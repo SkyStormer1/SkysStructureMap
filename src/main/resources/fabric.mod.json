@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "skysstructuremap",
+  "version": "${version}",
+  "name": "Sky's Structure Map",
+  "description": "Recognises ocean monuments, shipwrecks, nether fortresses and bastions from the blocks your client already sees, and puts every one you visit on Xaero's World Map: no seed needed.",
+  "authors": [
+    "SkyStormer1"
+  ],
+  "contact": {
+    "homepage": "https://github.com/SkyStormer1/SkysStructureMap",
+    "sources": "https://github.com/SkyStormer1/SkysStructureMap",
+    "issues": "https://github.com/SkyStormer1/SkysStructureMap/issues"
+  },
+  "license": "MIT",
+  "icon": "assets/skysstructuremap/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      {
+        "value": "com.skystormer.skysstructuremap.StructureMapClient",
+        "adapter": "kotlin"
+      }
+    ],
+    "modmenu": [
+      {
+        "value": "com.skystormer.skysstructuremap.gui.ModMenuIntegration",
+        "adapter": "kotlin"
+      }
+    ]
+  },
+  "mixins": [
+    "skysstructuremap.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "fabric-language-kotlin": ">=${fabric_kotlin_version}",
+    "xaeroworldmap": ">=1.44.0",
+    "minecraft": "${minecraft_version}",
+    "java": ">=${java_version}"
+  },
+  "suggests": {
+    "modmenu": "*",
+    "xaerominimap": "*",
+    "skysmapshapes": "*",
+    "skysmapexposer": "*"
+  }
+}
