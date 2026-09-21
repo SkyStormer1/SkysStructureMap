@@ -4,6 +4,7 @@ import com.skystormer.skysstructuremap.Config
 import net.minecraft.client.gui.components.AbstractSliderButton
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.components.CycleButton
+import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.components.StringWidget
 import net.minecraft.client.gui.components.Tooltip
 import net.minecraft.client.gui.screens.Screen
@@ -18,9 +19,11 @@ import kotlin.math.roundToInt
  */
 class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sky's Structure Map")) {
 
+    private lateinit var command: EditBox
+
     override fun init() {
         val left = width / 2 - WIDTH / 2
-        var y = maxOf(4, (height - 150) / 2)
+        var y = maxOf(4, (height - 175) / 2)
         addRenderableWidget(StringWidget(left, y, WIDTH, font.lineHeight, title, font))
         y += font.lineHeight + GAP * 3
 
@@ -38,12 +41,21 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
                 .create(left, y, WIDTH, ROW, Component.literal("Chat line on discovering one")) { _, on -> Config.announce = on }
                 .also { it.setTooltip(Tooltip.create(Component.literal("A line in your chat, which only you see, whenever you discover a structure."))) }
         )
+        y += ROW + GAP
+        val labelWidth = font.width("Private share command: /") + 4
+        addRenderableWidget(StringWidget(left, y + 6, labelWidth, font.lineHeight, Component.literal("Private share command: /"), font))
+        command = EditBox(font, left + labelWidth, y, WIDTH - labelWidth, ROW, Component.literal("Private share command"))
+        command.setMaxLength(24)
+        command.value = Config.privateShareCommand
+        command.setTooltip(Tooltip.create(Component.literal("The command Share sends to one player with: tell on most servers, or msg or w where those are used.")))
+        addRenderableWidget(command)
         y += ROW + GAP * 3
 
         addRenderableWidget(Button.builder(CommonComponents.GUI_DONE) { onClose() }.bounds(left, y, WIDTH, ROW).build())
     }
 
     override fun onClose() {
+        command.value.trim().removePrefix("/").takeIf { it.isNotEmpty() && ' ' !in it }?.let { Config.privateShareCommand = it }
         Config.save()
         minecraft.gui.setScreen(parent)
     }

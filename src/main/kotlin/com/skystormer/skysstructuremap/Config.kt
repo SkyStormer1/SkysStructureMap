@@ -18,6 +18,13 @@ object Config {
         private set
 
     var legendOpen = true
+
+    /** Where the legend sits: its right edge this far in from the screen's, its top this far down. Moved by dragging its header. */
+    var legendRight = 30
+    var legendTop = 4
+
+    /** How many lines the legend shows before scrolling. Changed by dragging its bottom edge. */
+    var legendRows = 6
     /** Off unless turned on in the legend: the icons are usually enough. */
     var outlines = false
 
@@ -38,6 +45,9 @@ object Config {
      */
     var discoverDistance = DEFAULT_DISCOVER_DISTANCE
 
+    /** The command a private share is sent with, without its slash: `tell`, or `msg` or `w` on servers that change it. */
+    var privateShareCommand = "tell"
+
     const val MIN_SCALE = 0.5f
     const val MAX_SCALE = 3f
     const val DEFAULT_DISCOVER_DISTANCE = 32
@@ -56,11 +66,15 @@ object Config {
             val json = Files.newBufferedReader(path).use { JsonParser.parseReader(it) }.asJsonObject
             json.getAsJsonArray("shown")?.let { array -> shown = array.mapNotNull { StructureType.byId(it.asString) }.toSet() }
             legendOpen = json.get("legendOpen")?.asBoolean ?: legendOpen
+            legendRight = json.get("legendRight")?.asInt ?: legendRight
+            legendTop = json.get("legendTop")?.asInt ?: legendTop
+            legendRows = (json.get("legendRows")?.asInt ?: legendRows).coerceIn(1, 32)
             outlines = json.get("outlines")?.asBoolean ?: outlines
             showUndiscovered = json.get("showUndiscovered")?.asBoolean ?: showUndiscovered
             announce = json.get("announce")?.asBoolean ?: announce
             iconScale = (json.get("iconScale")?.asFloat ?: iconScale).coerceIn(MIN_SCALE, MAX_SCALE)
             minimapIconScale = (json.get("minimapIconScale")?.asFloat ?: minimapIconScale).coerceIn(MIN_SCALE, MAX_SCALE)
+            privateShareCommand = json.get("privateShareCommand")?.asString?.trim()?.removePrefix("/")?.takeIf { it.isNotEmpty() } ?: privateShareCommand
             discoverDistance = (json.get("discoverDistance")?.asInt ?: discoverDistance).coerceIn(0, MAX_DISCOVER_DISTANCE)
         } catch (e: Exception) {
             Log.error("Could not read $path; using the defaults", e)
@@ -72,12 +86,16 @@ object Config {
             val json = JsonObject()
             json.add("shown", JsonArray().also { array -> StructureType.entries.filter { it in shown }.forEach { array.add(it.id) } })
             json.addProperty("legendOpen", legendOpen)
+            json.addProperty("legendRight", legendRight)
+            json.addProperty("legendTop", legendTop)
+            json.addProperty("legendRows", legendRows)
             json.addProperty("outlines", outlines)
             json.addProperty("showUndiscovered", showUndiscovered)
             json.addProperty("announce", announce)
             json.addProperty("iconScale", iconScale)
             json.addProperty("minimapIconScale", minimapIconScale)
             json.addProperty("discoverDistance", discoverDistance)
+            json.addProperty("privateShareCommand", privateShareCommand)
             Files.writeString(path, GSON.toJson(json))
         } catch (e: Exception) {
             Log.error("Could not save $path", e)

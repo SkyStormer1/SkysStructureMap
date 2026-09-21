@@ -1,7 +1,6 @@
 package com.skystormer.skysstructuremap
 
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.components.ChatComponent
 import net.minecraft.client.gui.screens.ConfirmScreen
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
@@ -16,7 +15,7 @@ object Menus {
         try {
             options.add(option("Make waypoint", options.size, target) { Waypoints.save(marker) }.setActive(Waypoints.available()))
             options.add(option("Copy coordinates", options.size, target) { copy(marker) })
-            options.add(option("Share in chat…", options.size, target) { share(marker) })
+            options.add(option("Share…", options.size, target) { parent -> open(com.skystormer.skysstructuremap.gui.ShareScreen(parent, marker)) })
             // While outlines are on for everything, this one's is already showing.
             if (!Config.outlines) {
                 options.add(option(if (marker.outlined) "Hide outline" else "Show outline", options.size, target) { toggleOutline(marker) })
@@ -47,17 +46,6 @@ object Menus {
             Log.error("Could not copy $text to the clipboard", e)
             say("Could not copy $text to the clipboard")
         }
-    }
-
-    /**
-     * Opens chat with the structure typed in: its name and coordinates for anyone to read, and a
-     * code that lets players with this mod add it to their map ([StructureShare]). Nothing is sent
-     * until you press Enter, so it can also be put after `/msg <player>` to share privately.
-     */
-    fun share(marker: Marker) {
-        val line = StructureShare.message(marker)
-        if (line.length > StructureShare.MAX_CHAT) return say("That structure is too long to share in one line of chat")
-        Minecraft.getInstance().gui.openChatAndAddText(ChatComponent.ChatMethod.MESSAGE, line)
     }
 
     /** Turns this one structure's box outline on or off, whatever the legend's Box switch says. */
@@ -98,7 +86,7 @@ object Menus {
             Component.literal("Delete this ${structure.name}?"),
             Component.literal(
                 "At ${structure.box.centreX} ${structure.waypointY} ${structure.box.centreZ}. It will be discovered again " +
-                    "if you go inside it in a later session. This cannot be undone."
+                    "if you come near it in a later session. This cannot be undone."
             ),
         ))
     }
