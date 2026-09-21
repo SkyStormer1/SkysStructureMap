@@ -25,6 +25,7 @@ object StructureMapClient : ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register { _, client ->
             client.execute {
                 StructureStore.close()
+                StructureShare.clear()
                 Tracker.clear()
             }
         }
@@ -81,6 +82,7 @@ object StructureMapClient : ClientModInitializer {
                     true
                 }
             }
+            StructureShare.tick()
             try {
                 Tracker.tick(client)
             } catch (e: Throwable) {

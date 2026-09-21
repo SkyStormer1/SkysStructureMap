@@ -17,37 +17,37 @@ import net.minecraft.network.chat.Component
 import java.lang.ref.WeakReference
 
 /**
- * The legend in the top-right corner of Xaero's world map: a small see-through panel with one
- * line per kind of structure that can exist in the dimension the map is showing, with its icon
- * and how many you have discovered there. Clicking a line shows or hides that kind. The header
- * folds the legend away, and its switches turn box outlines and not-yet-visited structures on and
- * off and open the settings. When there are more lines than fit, the list scrolls with the wheel.
+ * The legend on Xaero's world map: a small see-through panel with one line per kind of structure
+ * that can exist in the dimension the map is showing, with its icon and how many you have
+ * discovered. Clicking a line shows or hides that kind.
+ *
+ * The header folds the legend away when clicked and moves it when dragged; its switches turn box
+ * outlines and not-yet-visited structures on and off and open the settings. The grip on the bottom
+ * edge drags to show more or fewer lines; with more kinds than lines, the list scrolls with the
+ * wheel. It is as wide as its text needs, so nothing overlaps at any GUI scale.
  */
 object Legend {
 
-    private const val WIDTH = 140
     private const val ROW = 11
-    private const val MARGIN = 4
-
-    /** Room left at the right edge for Xaero's compass. */
-    private const val COMPASS = 30
-
-    /** At most this many lines before the list scrolls. */
-    private const val MAX_ROWS = 6
+    private const val GRIP = 4
 
     private const val BACKGROUND = 0x70000000
     private const val HOVER = 0x30FFFFFF
     private const val OFF = 0xFF9A9A9A.toInt()
 
+    private const val TITLE = "Structures"
     private const val BOX = "Box"
     private const val NEAR = "Near"
     private const val SET = "Set"
+
+    /** How wide a tooltip may be before it wraps onto another line. */
+    private const val TOOLTIP_WIDTH = 170
 
     /** The panel on the map screen open now, for the scroll hook in `GuiMapMixin`. */
     private var current = WeakReference<Panel>(null)
 
     fun addTo(screen: Screen) {
-        val panel = Panel(screen, screen.width - WIDTH - COMPASS, MARGIN, screen.height)
+        val panel = Panel(screen)
         Screens.getWidgets(screen).add(panel)
         current = WeakReference(panel)
     }
@@ -61,11 +61,16 @@ object Legend {
         return true
     }
 
-    class Panel(private val screen: Screen, x: Int, y: Int, private val screenHeight: Int) :
-        AbstractWidget(x, y, WIDTH, ROW, Component.literal("Structures")) {
+    class Panel(private val screen: Screen) : AbstractWidget(0, 0, 0, ROW, Component.literal(TITLE)) {
 
         private var offset = 0
         private var dimension: String? = null
+
+        private enum class Drag { NONE, MOVE, RESIZE }
+        private var drag = Drag.NONE
+        private var grabX = 0.0
+        private var grabY = 0.0
+        private var moved = false
 
         /** The kinds that can generate in the dimension the map shows; all of them if it is not a vanilla one. */
         private val types: List<StructureType>
@@ -75,17 +80,32 @@ object Legend {
                     dimension = shown
                     offset = 0
                 }
-                val here = StructureType.entries.filter { it.dimension == shown }
-                return here.ifEmpty { StructureType.entries }
+                return StructureType.entries.filter { it.dimension == shown }.ifEmpty { StructureType.entries }
             }
 
-        /** How many lines show at once: all of them, up to [MAX_ROWS] and what the screen has room for. */
+        /** How many lines show at once: the number chosen, but no more than there are or than fit below. */
         private fun shownRows(types: List<StructureType>): Int =
-            minOf(types.size, MAX_ROWS, maxOf(2, (screenHeight - y - ROW - 40) / ROW))
+            minOf(types.size, Config.legendRows, maxOf(1, (screen.height - y - ROW - GRIP - 4) / ROW))
 
+        private fun switchWidth(label: String) = font().width(label) + 4
+
+        private fun switchesWidth() = switchWidth(BOX) + switchWidth(NEAR) + switchWidth(SET) + 6
+
+        /** Wide enough for the header and for every line, with its count. */
+        private fun neededWidth(types: List<StructureType>): Int {
+            val font = font()
+            val header = 3 + font.width("- $TITLE") + 6 + switchesWidth()
+            val lines = types.maxOfOrNull { 13 + font.width(it.plural) + 8 + font.width("999") + 5 } ?: 0
+            return maxOf(header, lines)
+        }
+
+        /** Size and place from the settings, kept on screen. */
         private fun layout(types: List<StructureType>) {
+            width = neededWidth(types)
             val rows = shownRows(types)
-            height = if (Config.legendOpen) ROW * (1 + rows) + 2 else ROW
+            height = if (Config.legendOpen) ROW * (1 + rows) + 2 + GRIP else ROW
+            x = (screen.width - Config.legendRight - width).coerceIn(0, maxOf(0, screen.width - width))
+            y = Config.legendTop.coerceIn(0, maxOf(0, screen.height - height))
             offset = offset.coerceIn(0, maxOf(0, types.size - rows))
         }
 
@@ -96,12 +116,13 @@ object Legend {
         }
 
         // The switches at the right end of the header, right to left.
-        private fun switchWidth(label: String) = font().width(label) + 4
         private val setLeft get() = x + width - 2 - switchWidth(SET)
         private val nearLeft get() = setLeft - 2 - switchWidth(NEAR)
         private val boxLeft get() = nearLeft - 2 - switchWidth(BOX)
 
         private fun over(mouseX: Double, left: Int, label: String) = mouseX >= left && mouseX < left + switchWidth(label)
+
+        private fun onGrip(mouseY: Double) = Config.legendOpen && mouseY >= y + height - GRIP
 
         override fun extractWidgetRenderState(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
             val types = types
@@ -110,22 +131,24 @@ object Legend {
             graphics.fill(x, y, x + width, y + height, BACKGROUND)
 
             // Header
-            val overHeader = mouseY >= y && mouseY < y + ROW && mouseX >= x && mouseX < x + width
+            val inside = mouseX >= x && mouseX < x + width
+            val overHeader = inside && mouseY >= y && mouseY < y + ROW
             val mx = mouseX.toDouble()
             val overBox = overHeader && over(mx, boxLeft, BOX)
             val overNear = overHeader && over(mx, nearLeft, NEAR)
             val overSet = overHeader && over(mx, setLeft, SET)
-            if (overHeader && mouseX < boxLeft - 1) graphics.fill(x, y, boxLeft - 1, y + ROW, HOVER)
-            graphics.text(font, if (Config.legendOpen) "- Structures" else "+ Structures", x + 3, y + 2, 0xFFFFFFFF.toInt(), false)
+            if ((overHeader && mouseX < boxLeft - 1) || drag == Drag.MOVE) graphics.fill(x, y, boxLeft - 1, y + ROW, HOVER)
+            graphics.text(font, if (Config.legendOpen) "- $TITLE" else "+ $TITLE", x + 3, y + 2, 0xFFFFFFFF.toInt(), false)
             switch(graphics, BOX, boxLeft, Config.outlines, overBox)
             switch(graphics, NEAR, nearLeft, Config.showUndiscovered, overNear)
             switch(graphics, SET, setLeft, false, overSet)
-            when {
-                overBox -> graphics.setTooltipForNextFrame(Component.literal("Box outlines for every structure: ${onOff(Config.outlines)}"), mouseX, mouseY)
-                overNear -> graphics.setTooltipForNextFrame(Component.literal(
-                    "Structures seen nearby that you have not discovered yet, faded: ${onOff(Config.showUndiscovered)}"
-                ), mouseX, mouseY)
-                overSet -> graphics.setTooltipForNextFrame(Component.literal("Settings: icon sizes, how close counts as discovering"), mouseX, mouseY)
+            if (drag == Drag.NONE) {
+                when {
+                    overBox -> tooltip(graphics, "Box outlines for every structure: ${onOff(Config.outlines)}", mouseX, mouseY)
+                    overNear -> tooltip(graphics, "Structures seen nearby that you have not discovered yet, faded: ${onOff(Config.showUndiscovered)}", mouseX, mouseY)
+                    overSet -> tooltip(graphics, "Settings: icon sizes, how close counts as discovering, sharing", mouseX, mouseY)
+                    overHeader -> tooltip(graphics, "Click to fold the legend away or open it. Drag to move it.", mouseX, mouseY)
+                }
             }
             if (!Config.legendOpen) return
 
@@ -136,7 +159,7 @@ object Legend {
                 val type = types.getOrNull(i + offset) ?: break
                 val top = listTop + i * ROW
                 val shown = Config.isShown(type)
-                val over = mouseX >= x && mouseX < x + width && mouseY >= top && mouseY < top + ROW
+                val over = drag == Drag.NONE && inside && mouseY >= top && mouseY < top + ROW
                 if (over) graphics.fill(x, top, x + width, top + ROW, HOVER)
                 // The same picture as on the map, faded when that kind is hidden.
                 graphics.blit(RenderPipelines.GUI_TEXTURED, Icons.id(type), x + 2, top + 1, 0f, 0f, 9, 9, 16, 16, 16, 16,
@@ -144,11 +167,7 @@ object Legend {
                 graphics.text(font, type.plural, x + 13, top + 2, if (shown) 0xFFFFFFFF.toInt() else OFF, false)
                 val count = StructureStore.all.count { it.type == type }.toString()
                 graphics.text(font, count, x + width - 5 - font.width(count), top + 2, if (shown) 0xFFD0D0D0.toInt() else OFF, false)
-                if (over) {
-                    graphics.setTooltipForNextFrame(Component.literal(
-                        "${if (shown) "Hide" else "Show"} ${type.plural.lowercase()} on the map"
-                    ), mouseX, mouseY)
-                }
+                if (over) tooltip(graphics, "${if (shown) "Hide" else "Show"} ${type.plural.lowercase()} on the map", mouseX, mouseY)
             }
 
             // A thin scroll bar when not everything fits.
@@ -160,6 +179,23 @@ object Legend {
                 graphics.fill(x + width - 2, listTop, x + width, listTop + trackHeight, 0x40FFFFFF)
                 graphics.fill(x + width - 2, barTop, x + width, barTop + barHeight, 0xC0FFFFFF.toInt())
             }
+
+            // The grip along the bottom edge, for showing more or fewer lines.
+            val gripTop = y + height - GRIP
+            val overGrip = inside && mouseY >= gripTop && mouseY < y + height
+            val gripColour = if (overGrip || drag == Drag.RESIZE) 0xC0FFFFFF.toInt() else 0x50FFFFFF
+            graphics.fill(x + width / 2 - 8, gripTop + 1, x + width / 2 + 8, gripTop + 2, gripColour)
+            if (overGrip && drag == Drag.NONE) tooltip(graphics, "Drag to show more or fewer lines", mouseX, mouseY)
+        }
+
+        /**
+         * A tooltip wrapped onto several lines, and never above the top of the screen: the game
+         * puts tooltips a little above the mouse, which near the top edge ran them off screen.
+         */
+        private fun tooltip(graphics: GuiGraphicsExtractor, text: String, mouseX: Int, mouseY: Int) {
+            val font = font()
+            val lines = font.split(Component.literal(text), TOOLTIP_WIDTH)
+            graphics.setTooltipForNextFrame(font, lines, mouseX, maxOf(mouseY, 16))
         }
 
         private fun switch(graphics: GuiGraphicsExtractor, label: String, left: Int, on: Boolean, hovered: Boolean) {
@@ -173,25 +209,62 @@ object Legend {
             val mx = event.x()
             val my = event.y()
             val types = types
-            if (my < y + ROW) {
-                when {
+            when {
+                my < y + ROW -> when {
                     over(mx, setLeft, SET) -> {
                         Minecraft.getInstance().gui.setScreen(SettingsScreen(screen))
                         return true
                     }
-                    over(mx, nearLeft, NEAR) -> Config.showUndiscovered = !Config.showUndiscovered
-                    over(mx, boxLeft, BOX) -> Config.outlines = !Config.outlines
-                    else -> Config.legendOpen = !Config.legendOpen
+                    over(mx, nearLeft, NEAR) -> { Config.showUndiscovered = !Config.showUndiscovered; Config.save() }
+                    over(mx, boxLeft, BOX) -> { Config.outlines = !Config.outlines; Config.save() }
+                    // The title: a drag moves the legend, a click without one folds it (on release).
+                    else -> startDrag(Drag.MOVE, mx - x, my - y)
                 }
-                Config.save()
-            } else {
-                val row = ((my - (y + ROW + 1)) / ROW).toInt()
-                types.getOrNull(row + offset)?.takeIf { row in 0 until shownRows(types) }?.let { type ->
-                    Config.setShown(type, !Config.isShown(type))
+                onGrip(my) -> startDrag(Drag.RESIZE, 0.0, 0.0)
+                else -> {
+                    val row = ((my - (y + ROW + 1)) / ROW).toInt()
+                    types.getOrNull(row + offset)?.takeIf { row in 0 until shownRows(types) }?.let { type ->
+                        Config.setShown(type, !Config.isShown(type))
+                    }
                 }
             }
             layout(types)
             // Taken here, so the map underneath does not also get the click.
+            return true
+        }
+
+        private fun startDrag(kind: Drag, offsetX: Double, offsetY: Double) {
+            drag = kind
+            grabX = offsetX
+            grabY = offsetY
+            moved = false
+        }
+
+        override fun mouseDragged(event: MouseButtonEvent, dragX: Double, dragY: Double): Boolean {
+            when (drag) {
+                Drag.NONE -> return false
+                Drag.MOVE -> {
+                    val newX = (event.x() - grabX).toInt().coerceIn(0, maxOf(0, screen.width - width))
+                    val newY = (event.y() - grabY).toInt().coerceIn(0, maxOf(0, screen.height - ROW))
+                    if (newX != x || newY != y) moved = true
+                    Config.legendRight = screen.width - newX - width
+                    Config.legendTop = newY
+                }
+                Drag.RESIZE -> {
+                    val rows = ((event.y() - (y + ROW + 1)) / ROW).toInt()
+                    Config.legendRows = rows.coerceIn(1, maxOf(1, types.size))
+                }
+            }
+            layout(types)
+            return true
+        }
+
+        override fun mouseReleased(event: MouseButtonEvent): Boolean {
+            if (drag == Drag.NONE) return false
+            if (drag == Drag.MOVE && !moved) Config.legendOpen = !Config.legendOpen
+            drag = Drag.NONE
+            Config.save()
+            layout(types)
             return true
         }
 

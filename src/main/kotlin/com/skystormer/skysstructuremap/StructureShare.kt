@@ -112,6 +112,54 @@ object StructureShare {
         Menus.say("Added the ${shared.type.displayName} to your ${dimensionName(shared.dimension)} map")
     }
 
-    /** What a server will take in one line of chat. */
+    /** Sends [marker] to everyone as a line of chat. Only called from the share screen, by a click. */
+    fun shareWithEveryone(marker: Marker): Boolean {
+        val connection = Minecraft.getInstance().connection ?: return false
+        val line = message(marker)
+        if (line.length > MAX_CHAT) return false.also { Menus.say("That structure is too long to share in one line of chat") }
+        connection.sendChat(line)
+        Log.info("Shared {} with everyone", marker.name)
+        return true
+    }
+
+    /** Private messages still to send: (player, line), one every [SEND_EVERY] ticks. */
+    private val waiting = ArrayDeque<Pair<String, String>>()
+
+    /**
+     * Sends [marker] privately to each of [players], with [Config.privateShareCommand]. They go one
+     * at a time, because a burst of messages looks like spam to a server and can get you kicked.
+     */
+    fun shareWith(marker: Marker, players: List<String>): Boolean {
+        if (Minecraft.getInstance().connection == null) return false
+        val line = message(marker)
+        for (player in players) waiting.addLast(player to line)
+        return true
+    }
+
+    private var ticks = 0
+
+    /** Called every client tick: sends the next waiting private message. */
+    fun tick() {
+        if (waiting.isEmpty()) return
+        if (++ticks < SEND_EVERY) return
+        ticks = 0
+        val connection = Minecraft.getInstance().connection ?: return waiting.clear()
+        val (player, line) = waiting.removeFirst()
+        val command = "${Config.privateShareCommand} $player $line"
+        if (command.length > MAX_CHAT) {
+            Menus.say("That structure is too long to send privately")
+            return waiting.clear()
+        }
+        connection.sendCommand(command)
+        Log.info("Sent a structure to {}", player)
+    }
+
+    /** Nothing left to send when leaving a world. */
+    fun clear() = waiting.clear()
+
+    /** What a server will take in one line of chat, and in one command. */
     const val MAX_CHAT = 256
+
+    /** Ticks between private messages: half a second, which no server counts as spam. */
+    private const val SEND_EVERY = 10
 }
