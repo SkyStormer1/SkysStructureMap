@@ -278,6 +278,27 @@ $icons = [ordered]@{
       '................'
     )
   }
+  trial_chambers = @{
+    colours = @{ C = '2E2E36'; B = '8A8A96'; F = 'F07830'; Y = 'F8D048'; T = '6A6E66'; K = '4A4E48' }
+    rows = @(
+      '................',
+      '..CCCCCCCCCCCC..',
+      '..CBCBCBCBCBCC..',
+      '..CB........BC..',
+      '..CC...YY...CC..',
+      '..CB..YFFY..BC..',
+      '..CC..FFFF..CC..',
+      '..CB.FFYYFF.BC..',
+      '..CC.FFFFFF.CC..',
+      '..CB..FFFF..BC..',
+      '..CBCBCBCBCBCC..',
+      '..CCCCCCCCCCCC..',
+      '.TTKTTTKTTTKTTT.',
+      '.TKTTTKTTTKTTTK.',
+      '................',
+      '................'
+    )
+  }
   end_gateway = @{
     colours = @{ B = '3A3A3A'; H = '6A6A6A'; V = '0C0C18'; S = '7FE0FF'; M = 'B070E0' }
     rows = @(

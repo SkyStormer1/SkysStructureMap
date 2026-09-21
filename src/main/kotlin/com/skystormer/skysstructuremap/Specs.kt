@@ -204,6 +204,20 @@ object Specs {
         reach = null,
     )
 
+    /**
+     * Tuff bricks, polished and chiselled tuff (plain tuff is natural, these are not), with the
+     * trial spawners and vaults, deep underground.
+     */
+    private val TRIAL_CHAMBERS = Spec(
+        setOf(
+            Blocks.TUFF_BRICKS, Blocks.POLISHED_TUFF, Blocks.CHISELED_TUFF_BRICKS, Blocks.CHISELED_TUFF,
+            Blocks.TRIAL_SPAWNER, Blocks.VAULT,
+        ),
+        maxY = 10, merge = 32,
+        recognise = { d -> boundsIf(d, has(d, Blocks.TRIAL_SPAWNER, Blocks.VAULT) || d.count >= 200) },
+        reach = Spec.Reach(2, 1, 5),
+    )
+
     fun of(type: StructureType): Spec = when (type) {
         StructureType.VILLAGE -> VILLAGE
         StructureType.OUTPOST -> OUTPOST
@@ -214,6 +228,7 @@ object Specs {
         StructureType.DESERT_TEMPLE -> DESERT_TEMPLE
         StructureType.TRAIL_RUINS -> TRAIL_RUINS
         StructureType.ANCIENT_CITY -> ANCIENT_CITY
+        StructureType.TRIAL_CHAMBERS -> TRIAL_CHAMBERS
         StructureType.MONUMENT -> MONUMENT
         StructureType.SHIPWRECK -> SHIPWRECK
         StructureType.FORTRESS -> FORTRESS

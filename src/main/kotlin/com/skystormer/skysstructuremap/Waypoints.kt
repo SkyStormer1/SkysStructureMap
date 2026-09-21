@@ -54,6 +54,7 @@ object Waypoints {
         StructureType.DESERT_TEMPLE -> WaypointColor.YELLOW
         StructureType.TRAIL_RUINS -> WaypointColor.GOLD
         StructureType.ANCIENT_CITY -> WaypointColor.DARK_AQUA
+        StructureType.TRIAL_CHAMBERS -> WaypointColor.GOLD
         StructureType.MONUMENT -> WaypointColor.AQUA
         StructureType.SHIPWRECK -> WaypointColor.GOLD
         StructureType.FORTRESS -> WaypointColor.RED
