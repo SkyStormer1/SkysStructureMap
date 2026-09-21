@@ -13,7 +13,7 @@ you come near one, it's marked as discovered and appears on Xaero's World Map an
 ## Structures
 
 - **Overworld:** villages, pillager outposts, woodland mansions, strongholds, witch huts, jungle temples,
-  desert temples, trail ruins, ancient cities, ocean monuments and shipwrecks
+  desert temples, trail ruins, ancient cities, trial chambers, ocean monuments and shipwrecks
 - **Nether:** nether fortresses and bastion remnants
 - **End:** end cities and end gateways
 

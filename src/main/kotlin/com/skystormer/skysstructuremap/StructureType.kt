@@ -21,6 +21,7 @@ enum class StructureType(
     DESERT_TEMPLE("desert_temple", "Desert Temple", "Desert Temples", 0xFFE0C080.toInt(), OVERWORLD),
     TRAIL_RUINS("trail_ruins", "Trail Ruins", "Trail Ruins", 0xFFA0603A.toInt(), OVERWORLD),
     ANCIENT_CITY("ancient_city", "Ancient City", "Ancient Cities", 0xFF1FA0A8.toInt(), OVERWORLD),
+    TRIAL_CHAMBERS("trial_chambers", "Trial Chambers", "Trial Chambers", 0xFFC87850.toInt(), OVERWORLD),
     MONUMENT("monument", "Ocean Monument", "Ocean Monuments", 0xFF3FD0C0.toInt(), OVERWORLD),
     SHIPWRECK("shipwreck", "Shipwreck", "Shipwrecks", 0xFFC8904A.toInt(), OVERWORLD),
     FORTRESS("fortress", "Nether Fortress", "Nether Fortresses", 0xFFD04040.toInt(), NETHER),
