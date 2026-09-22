@@ -22,6 +22,7 @@ object Menus {
             }
             val structure = marker.structure
             if (structure != null) {
+                options.add(option(if (structure.completed) "Mark as not completed" else "Mark as completed", options.size, target) { toggleCompleted(structure) })
                 options.add(option("Delete…", options.size, target) { parent -> confirmDelete(parent, structure) })
             } else {
                 options.add(option("Mark as discovered", options.size, target) { markDiscovered(marker) })
@@ -59,6 +60,14 @@ object Menus {
             if (on) Markers.outlinedNearby.add(id) else Markers.outlinedNearby.remove(id)
         }
         say(if (on) "Showing the outline of ${marker.name}" else "Hid the outline of ${marker.name}")
+    }
+
+    /** Marks a structure as completed, with a tick beside its icon, or takes that back. */
+    private fun toggleCompleted(structure: Structure) {
+        val current = StructureStore.byId(structure.id) ?: return
+        val done = !current.completed
+        StructureStore.put(current.copy(completed = done))
+        say(if (done) "Marked the ${structure.name} as completed" else "Marked the ${structure.name} as not completed")
     }
 
     private fun markDiscovered(marker: Marker) {

@@ -341,6 +341,28 @@ $icons = [ordered]@{
       '................'
     )
   }
+  # Not a structure: the tick drawn beside the icon of one marked as completed.
+  completed = @{
+    colours = @{ G = '4CD05A'; H = 'A8F0A0' }
+    rows = @(
+      '................',
+      '................',
+      '............GG..',
+      '...........GGG..',
+      '..........GGG...',
+      '.........GGG....',
+      '..GG....GGG.....',
+      '..GGG..GGG......',
+      '...GGGGGG.......',
+      '....GGGG........',
+      '.....GH.........',
+      '................',
+      '................',
+      '................',
+      '................',
+      '................'
+    )
+  }
 }
 
 $outline = [System.Drawing.Color]::FromArgb(230, 20, 18, 22)

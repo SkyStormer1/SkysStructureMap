@@ -101,6 +101,7 @@ object MinimapMarkers {
             val view = Icons.view(marker.type)
             if (renderer != null && view != null) {
                 Icons.quad(renderer.begin(view), pose.last().pose(), size(), if (marker.discovered) 1f else 0.5f)
+                if (marker.completed) Icons.tickView()?.let { Icons.tick(renderer.begin(it), pose.last().pose(), size()) }
             } else {
                 graphics.fill(-half() + 1, -half() + 1, half() - 1, half() - 1, 0xFF000000.toInt() or (marker.type.colour and 0xFFFFFF))
             }
