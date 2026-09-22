@@ -30,6 +30,8 @@ class Marker(val structure: Structure?, val detection: Detection?) {
     val pieces: List<Piece> get() = structure?.pieces ?: detection?.pieces ?: emptyList()
     /** This one's box is drawn even while outlines are off for everything. */
     val outlined: Boolean get() = structure?.outlined ?: (detection!!.id in Markers.outlinedNearby)
+    /** Marked as completed; only a discovered one can be. */
+    val completed: Boolean get() = structure?.completed ?: false
     val name: String get() = type.displayName
     val y: Int get() = structure?.waypointY ?: waypointY(type, box)
 }
@@ -152,6 +154,7 @@ object Markers {
             val view = Icons.view(marker.type)
             if (renderer != null && view != null) {
                 Icons.quad(renderer.begin(view), pose.last().pose(), size(), if (marker.discovered) 1f else 0.5f)
+                if (marker.completed) Icons.tickView()?.let { Icons.tick(renderer.begin(it), pose.last().pose(), size()) }
             } else {
                 // The picture could not be loaded: the kind's colour, so the marker is still there.
                 graphics.fill(-half() + 2, -half() + 2, half() - 2, half() - 2, 0xFF000000.toInt())

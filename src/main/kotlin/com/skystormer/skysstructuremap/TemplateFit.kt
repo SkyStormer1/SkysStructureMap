@@ -25,7 +25,7 @@ import net.minecraft.world.level.block.Rotation
 open class TemplateFit(
     /** The folder under `data/minecraft/structure/` its designs are in. */
     private val folder: String,
-    private val names: List<String>,
+    val names: List<String>,
     /**
      * Match shapes whatever the wood: shipwrecks are built in eight woods from one design, while a
      * watchtower is always the same woods and is matched block for block.
@@ -310,6 +310,14 @@ object TownCentreFit : TemplateFit(
     anyWood = false,
     agreement = 0.2,
     samples = 400,
+)
+
+/**
+ * The same town centres, for a village whose bell is gone. Only paths are left to vote with, and a
+ * path votes for every path in a design, so fewer need to agree; what matches is checked as closely.
+ */
+object BelllessTownCentreFit : TemplateFit(
+    "village", TownCentreFit.names, anyWood = false, agreement = 0.2, samples = 400, minVotes = 15,
 )
 
 /**

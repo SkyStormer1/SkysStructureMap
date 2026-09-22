@@ -27,6 +27,8 @@ data class Structure(
      * in. Kept once found, so they stay after the structure is torn down.
      */
     val pieces: List<Piece> = emptyList(),
+    /** Marked as done (looted, cleared, whatever you count as done): a tick is drawn beside its icon. */
+    val completed: Boolean = false,
 ) {
     val name: String get() = type.displayName
 
@@ -168,7 +170,7 @@ object StructureStore {
             val k = kept[index]
             // An exact box (a monument, a wreck) stays as it was; the rest grow to cover both.
             val box = if (Specs.of(s.type).reach == null) k.box else k.box.union(s.box)
-            kept[index] = k.copy(box = box, outlined = k.outlined || s.outlined,
+            kept[index] = k.copy(box = box, outlined = k.outlined || s.outlined, completed = k.completed || s.completed,
                 pieces = k.pieces + s.pieces.filter { p -> k.pieces.none { it.box == p.box } })
             joined++
         }
@@ -215,6 +217,7 @@ object StructureStore {
         addProperty("discovered", structure.discovered)
         structure.variant?.let { addProperty("variant", it) }
         if (structure.outlined) addProperty("outlined", true)
+        if (structure.completed) addProperty("completed", true)
         if (structure.pieces.isNotEmpty()) add("pieces", JsonArray().also { a ->
             structure.pieces.forEach { p ->
                 a.add(JsonObject().apply {
@@ -237,6 +240,7 @@ object StructureStore {
             discovered = json.get("discovered")?.asLong ?: 0L,
             variant = json.get("variant")?.asString,
             outlined = json.get("outlined")?.asBoolean ?: false,
+            completed = json.get("completed")?.asBoolean ?: false,
             pieces = json.getAsJsonArray("pieces")?.mapNotNull { element ->
                 val p = element.asJsonObject
                 val pb = p.getAsJsonArray("box")?.map { it.asInt }?.takeIf { it.size == 6 } ?: return@mapNotNull null
