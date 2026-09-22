@@ -23,7 +23,7 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
 
     override fun init() {
         val left = width / 2 - WIDTH / 2
-        var y = maxOf(4, (height - 205) / 2)
+        var y = maxOf(4, (height - 235) / 2)
         addRenderableWidget(StringWidget(left, y, WIDTH, font.lineHeight, title, font))
         y += font.lineHeight + GAP * 3
 
@@ -35,6 +35,22 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
         y += ROW + GAP * 3
 
         val half = (WIDTH - GAP) / 2
+        addRenderableWidget(
+            CycleButton.onOffBuilder(Config.show)
+                .create(left, y, half, ROW, Component.literal("Show structures")) { _, on -> Config.show = on }
+                .also { it.setTooltip(Tooltip.create(Component.literal(
+                    "Everything this mod draws, in one switch: icons, outlines and spawn boxes. Your discoveries are kept either way."
+                ))) }
+        )
+        addRenderableWidget(
+            CycleButton.onOffBuilder(Config.hideCompleted)
+                .create(left + half + GAP, y, WIDTH - half - GAP, ROW, Component.literal("Hide completed")) { _, on -> Config.hideCompleted = on }
+                .also { it.setTooltip(Tooltip.create(Component.literal(
+                    "Leaves the structures you have marked as completed off the maps, so only the ones left show."
+                ))) }
+        )
+        y += ROW + GAP * 3
+
         addRenderableWidget(
             CycleButton.onOffBuilder(Config.spawnBoxesOnMap)
                 .create(left, y, half, ROW, Component.literal("Spawn boxes: map")) { _, on -> Config.spawnBoxesOnMap = on }
