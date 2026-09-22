@@ -155,7 +155,12 @@ object Specs {
     private val WITCH_HUT = Spec(
         setOf(Blocks.SPRUCE_PLANKS, Blocks.SPRUCE_STAIRS, Blocks.OAK_FENCE, Blocks.CAULDRON, Blocks.POTTED_RED_MUSHROOM, Blocks.CRAFTING_TABLE),
         biomes = setOf("swamp"), merge = 6,
-        recognise = { d -> if (d.count >= 25 && has(d, Blocks.CAULDRON)) d.bounds?.let(Recognise::witchHutBox) else null },
+        // The game builds it one size, 7 by 9 and a few blocks high: a spruce hut of another size is a player's.
+        recognise = { d ->
+            val b = d.bounds
+            val size = if (b == null) emptyList() else listOf(b.sizeX, b.sizeZ).sorted()
+            if (b != null && d.count >= 25 && has(d, Blocks.CAULDRON) && size == listOf(7, 9) && b.sizeY <= 6) Recognise.witchHutBox(b) else null
+        },
         reach = null, waypointAtTop = true,
     )
 
@@ -235,7 +240,8 @@ object Specs {
             Blocks.TRIAL_SPAWNER, Blocks.VAULT,
         ),
         maxY = 10, merge = 32,
-        recognise = { d -> boundsIf(d, has(d, Blocks.TRIAL_SPAWNER, Blocks.VAULT) || d.count >= 200) },
+        // Only the spawners and vaults decide it: players cannot place them, while tuff bricks are a common build.
+        recognise = { d -> boundsIf(d, has(d, Blocks.TRIAL_SPAWNER, Blocks.VAULT)) },
         reach = Spec.Reach(2, 1, 5),
     )
 

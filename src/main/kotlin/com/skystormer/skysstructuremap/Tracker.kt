@@ -124,6 +124,8 @@ object Tracker {
                 if (crossroads.size != detection.pieces.size) Log.info("Fortress #{}: {} crossroads {}", detection.id, crossroads.size, crossroads)
                 detection.pieces = crossroads.map { Piece(FortressPieces.CROSSROADS, it) }
                 detection.box = FortressPieces.outerBox(bricks, crossroads)
+                // Every fortress starts from a crossroads; nether bricks without one are a build.
+                if (crossroads.isEmpty()) detection.box = null
             }
             if (detection.box != null && before == null) {
                 Log.info("Recognised {} #{} from {} blocks ({}), seen {}: box {}", detection.type.id, detection.id, detection.count, describeKinds(detection), detection.bounds, detection.box)
