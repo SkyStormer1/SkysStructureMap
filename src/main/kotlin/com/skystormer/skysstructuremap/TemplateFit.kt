@@ -322,3 +322,19 @@ object TrailRuinsFit : TemplateFit(
     loose = setOf("gravel"),
     minVotes = 25,
 )
+
+/**
+ * An end city's pieces: every city starts from its base floor, and the game places each piece as
+ * designed. Only the rooms, towers and ship: roofs and bridges are plain purpur a player could lay.
+ */
+object EndCityFit : TemplateFit(
+    "end_city",
+    listOf(
+        "base_floor", "second_floor_1", "second_floor_2", "third_floor_1", "third_floor_2", "tower_base", "tower_top",
+        "fat_tower_base", "fat_tower_middle", "fat_tower_top", "ship",
+    ),
+    anyWood = false,
+    agreement = 0.2,
+    samples = 400,
+    minVotes = 25,
+)

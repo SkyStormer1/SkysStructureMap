@@ -103,12 +103,12 @@ object Tracker {
                 detection.box = when (detection.type) {
                     StructureType.OUTPOST -> Recognise.outpostBox(match.box)
                     // The town centre (or tower) proves it; the rest is everything seen around it.
-                    StructureType.VILLAGE, StructureType.TRAIL_RUINS -> detection.bounds
+                    StructureType.VILLAGE, StructureType.TRAIL_RUINS, StructureType.END_CITY -> detection.bounds
                     else -> match.box
                 }
             }
             // A village is proved once; after that its box is everything seen, as more of it loads.
-            if (match == null && (detection.type == StructureType.VILLAGE || detection.type == StructureType.TRAIL_RUINS) && detection.variant != null) detection.box = detection.bounds
+            if (match == null && detection.type in PROVED_THEN_SEEN && detection.variant != null) detection.box = detection.bounds
             if (match?.box != before || (match == null && detection.blocks.size >= 100)) {
                 Log.info("{} #{} at {}: {} in {} ms ({})", detection.type.id, detection.id, detection.bounds,
                     match?.let { "${it.template.name}, box ${detection.box}" } ?: "no template fits", millis, fitter.lastReport)
@@ -198,8 +198,12 @@ object Tracker {
         StructureType.OUTPOST -> WatchtowerFit
         StructureType.VILLAGE -> TownCentreFit
         StructureType.TRAIL_RUINS -> TrailRuinsFit
+        StructureType.END_CITY -> EndCityFit
         else -> null
     }
+
+    /** Kinds proved once by one piece matching, whose box is then everything seen around it. */
+    private val PROVED_THEN_SEEN = setOf(StructureType.VILLAGE, StructureType.TRAIL_RUINS, StructureType.END_CITY)
 
     /** How far from a bell, sideways, a village's town centre reaches. */
     private const val TOWN_CENTRE_REACH = 12
