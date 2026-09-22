@@ -35,7 +35,7 @@ object Tracker {
             this.dimension = dimension
         }
         // Matched against the game's designs, which need to know each block.
-        val keepBlocks = type == StructureType.SHIPWRECK || type == StructureType.OUTPOST
+        val keepBlocks = fitterFor(type) != null
         for (group in found.groupBy { Detection.cellKey(it.x, it.y, it.z) }.values) {
             var cell = Box.of(group[0].x, group[0].y, group[0].z)
             for (f in group) cell = cell.including(f.x, f.y, f.z)
@@ -87,17 +87,34 @@ object Tracker {
             // An outpost's cages, tents and log piles are the same wood as its tower; only the
             // tower stands well above its base, so only those blocks vote.
             val base = detection.bounds?.minY ?: 0
-            val match = if (detection.type == StructureType.OUTPOST) {
-                fitter.fit(detection, level) { key -> net.minecraft.core.BlockPos.getY(key) >= base + OUTPOST_TOWER_FROM }
-            } else fitter.fit(detection, level)
+            val match = when (detection.type) {
+                StructureType.OUTPOST -> fitter.fit(detection, level) { key -> net.minecraft.core.BlockPos.getY(key) >= base + OUTPOST_TOWER_FROM }
+                // The town centre is around the bell; streets and houses further out do not vote.
+                // Each bell on its own: a village can have more than one, and pooling the blocks
+                // around both drowned out the town centre in testing.
+                StructureType.VILLAGE -> detection.blocks.long2ObjectEntrySet()
+                    .filter { it.value == net.minecraft.world.level.block.Blocks.BELL }.map { it.longKey }
+                    .firstNotNullOfOrNull { bell -> fitter.fit(detection, level) { key -> near(bell, key, TOWN_CENTRE_REACH) } }
+                else -> fitter.fit(detection, level)
+            }
             val millis = (System.nanoTime() - started) / 1_000_000
             if (match != null) {
                 detection.variant = match.template.name
-                detection.box = if (detection.type == StructureType.OUTPOST) Recognise.outpostBox(match.box) else match.box
+                detection.box = when (detection.type) {
+                    StructureType.OUTPOST -> Recognise.outpostBox(match.box)
+                    // The town centre proves it; the village is everything seen around it.
+                    StructureType.VILLAGE -> detection.bounds
+                    else -> match.box
+                }
             }
+            // A village is proved once; after that its box is everything seen, as more of it loads.
+            if (match == null && detection.type == StructureType.VILLAGE && detection.variant != null) detection.box = detection.bounds
             if (match?.box != before || (match == null && detection.blocks.size >= 100)) {
                 Log.info("{} #{} at {}: {} in {} ms ({})", detection.type.id, detection.id, detection.bounds,
                     match?.let { "${it.template.name}, box ${detection.box}" } ?: "no template fits", millis, fitter.lastReport)
+                if (match == null && detection.type == StructureType.VILLAGE) Log.info("  bells seen: {}", detection.blocks.long2ObjectEntrySet()
+                    .filter { it.value == net.minecraft.world.level.block.Blocks.BELL }
+                    .joinToString { "${net.minecraft.core.BlockPos.getX(it.longKey)} ${net.minecraft.core.BlockPos.getY(it.longKey)} ${net.minecraft.core.BlockPos.getZ(it.longKey)}" })
             }
         } else {
             detection.box = Recognise.box(detection)
@@ -177,7 +194,18 @@ object Tracker {
     private fun fitterFor(type: StructureType): TemplateFit? = when (type) {
         StructureType.SHIPWRECK -> ShipwreckFit
         StructureType.OUTPOST -> WatchtowerFit
+        StructureType.VILLAGE -> TownCentreFit
         else -> null
+    }
+
+    /** How far from a bell, sideways, a village's town centre reaches. */
+    private const val TOWN_CENTRE_REACH = 12
+
+    private fun near(a: Long, b: Long, reach: Int): Boolean {
+        val dx = net.minecraft.core.BlockPos.getX(a) - net.minecraft.core.BlockPos.getX(b)
+        val dz = net.minecraft.core.BlockPos.getZ(a) - net.minecraft.core.BlockPos.getZ(b)
+        val dy = net.minecraft.core.BlockPos.getY(a) - net.minecraft.core.BlockPos.getY(b)
+        return dx * dx + dz * dz <= reach * reach && Math.abs(dy) <= reach
     }
 
     /** Blocks this far above an outpost's base can only be its tower. */

@@ -17,8 +17,12 @@ class Spec(
     val tags: List<net.minecraft.tags.TagKey<Block>> = emptyList(),
     val minY: Int = Int.MIN_VALUE,
     val maxY: Int = Int.MAX_VALUE,
-    /** Only in biomes whose id contains one of these (null: anywhere). */
-    val biomes: List<String>? = null,
+    /**
+     * Only in these biomes (their ids without `minecraft:`), taken from the game's own list of
+     * where each structure can generate; null for anywhere. A player's base elsewhere, say on a
+     * mushroom island, is never taken for one.
+     */
+    val biomes: Set<String>? = null,
     /** Never in biomes whose id contains one of these. */
     val notBiomes: List<String> = emptyList(),
     /** Blocks this close to a group join it rather than starting another. */
@@ -41,7 +45,17 @@ class Spec(
     val biomeFiltered: Boolean get() = biomes != null || notBiomes.isNotEmpty()
 
     fun biomeAllowed(path: String): Boolean =
-        (biomes == null || biomes.any { it in path }) && notBiomes.none { it in path }
+        (biomes == null || path in biomes) && notBiomes.none { it in path }
+}
+
+/** Groups of biomes the game's structure lists refer to (its `is_ocean`, `is_beach`, `is_mountain` tags). */
+object Biomes {
+    val OCEAN = setOf(
+        "ocean", "deep_ocean", "cold_ocean", "deep_cold_ocean", "lukewarm_ocean", "deep_lukewarm_ocean",
+        "warm_ocean", "frozen_ocean", "deep_frozen_ocean",
+    )
+    val BEACH = setOf("beach", "snowy_beach")
+    val MOUNTAIN = setOf("meadow", "frozen_peaks", "jagged_peaks", "stony_peaks", "snowy_slopes", "cherry_grove")
 }
 
 object Specs {
@@ -59,7 +73,7 @@ object Specs {
 
     private val SHIPWRECK by lazy {
         Spec(
-            ShipwreckFit.signatureBlocks, minY = 0, biomes = listOf("ocean", "beach"), merge = 4,
+            ShipwreckFit.signatureBlocks, minY = 0, biomes = Biomes.OCEAN + Biomes.BEACH, merge = 4,
             recognise = { d -> d.box }, reach = null, waypointAtTop = true,
         )
     }
@@ -75,7 +89,7 @@ object Specs {
             Blocks.POLISHED_BLACKSTONE_BRICK_WALL, Blocks.POLISHED_BLACKSTONE_BRICK_STAIRS,
             Blocks.POLISHED_BLACKSTONE_BRICK_SLAB, Blocks.CHISELED_POLISHED_BLACKSTONE, Blocks.GILDED_BLACKSTONE,
         ),
-        merge = 24,
+        biomes = setOf("crimson_forest", "nether_wastes", "soul_sand_valley", "warped_forest"), merge = 24,
         recognise = { d ->
             val b = d.bounds
             boundsIf(d, b != null && d.count >= Recognise.BASTION_BLOCKS && maxOf(b.sizeX, b.sizeZ) >= Recognise.BASTION_WIDTH)
@@ -90,8 +104,9 @@ object Specs {
             Blocks.FLETCHING_TABLE, Blocks.GRINDSTONE, Blocks.LOOM, Blocks.SMITHING_TABLE, Blocks.STONECUTTER,
             Blocks.BARREL, Blocks.HAY_BLOCK,
         ),
-        tags = listOf(BlockTags.BEDS), merge = 32,
-        recognise = { d -> boundsIf(d, d.count >= 40 && (has(d, Blocks.BELL) || d.kinds.keys.any { it.defaultBlockState().`is`(BlockTags.BEDS) })) },
+        tags = listOf(BlockTags.BEDS), biomes = setOf("plains", "meadow", "desert", "savanna", "snowy_plains", "taiga"), merge = 32,
+        // Set once a town centre matches (see [TownCentreFit]).
+        recognise = { d -> d.box },
         // Houses stand beside the streets, so a little way off the paths is still in the village.
         reach = Spec.Reach(6, 2, 8),
     )
@@ -106,7 +121,7 @@ object Specs {
             Blocks.BIRCH_PLANKS, Blocks.DARK_OAK_PLANKS, Blocks.DARK_OAK_LOG, Blocks.DARK_OAK_FENCE, Blocks.DARK_OAK_SLAB,
             Blocks.DARK_OAK_STAIRS, Blocks.WALL_BANNER.white(),
         ),
-        minY = 55, merge = 24,
+        minY = 55, biomes = setOf("desert", "plains", "savanna", "snowy_plains", "taiga", "grove") + Biomes.MOUNTAIN, merge = 24,
         // Set by matching the watchtower (see [WatchtowerFit]).
         recognise = { d -> d.box },
         reach = null, waypointAtTop = true,
@@ -117,7 +132,7 @@ object Specs {
             Blocks.BIRCH_PLANKS, Blocks.DARK_OAK_PLANKS, Blocks.OAK_PLANKS, Blocks.CARPET.red(), Blocks.POLISHED_ANDESITE,
             Blocks.WOOL.lightGray(), Blocks.WOOL.black(), Blocks.BOOKSHELF, Blocks.BIRCH_STAIRS, Blocks.DARK_OAK_STAIRS,
         ),
-        minY = 50, biomes = listOf("dark_forest"), merge = 24,
+        minY = 50, biomes = setOf("dark_forest", "pale_garden"), merge = 24,
         recognise = { d -> boundsIf(d, d.count >= 300) },
     )
 
@@ -139,7 +154,7 @@ object Specs {
     /** Spruce planks and stairs on oak stilts, with the cauldron: nothing else in a swamp is spruce. */
     private val WITCH_HUT = Spec(
         setOf(Blocks.SPRUCE_PLANKS, Blocks.SPRUCE_STAIRS, Blocks.OAK_FENCE, Blocks.CAULDRON, Blocks.POTTED_RED_MUSHROOM, Blocks.CRAFTING_TABLE),
-        biomes = listOf("swamp"), merge = 6,
+        biomes = setOf("swamp"), merge = 6,
         recognise = { d -> if (d.count >= 25 && has(d, Blocks.CAULDRON)) d.bounds?.let(Recognise::witchHutBox) else null },
         reach = null, waypointAtTop = true,
     )
@@ -150,7 +165,7 @@ object Specs {
             Blocks.COBBLESTONE, Blocks.MOSSY_COBBLESTONE, Blocks.COBBLESTONE_STAIRS, Blocks.CHISELED_STONE_BRICKS,
             Blocks.TRIPWIRE_HOOK, Blocks.DISPENSER, Blocks.STICKY_PISTON, Blocks.LEVER,
         ),
-        minY = 50, biomes = listOf("jungle"), merge = 8,
+        minY = 50, biomes = setOf("jungle", "bamboo_jungle"), merge = 8,
         recognise = { d -> boundsIf(d, d.count >= 150 && has(d, Blocks.CHISELED_STONE_BRICKS)) },
         reach = Spec.Reach(1, 1, 3), waypointAtTop = true,
     )
@@ -161,7 +176,7 @@ object Specs {
             Blocks.CUT_SANDSTONE, Blocks.CHISELED_SANDSTONE, Blocks.SANDSTONE_STAIRS, Blocks.SANDSTONE_SLAB,
             Blocks.DYED_TERRACOTTA.orange(), Blocks.DYED_TERRACOTTA.blue(), Blocks.TNT, Blocks.STONE_PRESSURE_PLATE,
         ),
-        biomes = listOf("desert"), merge = 8,
+        biomes = setOf("desert"), merge = 8,
         recognise = { d -> boundsIf(d, d.count >= 40 && has(d, Blocks.DYED_TERRACOTTA.blue()) && has(d, Blocks.DYED_TERRACOTTA.orange())) },
         reach = Spec.Reach(1, 1, 3), waypointAtTop = true,
     )
@@ -169,7 +184,7 @@ object Specs {
     /** Mud bricks and suspicious gravel (away from the sea, where ocean ruins have it too). */
     private val TRAIL_RUINS = Spec(
         setOf(Blocks.MUD_BRICKS, Blocks.MUD_BRICK_STAIRS, Blocks.MUD_BRICK_SLAB, Blocks.MUD_BRICK_WALL, Blocks.PACKED_MUD, Blocks.SUSPICIOUS_GRAVEL),
-        notBiomes = listOf("ocean"), merge = 16,
+        biomes = setOf("taiga", "snowy_taiga", "old_growth_pine_taiga", "old_growth_spruce_taiga", "old_growth_birch_forest", "jungle"), merge = 16,
         recognise = { d -> boundsIf(d, d.count >= 40) },
         reach = Spec.Reach(1, 1, 3),
     )
@@ -181,7 +196,7 @@ object Specs {
             Blocks.DEEPSLATE_TILE_SLAB, Blocks.DEEPSLATE_TILE_WALL, Blocks.CHISELED_DEEPSLATE, Blocks.POLISHED_DEEPSLATE,
             Blocks.POLISHED_DEEPSLATE_WALL, Blocks.WOOL.gray(), Blocks.REINFORCED_DEEPSLATE,
         ),
-        maxY = 0, merge = 32,
+        maxY = 0, biomes = setOf("deep_dark"), merge = 32,
         recognise = { d -> boundsIf(d, d.count >= 300) },
         reach = Spec.Reach(2, 1, 5),
     )
@@ -191,7 +206,7 @@ object Specs {
             Blocks.PURPUR_BLOCK, Blocks.PURPUR_PILLAR, Blocks.PURPUR_STAIRS, Blocks.PURPUR_SLAB,
             Blocks.END_STONE_BRICKS, Blocks.END_ROD, Blocks.STAINED_GLASS.magenta(),
         ),
-        merge = 24,
+        biomes = setOf("end_highlands", "end_midlands"), merge = 24,
         recognise = { d -> boundsIf(d, d.count >= 60) },
     )
 

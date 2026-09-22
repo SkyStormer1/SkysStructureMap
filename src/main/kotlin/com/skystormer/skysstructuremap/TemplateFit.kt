@@ -31,6 +31,14 @@ open class TemplateFit(
      * watchtower is always the same woods and is matched block for block.
      */
     private val anyWood: Boolean,
+    /**
+     * How many of the blocks voting must agree on one placement: most for a lone structure like a
+     * wreck; fewer for a village's town centre, whose streets run right up to it and vote too.
+     * Every placement is then checked block for block just the same.
+     */
+    private val agreement: Double = MIN_AGREEMENT,
+    /** How many of the blocks seen vote: more where most of them are not part of the design. */
+    private val samples: Int = SAMPLES,
 ) {
 
     /**
@@ -63,9 +71,12 @@ open class TemplateFit(
          */
         private const val MIN_MATCH = 0.5
         private const val MIN_MATCHED_BLOCKS = 60
-        private const val MIN_AGREEMENT = 0.8
+        const val MIN_AGREEMENT = 0.8
 
-        private const val SAMPLES = 24
+        const val SAMPLES = 24
+
+        /** How many of the best-voted starts for each design and turn are checked. */
+        private const val TOP_STARTS = 3
 
         private val WOODS = listOf("stripped_", "dark_oak_", "pale_oak_", "oak_", "spruce_", "birch_", "jungle_", "acacia_", "mangrove_", "cherry_", "bamboo_")
     }
@@ -104,7 +115,7 @@ open class TemplateFit(
             lastReport = "${keys.size} blocks that may vote, too few"
             return null
         }
-        val step = maxOf(1, keys.size / SAMPLES)
+        val step = maxOf(1, keys.size / this.samples)
         val samples = (keys.indices step step).map { keys[it] }
 
         class Candidate(val template: Template, val rotation: Rotation, val origin: Long, val votes: Int)
@@ -123,25 +134,34 @@ open class TemplateFit(
                         votes.addTo(BlockPos.asLong(x - turned.x, y - turned.y, z - turned.z), 1)
                     }
                 }
-                var bestOrigin = 0L
-                var bestVotes = 0
+                // The few best-voted starts, not just the best: other blocks nearby (a village's
+                // streets) can put the true one second or third.
+                val top = ArrayList<Pair<Long, Int>>(TOP_STARTS + 1)
                 val iterator = votes.long2IntEntrySet().fastIterator()
                 while (iterator.hasNext()) {
                     val entry = iterator.next()
-                    if (entry.intValue > bestVotes) {
-                        bestVotes = entry.intValue
-                        bestOrigin = entry.longKey
+                    if (entry.intValue < samples.size * agreement) continue
+                    if (top.size < TOP_STARTS || entry.intValue > top.last().second) {
+                        top.add(entry.longKey to entry.intValue)
+                        top.sortByDescending { it.second }
+                        if (top.size > TOP_STARTS) top.removeAt(top.size - 1)
                     }
                 }
-                if (bestVotes >= samples.size * MIN_AGREEMENT) candidates.add(Candidate(template, rotation, bestOrigin, bestVotes))
+                for ((origin, count) in top) candidates.add(Candidate(template, rotation, origin, count))
             }
         }
         val bestVotes = candidates.maxOfOrNull { it.votes } ?: 0
         lastReport = "${detection.blocks.size} blocks, ${samples.size} samples, ${candidates.size} placements most samples agree on (best $bestVotes)"
+        if (candidates.isEmpty()) {
+            // Which kinds voted, and whether any design has them at all: what to look at when nothing fits.
+            val kinds = samples.mapNotNull { detection.blocks.get(it)?.let(::family) }.groupingBy { it }.eachCount()
+            lastReport += "; voting kinds ${kinds.entries.joinToString { "${it.key}×${it.value}" + if (templates.none { t -> it.key in t.byFamily }) " (in no design)" else "" }}"
+        }
         if (candidates.isEmpty()) return null
 
         var best: Match? = null
-        for (candidate in candidates.sortedByDescending { it.votes }.take(6)) {
+        // Every well-voted placement is checked: a design heavy with paths can outvote the right one.
+        for (candidate in candidates.sortedByDescending { it.votes }) {
             val match = check(candidate.template, candidate.rotation, candidate.origin, level)
             lastReport += "; ${candidate.template.name} ${candidate.rotation}: " + (match?.let { "${it.matched}/${it.known}" } ?: lastCheck)
             if (match == null) continue
@@ -243,3 +263,26 @@ object ShipwreckFit : TemplateFit(
  * the tower itself.
  */
 object WatchtowerFit : TemplateFit("pillager_outpost", listOf("watchtower", "watchtower_overgrown"), anyWood = false)
+
+/**
+ * A village's town centre, the meeting point or fountain with its bell that every village grows
+ * from, for each kind of village. A player's base can have paths, beds, a bell and job blocks, but
+ * not one of these laid out as the game lays them.
+ */
+object TownCentreFit : TemplateFit(
+    "village",
+    listOf(
+        "plains/town_centers/plains_fountain_01", "plains/town_centers/plains_meeting_point_1",
+        "plains/town_centers/plains_meeting_point_2", "plains/town_centers/plains_meeting_point_3",
+        "desert/town_centers/desert_meeting_point_1", "desert/town_centers/desert_meeting_point_2",
+        "desert/town_centers/desert_meeting_point_3",
+        "savanna/town_centers/savanna_meeting_point_1", "savanna/town_centers/savanna_meeting_point_2",
+        "savanna/town_centers/savanna_meeting_point_3", "savanna/town_centers/savanna_meeting_point_4",
+        "snowy/town_centers/snowy_meeting_point_1", "snowy/town_centers/snowy_meeting_point_2",
+        "snowy/town_centers/snowy_meeting_point_3",
+        "taiga/town_centers/taiga_meeting_point_1", "taiga/town_centers/taiga_meeting_point_2",
+    ),
+    anyWood = false,
+    agreement = 0.2,
+    samples = 400,
+)
