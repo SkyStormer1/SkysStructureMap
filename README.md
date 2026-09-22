@@ -21,8 +21,8 @@ game's own structure designs:
 
 - **Ocean monuments** are always the same building on the same grid, so their exact box is known.
 - **Shipwrecks, pillager outposts, villages, trail ruins and end cities** are matched against the game's own
-  designs: a wreck in any wood, an outpost's watchtower, a village's town centre around its bell, a trail ruins
-  tower, an end city's rooms, towers or ship. The match allows for broken or added blocks, but a player's build
+  designs: a wreck in any wood, an outpost's watchtower, a village's town centre around its bell (or where its
+  streets meet, if a raid took the bell), a trail ruins tower, an end city's rooms, towers or ship. The match allows for broken or added blocks, but a player's build
   that only uses the same blocks does not pass.
 - **Nether fortresses** need a bridge crossroads, **strongholds** their end portal frames, **trial chambers** a
   trial spawner or vault, and **witch huts** their exact size.
@@ -52,7 +52,9 @@ game's own structure designs:
   - **Box** draws every structure's outline, **Near** shows ones you've seen but not discovered yet, and **Set**
     opens the settings.
 - **Right-click an icon** to make a Xaero's Minimap waypoint, copy its coordinates, show or hide its outline, share
-  it, or delete it.
+  it, mark it as completed, or delete it.
+- **Completed** structures get a green tick beside their icon, on the world map and minimap, so you can see at a
+  glance which ones you've already looted or cleared. Right-click again to mark one as not completed.
 - **Share** a structure with everyone in chat, or privately with the players you pick. Anyone with this mod gets
   an **[Add to my map]** button that puts it on their map. It's one plain line of chat, so anyone without the mod
   sees its name, coordinates and box, and no code.
