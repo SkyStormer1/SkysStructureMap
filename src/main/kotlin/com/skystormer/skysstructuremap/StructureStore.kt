@@ -22,6 +22,11 @@ data class Structure(
     val variant: String? = null,
     /** Its box outline drawn on the map even while outlines are off for everything. */
     val outlined: Boolean = false,
+    /**
+     * Boxes inside it that matter on their own: for a fortress, its crossroads, which mobs spawn
+     * in. Kept once found, so they stay after the structure is torn down.
+     */
+    val pieces: List<Piece> = emptyList(),
 ) {
     val name: String get() = type.displayName
 
@@ -29,6 +34,9 @@ data class Structure(
     val waypointY: Int
         get() = waypointY(type, box)
 }
+
+/** A named box inside a structure: [FortressPieces.CROSSROADS], so far. */
+data class Piece(val kind: String, val box: Box)
 
 /** Where a waypoint to a [type] with this [box] goes. */
 fun waypointY(type: StructureType, box: Box): Int = if (Specs.of(type).waypointAtTop) box.maxY + 1 else box.centreY
@@ -52,6 +60,14 @@ object StructureStore {
     var all: List<Structure> = emptyList()
         private set
 
+    /**
+     * Structures you deleted, kept so they stay deleted: one recognised again where a deleted one
+     * was is ignored, however often you come back.
+     */
+    @Volatile
+    var deleted: List<Structure> = emptyList()
+        private set
+
     private var dirty = false
 
     val isOpen: Boolean get() = file != null
@@ -66,6 +82,7 @@ object StructureStore {
         worldName = name
         file = FabricLoader.getInstance().configDir.resolve("skysstructuremap").resolve("$key.json")
         all = read(file!!)
+        deleted = read(file!!, "deleted")
         Log.info("Loaded {} structure(s) for {} from {}", all.size, name, file)
     }
 
@@ -74,6 +91,7 @@ object StructureStore {
         file = null
         worldName = null
         all = emptyList()
+        deleted = emptyList()
     }
 
     fun byId(id: String): Structure? = all.firstOrNull { it.id == id }
@@ -87,7 +105,9 @@ object StructureStore {
         dirty = true
     }
 
+    /** Deletes a structure for good: it goes on [deleted], so it is not added back when seen again. */
     fun remove(id: String) {
+        byId(id)?.let { gone -> deleted = deleted + gone }
         all = all.filter { it.id != id }
         saveNow()
     }
@@ -106,6 +126,7 @@ object StructureStore {
             val json = JsonObject()
             json.addProperty("version", 1)
             json.add("structures", array)
+            if (deleted.isNotEmpty()) json.add("deleted", JsonArray().also { a -> deleted.forEach { a.add(toJson(it)) } })
             Files.createDirectories(path.parent)
             // Written beside it and moved into place, so a crash mid-write cannot lose the list.
             val temporary = path.resolveSibling(path.fileName.toString() + ".tmp")
@@ -129,11 +150,20 @@ object StructureStore {
 
     private fun safe(text: String): String = text.replace(Regex("[^A-Za-z0-9._-]"), "_").ifEmpty { "_" }
 
-    private fun read(path: Path): List<Structure> {
+    /** Whether [type] at [box] in [dimension] is one you deleted. */
+    fun isDeleted(type: StructureType, dimension: String, box: Box): Boolean =
+        deleted.any { it.type == type && it.dimension == dimension && it.box.grow(8).overlaps(box) }
+
+    /** Takes [type] at [box] off the deleted list, when you add it back yourself (from a share). */
+    fun undelete(type: StructureType, dimension: String, box: Box) {
+        deleted = deleted.filterNot { it.type == type && it.dimension == dimension && it.box.grow(8).overlaps(box) }
+    }
+
+    private fun read(path: Path, list: String = "structures"): List<Structure> {
         if (!Files.exists(path)) return emptyList()
         return try {
             val json = Files.newBufferedReader(path).use { JsonParser.parseReader(it) }.asJsonObject
-            json.getAsJsonArray("structures")?.mapNotNull { element ->
+            json.getAsJsonArray(list)?.mapNotNull { element ->
                 try {
                     fromJson(element.asJsonObject)
                 } catch (e: Exception) {
@@ -156,6 +186,15 @@ object StructureStore {
         addProperty("discovered", structure.discovered)
         structure.variant?.let { addProperty("variant", it) }
         if (structure.outlined) addProperty("outlined", true)
+        if (structure.pieces.isNotEmpty()) add("pieces", JsonArray().also { a ->
+            structure.pieces.forEach { p ->
+                a.add(JsonObject().apply {
+                    addProperty("kind", p.kind)
+                    val pb = p.box
+                    add("box", JsonArray().also { c -> listOf(pb.minX, pb.minY, pb.minZ, pb.maxX, pb.maxY, pb.maxZ).forEach(c::add) })
+                })
+            }
+        })
     }
 
     private fun fromJson(json: JsonObject): Structure {
@@ -169,6 +208,11 @@ object StructureStore {
             discovered = json.get("discovered")?.asLong ?: 0L,
             variant = json.get("variant")?.asString,
             outlined = json.get("outlined")?.asBoolean ?: false,
+            pieces = json.getAsJsonArray("pieces")?.mapNotNull { element ->
+                val p = element.asJsonObject
+                val pb = p.getAsJsonArray("box")?.map { it.asInt }?.takeIf { it.size == 6 } ?: return@mapNotNull null
+                Piece(p.get("kind")?.asString ?: return@mapNotNull null, Box(pb[0], pb[1], pb[2], pb[3], pb[4], pb[5]))
+            } ?: emptyList(),
         )
     }
 }

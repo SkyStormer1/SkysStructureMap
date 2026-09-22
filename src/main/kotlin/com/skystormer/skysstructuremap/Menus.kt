@@ -64,7 +64,7 @@ object Menus {
     private fun markDiscovered(marker: Marker) {
         val detection = marker.detection ?: return
         if (!StructureStore.isOpen) return say("Not in a world")
-        val structure = Structure(UUID.randomUUID().toString(), marker.type, marker.dimension, marker.box, System.currentTimeMillis(), detection.variant)
+        val structure = Structure(UUID.randomUUID().toString(), marker.type, marker.dimension, marker.box, System.currentTimeMillis(), detection.variant, pieces = detection.pieces)
         StructureStore.put(structure)
         detection.storedId = structure.id
         Log.info("Marked {} #{} as discovered by hand", marker.type.id, detection.id)
@@ -85,8 +85,8 @@ object Menus {
             },
             Component.literal("Delete this ${structure.name}?"),
             Component.literal(
-                "At ${structure.box.centreX} ${structure.waypointY} ${structure.box.centreZ}. It will be discovered again " +
-                    "if you come near it in a later session. This cannot be undone."
+                "At ${structure.box.centreX} ${structure.waypointY} ${structure.box.centreZ}. It stays deleted: it will not come back " +
+                    "when you return, unless someone shares it with you and you add it."
             ),
         ))
     }

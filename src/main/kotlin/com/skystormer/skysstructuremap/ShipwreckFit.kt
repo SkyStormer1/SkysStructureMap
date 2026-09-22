@@ -24,8 +24,24 @@ import net.minecraft.world.level.block.Rotation
  */
 object ShipwreckFit {
 
-    class Template(val name: String, val sizeX: Int, val sizeY: Int, val sizeZ: Int, val blocks: List<Pair<BlockPos, Block>>) {
-        val byBlock: Map<Block, List<BlockPos>> = blocks.groupBy({ it.second }, { it.first })
+    /**
+     * One shipwreck design. Its blocks are kept by [family] (stairs, planks, fence…) rather than by
+     * wood: the game builds each design in eight woods (a template holds eight palettes), and
+     * matching the shape alone finds every one of them.
+     */
+    class Template(val name: String, val sizeX: Int, val sizeY: Int, val sizeZ: Int, val blocks: List<Pair<BlockPos, String>>, val woods: Set<Block>) {
+        val byFamily: Map<String, List<BlockPos>> = blocks.groupBy({ it.second }, { it.first })
+    }
+
+    private val families = HashMap<Block, String>()
+
+    private val WOODS = listOf("stripped_", "dark_oak_", "pale_oak_", "oak_", "spruce_", "birch_", "jungle_", "acacia_", "mangrove_", "cherry_", "bamboo_")
+
+    /** A block without its wood: `dark_oak_stairs` and `spruce_stairs` are both `stairs`. */
+    fun family(block: Block): String = families.getOrPut(block) {
+        var path = BuiltInRegistries.BLOCK.getKey(block).path
+        for (wood in WOODS) path = path.removePrefix(wood)
+        path
     }
 
     private val NAMES = listOf(
@@ -45,7 +61,7 @@ object ShipwreckFit {
 
     /** Every kind of block that is in some shipwreck: what chunks are searched for. */
     val signatureBlocks: Set<Block> by lazy {
-        templates.flatMapTo(HashSet()) { it.byBlock.keys }.also { blocks ->
+        templates.flatMapTo(HashSet()) { it.woods }.also { blocks ->
             Log.info("Searching the sea for {} kinds of shipwreck block: {}", blocks.size,
                 blocks.map { BuiltInRegistries.BLOCK.getKey(it).path }.sorted().joinToString(", "))
         }
@@ -89,7 +105,7 @@ object ShipwreckFit {
                 val votes = Long2IntOpenHashMap()
                 for (key in samples) {
                     val block = detection.blocks.get(key) ?: continue
-                    val local = template.byBlock[block] ?: continue
+                    val local = template.byFamily[family(block)] ?: continue
                     val x = BlockPos.getX(key)
                     val y = BlockPos.getY(key)
                     val z = BlockPos.getZ(key)
@@ -141,7 +157,7 @@ object ShipwreckFit {
             cursor.set(ox + turned.x, oy + turned.y, oz + turned.z)
             if (!level.hasChunk(cursor.x shr 4, cursor.z shr 4)) continue
             known++
-            if (level.getBlockState(cursor).block == block) matched++
+            if (family(level.getBlockState(cursor).block) == block) matched++
         }
         lastCheck = "$matched/$known of ${template.blocks.size} match"
         if (known < template.blocks.size * 0.6 || matched < known * MIN_MATCH || matched < MIN_MATCHED_BLOCKS) return null
@@ -172,20 +188,27 @@ object ShipwreckFit {
 
     private fun parse(name: String, tag: CompoundTag): Template {
         val size = tag.getListOrEmpty("size")
-        val paletteTag = tag.getList("palette").orElseGet { tag.getListOrEmpty("palettes").getListOrEmpty(0) }
-        val palette = (0 until paletteTag.size).map { i ->
-            val id = paletteTag.getCompoundOrEmpty(i).getStringOr("Name", "minecraft:air")
-            BuiltInRegistries.BLOCK.getValue(Identifier.parse(id))
+        // One palette, or several (the same design in different woods); the first gives the shape.
+        val palettes = tag.getList("palette").map { listOf(it) }.orElseGet {
+            val many = tag.getListOrEmpty("palettes")
+            (0 until many.size).map { many.getListOrEmpty(it) }
         }
+        val blockPalettes = palettes.map { paletteTag ->
+            (0 until paletteTag.size).map { i ->
+                BuiltInRegistries.BLOCK.getValue(Identifier.parse(paletteTag.getCompoundOrEmpty(i).getStringOr("Name", "minecraft:air")))
+            }
+        }
+        val palette = blockPalettes.firstOrNull() ?: emptyList()
         val blocksTag = tag.getListOrEmpty("blocks")
-        val blocks = ArrayList<Pair<BlockPos, Block>>()
+        val blocks = ArrayList<Pair<BlockPos, String>>()
         for (i in 0 until blocksTag.size) {
             val entry = blocksTag.getCompoundOrEmpty(i)
             val block = palette.getOrNull(entry.getIntOr("state", -1)) ?: continue
             if (block in IGNORED) continue
             val pos = entry.getListOrEmpty("pos")
-            blocks.add(BlockPos(pos.getIntOr(0, 0), pos.getIntOr(1, 0), pos.getIntOr(2, 0)) to block)
+            blocks.add(BlockPos(pos.getIntOr(0, 0), pos.getIntOr(1, 0), pos.getIntOr(2, 0)) to family(block))
         }
-        return Template(name, size.getIntOr(0, 0), size.getIntOr(1, 0), size.getIntOr(2, 0), blocks)
+        val woods = blockPalettes.flatten().filterTo(HashSet()) { it !in IGNORED }
+        return Template(name, size.getIntOr(0, 0), size.getIntOr(1, 0), size.getIntOr(2, 0), blocks, woods)
     }
 }
