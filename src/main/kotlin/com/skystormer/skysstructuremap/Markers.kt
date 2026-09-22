@@ -33,7 +33,7 @@ class Marker(val structure: Structure?, val detection: Detection?) {
 }
 
 /**
- * Every structure's badge on Xaero's world map, in the middle of its box, through Xaero's own
+ * Every structure's icon on Xaero's world map, in the middle of its box, through Xaero's own
  * element system (the one its waypoints use) so it can be hovered for details and right-clicked.
  */
 object Markers {
@@ -114,7 +114,7 @@ object Markers {
         ElementRenderer<Marker, Context, Renderer>(context, provider, reader) {
 
         // Xaero draws element layers in ascending order, later ones on top; its claims are 150 and
-        // waypoints 200. Below those, so a badge never covers a waypoint.
+        // waypoints 200. Below those, so an icon never covers a waypoint.
         override fun getOrder(): Int = ORDER
 
         // Xaero renders elements in two passes, shadows first ("pre"); both go through here.

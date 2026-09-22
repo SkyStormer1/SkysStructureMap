@@ -6,7 +6,7 @@ import java.util.UUID
 
 /**
  * Turns the blocks [ChunkScanner] finds into structures: groups them, decides when a group is
- * recognised, and saves it as discovered once your hitbox is inside its box.
+ * recognised, and saves it as discovered once you come near it ([Detection.touches]).
  *
  * Everything here runs on the client's main thread (chunk loading, ticking and drawing the map
  * all do), so nothing needs locking.
