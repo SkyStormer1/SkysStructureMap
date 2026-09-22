@@ -20,12 +20,23 @@ Each kind of structure is recognised from blocks that only it generates, chosen 
 game's own structure designs:
 
 - **Ocean monuments** are always the same building on the same grid, so their exact box is known.
-- **Shipwrecks** are matched against the game's own shipwreck designs.
-- **Everything else** is mapped out from its blocks as you see more of it. Where it looks (biome, height) rules out
-  look-alikes such as dungeons and ocean ruins.
+- **Shipwrecks, pillager outposts and villages** are matched against the game's own designs: a wreck in any wood,
+  an outpost's watchtower, a village's town centre around its bell. The match allows for broken or added blocks,
+  but a player's build that only uses the same blocks does not pass.
+- **Strongholds** need their end portal frames.
+- **Everything else** is mapped out from its blocks as you see more of it.
+- Each kind is only looked for in the biomes the game generates it in, so a player's base elsewhere is never
+  taken for one.
 
 ## Features
 
+- **Spawn boxes**, like MiniHUD's but without the seed: the boxes that structures with mobs of their own spawn
+  them in, drawn in the world around you and on the world map.
+  - **Nether fortresses:** the whole fortress box, and each bridge crossroads (the pieces wither skeletons and
+    blazes spawn in), both exact.
+  - **Ocean monuments, pillager outposts, witch huts:** their exact boxes.
+  - Kept once found, so they stay after you tear the structure down.
+  - Turn them off on the map or in the world under Set, or bind a key in Controls to show and hide them in the world.
 - **Icons on the world map and minimap** for every structure you've discovered. Hover one on the world map for
   its coordinates and size.
 - **A legend** on the world map, listing the structures that can exist in the dimension you're looking at, with
@@ -44,6 +55,7 @@ game's own structure designs:
   - how close counts as discovering a structure (or only when you're inside it),
   - a chat line when you discover one,
   - the command used for private shares (`tell` by default).
+- **Deleting** a structure is for good: it does not come back when you return.
 - Discoveries are saved per server, in `config/skysstructuremap/`.
 
 ## Structures
