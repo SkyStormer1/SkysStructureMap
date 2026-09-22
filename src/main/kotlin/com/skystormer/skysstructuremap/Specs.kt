@@ -92,7 +92,12 @@ object Specs {
         biomes = setOf("crimson_forest", "nether_wastes", "soul_sand_valley", "warped_forest"), merge = 24,
         recognise = { d ->
             val b = d.bounds
-            boundsIf(d, b != null && d.count >= Recognise.BASTION_BLOCKS && maxOf(b.sizeX, b.sizeZ) >= Recognise.BASTION_WIDTH)
+            // The game cracks about 30% of a bastion's polished blackstone bricks as it places it; a
+            // player's blackstone build has few or none cracked, or only cracked ones.
+            val polished = d.kinds[Blocks.POLISHED_BLACKSTONE_BRICKS] ?: 0
+            val cracked = d.kinds[Blocks.CRACKED_POLISHED_BLACKSTONE_BRICKS] ?: 0
+            val share = if (polished + cracked == 0) 0.0 else cracked.toDouble() / (polished + cracked)
+            boundsIf(d, b != null && d.count >= Recognise.BASTION_BLOCKS && maxOf(b.sizeX, b.sizeZ) >= Recognise.BASTION_WIDTH && share in 0.18..0.45)
         },
     )
 
@@ -133,7 +138,13 @@ object Specs {
             Blocks.WOOL.lightGray(), Blocks.WOOL.black(), Blocks.BOOKSHELF, Blocks.BIRCH_STAIRS, Blocks.DARK_OAK_STAIRS,
         ),
         minY = 50, biomes = setOf("dark_forest", "pale_garden"), merge = 24,
-        recognise = { d -> boundsIf(d, d.count >= 300) },
+        // A mansion is its mix at scale: red carpet down every corridor and several of these at once
+        // (the test one had 943 red carpet among 12485 blocks), where a player's wooden house has
+        // planks and stairs but little carpet.
+        recognise = { d ->
+            val carpet = d.kinds[Blocks.CARPET.red()] ?: 0
+            boundsIf(d, d.count >= 1000 && carpet >= 100 && d.kinds.values.count { it >= 20 } >= 5)
+        },
     )
 
     /**
@@ -217,7 +228,8 @@ object Specs {
             Blocks.END_STONE_BRICKS, Blocks.END_ROD, Blocks.STAINED_GLASS.magenta(),
         ),
         biomes = setOf("end_highlands", "end_midlands"), merge = 24,
-        recognise = { d -> boundsIf(d, d.count >= 60) },
+        // Set once one of its pieces matches (see [EndCityFit]).
+        recognise = { d -> d.box },
     )
 
     /**
