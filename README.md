@@ -20,13 +20,18 @@ Each kind of structure is recognised from blocks that only it generates, chosen 
 game's own structure designs:
 
 - **Ocean monuments** are always the same building on the same grid, so their exact box is known.
-- **Shipwrecks, pillager outposts and villages** are matched against the game's own designs: a wreck in any wood,
-  an outpost's watchtower, a village's town centre around its bell. The match allows for broken or added blocks,
-  but a player's build that only uses the same blocks does not pass.
-- **Strongholds** need their end portal frames.
+- **Shipwrecks, pillager outposts, villages, trail ruins and end cities** are matched against the game's own
+  designs: a wreck in any wood, an outpost's watchtower, a village's town centre around its bell, a trail ruins
+  tower, an end city's rooms, towers or ship. The match allows for broken or added blocks, but a player's build
+  that only uses the same blocks does not pass.
+- **Nether fortresses** need a bridge crossroads, **strongholds** their end portal frames, **trial chambers** a
+  trial spawner or vault, and **witch huts** their exact size.
+- **Bastions** need the share of cracked bricks the game leaves when it builds one, and **woodland mansions** their
+  mix of materials at scale, red carpet down every corridor included.
 - **Everything else** is mapped out from its blocks as you see more of it.
 - Each kind is only looked for in the biomes the game generates it in, so a player's base elsewhere is never
-  taken for one.
+  taken for one. Outposts and villages only need part of themselves in the right biome, since they often reach
+  over into a beach or river beside it.
 
 ## Features
 
@@ -49,7 +54,8 @@ game's own structure designs:
 - **Right-click an icon** to make a Xaero's Minimap waypoint, copy its coordinates, show or hide its outline, share
   it, or delete it.
 - **Share** a structure with everyone in chat, or privately with the players you pick. Anyone with this mod gets
-  an **[Add to my map]** button that puts it on their map. Anyone without it still sees the name and coordinates.
+  an **[Add to my map]** button that puts it on their map. It's one plain line of chat, so anyone without the mod
+  sees its name, coordinates and box, and no code.
 - **Settings** (the legend's Set button, or Mod Menu):
   - icon size on the world map and minimap,
   - how close counts as discovering a structure (or only when you're inside it),
@@ -79,8 +85,10 @@ game's own structure designs:
 
 - A structure has to be within your render distance to be recognised.
 - Boxes for most structures are built from what you've seen, so they grow as you explore more of them.
-- A large player base with paths, beds, a bell and job-site blocks could be taken for a village. Right-click its
-  icon and choose Delete.
+- A player's build can still occasionally be taken for a structure. If one is, right-click its icon and
+  choose Delete.
+- A structure that's been heavily griefed or partly torn down may no longer be recognised, if you didn't find it
+  before that happened.
 
 ## Licence
 
