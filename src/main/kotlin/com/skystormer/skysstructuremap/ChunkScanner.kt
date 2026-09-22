@@ -52,8 +52,9 @@ object ChunkScanner {
                         if (!spec.matches(state)) continue
                         // Wood is everywhere on land, bricks under the sea, and so on: where a
                         // block is can matter as much as what it is.
-                        if (spec.biomeFiltered && !spec.biomeAllowed(biomeAt(chunk, x, worldY, z))) continue
-                        found.add(Found(baseX + x, worldY, baseZ + z, state.block))
+                        val allowed = !spec.biomeFiltered || spec.biomeAllowed(biomeAt(chunk, x, worldY, z))
+                        if (!allowed && !spec.biomeAsWhole) continue
+                        found.add(Found(baseX + x, worldY, baseZ + z, state.block, allowed))
                     }
                 }
             }
@@ -64,5 +65,6 @@ object ChunkScanner {
     private fun biomeAt(chunk: LevelChunk, x: Int, y: Int, z: Int): String =
         chunk.getNoiseBiome(x shr 2, y shr 2, z shr 2).unwrapKey().map { it.identifier().path }.orElse("")
 
-    class Found(val x: Int, val y: Int, val z: Int, val block: Block)
+    /** A block found, and whether it stands in a biome its structure can be in. */
+    class Found(val x: Int, val y: Int, val z: Int, val block: Block, val inBiome: Boolean = true)
 }
