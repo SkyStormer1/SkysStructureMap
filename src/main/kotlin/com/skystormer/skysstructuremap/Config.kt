@@ -26,6 +26,12 @@ object Config {
     /** How many lines the legend shows before scrolling. Changed by dragging its bottom edge. */
     var legendRows = 6
     /** Off unless turned on in the legend: the icons are usually enough. */
+    /** Everything this mod draws, off in one switch: icons, outlines and spawn boxes. */
+    var show = true
+
+    /** Structures marked as completed are left off the maps. */
+    var hideCompleted = false
+
     var outlines = false
 
     /** Also show structures recognised nearby that you have not discovered yet, faintly. */
@@ -76,6 +82,8 @@ object Config {
             legendRight = json.get("legendRight")?.asInt ?: legendRight
             legendTop = json.get("legendTop")?.asInt ?: legendTop
             legendRows = (json.get("legendRows")?.asInt ?: legendRows).coerceIn(1, 32)
+            show = json.get("show")?.asBoolean ?: show
+            hideCompleted = json.get("hideCompleted")?.asBoolean ?: hideCompleted
             outlines = json.get("outlines")?.asBoolean ?: outlines
             showUndiscovered = json.get("showUndiscovered")?.asBoolean ?: showUndiscovered
             announce = json.get("announce")?.asBoolean ?: announce
@@ -98,6 +106,8 @@ object Config {
             json.addProperty("legendRight", legendRight)
             json.addProperty("legendTop", legendTop)
             json.addProperty("legendRows", legendRows)
+            json.addProperty("show", show)
+            json.addProperty("hideCompleted", hideCompleted)
             json.addProperty("outlines", outlines)
             json.addProperty("showUndiscovered", showUndiscovered)
             json.addProperty("announce", announce)

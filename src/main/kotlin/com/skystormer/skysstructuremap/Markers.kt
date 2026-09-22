@@ -47,7 +47,9 @@ object Markers {
 
     /** What the map shows for [dimension]: the kinds ticked in the legend, discovered ones and, if turned on, nearby ones. */
     fun visibleIn(dimension: String): List<Marker> {
-        val saved = StructureStore.inDimension(dimension).filter { Config.isShown(it.type) }.map { Marker(it, null) }
+        if (!Config.show) return emptyList()
+        val saved = StructureStore.inDimension(dimension)
+            .filter { Config.isShown(it.type) && !(Config.hideCompleted && it.completed) }.map { Marker(it, null) }
         if (!Config.showUndiscovered) return saved
         return saved + Tracker.undiscovered(dimension).filter { Config.isShown(it.type) }.map { Marker(null, it) }
     }
@@ -123,6 +125,15 @@ object Markers {
 
         // Xaero renders elements in two passes, shadows first ("pre"); both go through here.
         override fun shouldRender(location: ElementRenderLocation, pre: Boolean): Boolean = location == ElementRenderLocation.WORLD_MAP
+
+        /**
+         * Xaero divides an element's position by the dimension scale, because its own waypoints are
+         * kept in the coordinates of the dimension you are standing in and have to be converted to
+         * the one the map is showing. These are read from the dimension being shown already, so
+         * there is nothing to convert: letting Xaero convert them anyway threw every icon eight
+         * times too far out (or in) whenever the map was switched between the nether and overworld.
+         */
+        override fun shouldBeDimScaled(): Boolean = false
 
         override fun preRender(info: ElementRenderInfo, buffers: XaeroBufferProvider, renderers: MultiTextureRenderTypeRendererProvider, pre: Boolean) {
             context.icons = renderers.getRenderer(CustomRenderTypes.GUI_NEAREST)

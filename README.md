@@ -59,6 +59,8 @@ game's own structure designs:
   an **[Add to my map]** button that puts it on their map. It's one plain line of chat, so anyone without the mod
   sees its name, coordinates and box, and no code.
 - **Settings** (the legend's Set button, or Mod Menu):
+  - **Show structures**, one switch for everything the mod draws, and **Hide completed**, which leaves the ones
+    you've finished with off the maps,
   - icon size on the world map and minimap,
   - how close counts as discovering a structure (or only when you're inside it),
   - a chat line when you discover one,
