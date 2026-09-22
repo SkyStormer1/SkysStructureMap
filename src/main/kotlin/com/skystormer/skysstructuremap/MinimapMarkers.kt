@@ -52,6 +52,18 @@ object MinimapMarkers {
 
     class Reader : MinimapElementReader<Marker, Context>() {
         override fun isHidden(marker: Marker, context: Context): Boolean = false
+        /**
+         * Xaero converts an element's coordinates from the dimension you are standing in into the
+         * one the minimap is showing, as it does for its own waypoints. These are read from the
+         * dimension being shown already, so there is nothing to convert: letting it convert them
+         * anyway threw them eight times too far out and off the minimap whenever it was switched
+         * between the nether and the overworld.
+         */
+        override fun getCoordinateScale(marker: Marker, context: Context, info: MinimapElementRenderInfo): Double = 1.0
+
+        /** For the same reason, your movement between blocks is not scaled either (as for waypoints). */
+        override fun shouldScalePartialCoordinates(marker: Marker, context: Context, info: MinimapElementRenderInfo): Boolean = false
+
         override fun getRenderX(marker: Marker, context: Context, partialTicks: Float): Double = (marker.box.minX + marker.box.maxX + 1) / 2.0
         override fun getRenderY(marker: Marker, context: Context, partialTicks: Float): Double = marker.y.toDouble()
         override fun getRenderZ(marker: Marker, context: Context, partialTicks: Float): Double = (marker.box.minZ + marker.box.maxZ + 1) / 2.0
