@@ -83,6 +83,7 @@ object StructureStore {
         file = FabricLoader.getInstance().configDir.resolve("skysstructuremap").resolve("$key.json")
         all = read(file!!)
         deleted = read(file!!, "deleted")
+        mergeDuplicates()
         Log.info("Loaded {} structure(s) for {} from {}", all.size, name, file)
     }
 
@@ -150,13 +151,41 @@ object StructureStore {
 
     private fun safe(text: String): String = text.replace(Regex("[^A-Za-z0-9._-]"), "_").ifEmpty { "_" }
 
+    /**
+     * Joins structures saved twice: before sightings were matched by the distance two can be
+     * apart, one seen half on one visit and half on the next could be saved as two. The earliest
+     * discovery is kept, with both boxes and all pieces.
+     */
+    private fun mergeDuplicates() {
+        val kept = ArrayList<Structure>()
+        var joined = 0
+        for (s in all.sortedBy { it.discovered }) {
+            val index = kept.indexOfFirst { it.type == s.type && it.dimension == s.dimension && Specs.sameStructure(s.type, it.box, s.box) }
+            if (index < 0) {
+                kept.add(s)
+                continue
+            }
+            val k = kept[index]
+            // An exact box (a monument, a wreck) stays as it was; the rest grow to cover both.
+            val box = if (Specs.of(s.type).reach == null) k.box else k.box.union(s.box)
+            kept[index] = k.copy(box = box, outlined = k.outlined || s.outlined,
+                pieces = k.pieces + s.pieces.filter { p -> k.pieces.none { it.box == p.box } })
+            joined++
+        }
+        if (joined > 0) {
+            Log.info("Joined {} structure(s) that had been saved twice", joined)
+            all = kept
+            dirty = true
+        }
+    }
+
     /** Whether [type] at [box] in [dimension] is one you deleted. */
     fun isDeleted(type: StructureType, dimension: String, box: Box): Boolean =
-        deleted.any { it.type == type && it.dimension == dimension && it.box.grow(8).overlaps(box) }
+        deleted.any { it.type == type && it.dimension == dimension && Specs.sameStructure(type, it.box, box) }
 
     /** Takes [type] at [box] off the deleted list, when you add it back yourself (from a share). */
     fun undelete(type: StructureType, dimension: String, box: Box) {
-        deleted = deleted.filterNot { it.type == type && it.dimension == dimension && it.box.grow(8).overlaps(box) }
+        deleted = deleted.filterNot { it.type == type && it.dimension == dimension && Specs.sameStructure(type, it.box, box) }
     }
 
     private fun read(path: Path, list: String = "structures"): List<Structure> {

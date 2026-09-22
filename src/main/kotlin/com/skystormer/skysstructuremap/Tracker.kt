@@ -102,13 +102,13 @@ object Tracker {
                 detection.variant = match.template.name
                 detection.box = when (detection.type) {
                     StructureType.OUTPOST -> Recognise.outpostBox(match.box)
-                    // The town centre proves it; the village is everything seen around it.
-                    StructureType.VILLAGE -> detection.bounds
+                    // The town centre (or tower) proves it; the rest is everything seen around it.
+                    StructureType.VILLAGE, StructureType.TRAIL_RUINS -> detection.bounds
                     else -> match.box
                 }
             }
             // A village is proved once; after that its box is everything seen, as more of it loads.
-            if (match == null && detection.type == StructureType.VILLAGE && detection.variant != null) detection.box = detection.bounds
+            if (match == null && (detection.type == StructureType.VILLAGE || detection.type == StructureType.TRAIL_RUINS) && detection.variant != null) detection.box = detection.bounds
             if (match?.box != before || (match == null && detection.blocks.size >= 100)) {
                 Log.info("{} #{} at {}: {} in {} ms ({})", detection.type.id, detection.id, detection.bounds,
                     match?.let { "${it.template.name}, box ${detection.box}" } ?: "no template fits", millis, fitter.lastReport)
@@ -133,7 +133,7 @@ object Tracker {
         if (detection.storedId == null) {
             // Found again after rejoining, or seen from another side: it is the one already saved.
             val saved = StructureStore.inDimension(detection.dimension)
-                .firstOrNull { it.type == detection.type && it.box.grow(8).overlaps(box) }
+                .firstOrNull { it.type == detection.type && Specs.sameStructure(it.type, it.box, box) }
             if (saved != null) {
                 detection.storedId = saved.id
                 Log.info("{} #{} is the one discovered before ({})", detection.type.id, detection.id, saved.id)
