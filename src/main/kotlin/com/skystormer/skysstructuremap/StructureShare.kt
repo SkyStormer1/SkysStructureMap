@@ -103,6 +103,8 @@ object StructureShare {
         val existing = StructureStore.inDimension(shared.dimension)
             .firstOrNull { it.type == shared.type && it.box.grow(8).overlaps(shared.box) }
         if (existing != null) return Menus.say("That ${shared.type.displayName} is already on your map.")
+        // Adding it yourself undoes having deleted it.
+        StructureStore.undelete(shared.type, shared.dimension, shared.box)
         val structure = Structure(UUID.randomUUID().toString(), shared.type, shared.dimension, shared.box, System.currentTimeMillis(), shared.variant)
         StructureStore.put(structure)
         // It may already be in view but not visited: it is the saved one now.

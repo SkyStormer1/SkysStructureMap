@@ -24,15 +24,23 @@ object Outlines {
         }
         try {
             val dimension = mapProcessor.mapWorld?.currentDimension?.dimId?.identifier()?.toString() ?: return
-            val markers = Markers.visibleIn(dimension).filter { Config.outlines || it.outlined }
+            // Every structure's box when outlines are on (or just this one's); spawn boxes, a
+            // fortress's crossroads included, whenever those are on.
+            val markers = Markers.visibleIn(dimension).filter {
+                Config.outlines || it.outlined || (Config.spawnBoxesOnMap && SpawnBoxes.hasSpawns(it.type))
+            }
             if (markers.isEmpty()) return
             val blocksPerUnit = Matrix4f(matrix).invert().transformDirection(Vector3f(1f, 0f, 0f)).length().coerceAtLeast(1e-4f)
             val half = (LINE_WIDTH * blocksPerUnit / 2).toDouble()
             val buffer = XaeroLib.INSTANCE.client.bufferProvider.getBuffer(CustomRenderTypes.MAP_COLOR_OVERLAY)
             for (marker in markers) {
-                val b = marker.box
                 val alpha = if (marker.discovered) 1f else 0.45f
-                rectangle(buffer, matrix, b.minX.toDouble(), b.minZ.toDouble(), b.maxX + 1.0, b.maxZ + 1.0, half, originX, originZ, marker.type.colour, alpha)
+                val boxes = if (Config.spawnBoxesOnMap && SpawnBoxes.hasSpawns(marker.type)) SpawnBoxes.boxesOf(marker)
+                else listOf(SpawnBoxes.Drawn(marker.box, marker.type.colour))
+                for (drawn in boxes) {
+                    val b = drawn.box
+                    rectangle(buffer, matrix, b.minX.toDouble(), b.minZ.toDouble(), b.maxX + 1.0, b.maxZ + 1.0, half, originX, originZ, drawn.colour, alpha)
+                }
             }
         } catch (e: Throwable) {
             if (!failed) {

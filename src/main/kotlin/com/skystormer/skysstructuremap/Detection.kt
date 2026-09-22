@@ -42,6 +42,9 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
     /** Shipwrecks only: which template matched. */
     var variant: String? = null
 
+    /** Fortresses: the crossroads found so far. */
+    var pieces: List<Piece> = emptyList()
+
     /** The saved structure this is, once discovered (or recognised as one discovered before). */
     var storedId: String? = null
 

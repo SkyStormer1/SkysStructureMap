@@ -34,6 +34,13 @@ object Config {
     /** A chat line (seen only by you) whenever you discover one. */
     var announce = true
 
+    /**
+     * The boxes that structures with mobs of their own spawn them in ([SpawnBoxes]): drawn on the
+     * world map, and in the world around you (the second can also be switched with a key).
+     */
+    var spawnBoxesOnMap = true
+    var spawnBoxesInWorld = true
+
     /** How big the icons are on the world map and on the minimap, as a multiple of their normal size. */
     var iconScale = 1f
     var minimapIconScale = 1f
@@ -72,6 +79,8 @@ object Config {
             outlines = json.get("outlines")?.asBoolean ?: outlines
             showUndiscovered = json.get("showUndiscovered")?.asBoolean ?: showUndiscovered
             announce = json.get("announce")?.asBoolean ?: announce
+            spawnBoxesOnMap = json.get("spawnBoxesOnMap")?.asBoolean ?: spawnBoxesOnMap
+            spawnBoxesInWorld = json.get("spawnBoxesInWorld")?.asBoolean ?: spawnBoxesInWorld
             iconScale = (json.get("iconScale")?.asFloat ?: iconScale).coerceIn(MIN_SCALE, MAX_SCALE)
             minimapIconScale = (json.get("minimapIconScale")?.asFloat ?: minimapIconScale).coerceIn(MIN_SCALE, MAX_SCALE)
             privateShareCommand = json.get("privateShareCommand")?.asString?.trim()?.removePrefix("/")?.takeIf { it.isNotEmpty() } ?: privateShareCommand
@@ -92,6 +101,8 @@ object Config {
             json.addProperty("outlines", outlines)
             json.addProperty("showUndiscovered", showUndiscovered)
             json.addProperty("announce", announce)
+            json.addProperty("spawnBoxesOnMap", spawnBoxesOnMap)
+            json.addProperty("spawnBoxesInWorld", spawnBoxesInWorld)
             json.addProperty("iconScale", iconScale)
             json.addProperty("minimapIconScale", minimapIconScale)
             json.addProperty("discoverDistance", discoverDistance)

@@ -94,6 +94,13 @@ object Tracker {
             }
         } else {
             detection.box = Recognise.box(detection)
+            val bricks = detection.bounds
+            if (detection.type == StructureType.FORTRESS && detection.box != null && bricks != null) {
+                val crossroads = FortressPieces.crossroads(detection, level)
+                if (crossroads.size != detection.pieces.size) Log.info("Fortress #{}: {} crossroads {}", detection.id, crossroads.size, crossroads)
+                detection.pieces = crossroads.map { Piece(FortressPieces.CROSSROADS, it) }
+                detection.box = FortressPieces.outerBox(bricks, crossroads)
+            }
             if (detection.box != null && before == null) {
                 Log.info("Recognised {} #{} from {} blocks ({}), seen {}: box {}", detection.type.id, detection.id, detection.count, describeKinds(detection), detection.bounds, detection.box)
             }
@@ -106,6 +113,10 @@ object Tracker {
             if (saved != null) {
                 detection.storedId = saved.id
                 Log.info("{} #{} is the one discovered before ({})", detection.type.id, detection.id, saved.id)
+            } else if (StructureStore.isDeleted(detection.type, detection.dimension, box)) {
+                // Deleted on purpose: never shown or discovered again.
+                detection.storedId = Menus.DELETED
+                Log.info("{} #{} is one you deleted; ignoring it", detection.type.id, detection.id)
             }
         }
         val stored = detection.storedId?.let(StructureStore::byId) ?: return
@@ -114,9 +125,13 @@ object Tracker {
         val better = when {
             detection.type == StructureType.SHIPWRECK -> stored.box
             Specs.of(detection.type).reach == null -> box
+            // A fortress's bottom is worked out, not seen: the new one replaces any older guess.
+            detection.type == StructureType.FORTRESS -> stored.box.union(box).let { if (box.minY == 48) it.copy(minY = 48) else it }
             else -> stored.box.union(box)
         }
-        if (better != stored.box) StructureStore.put(stored.copy(box = better))
+        // Pieces are only ever added, so they stay after the structure is torn down.
+        val pieces = stored.pieces + detection.pieces.filter { new -> stored.pieces.none { it.box == new.box } }
+        if (better != stored.box || pieces.size != stored.pieces.size) StructureStore.put(stored.copy(box = better, pieces = pieces))
     }
 
     private fun discover(detection: Detection) {
@@ -133,6 +148,7 @@ object Tracker {
             box = box,
             discovered = System.currentTimeMillis(),
             variant = detection.variant,
+            pieces = detection.pieces,
         )
         StructureStore.put(structure)
         detection.storedId = structure.id

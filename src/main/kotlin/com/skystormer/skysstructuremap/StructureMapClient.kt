@@ -2,7 +2,11 @@ package com.skystormer.skysstructuremap
 
 import com.skystormer.skysstructuremap.gui.Legend
 import com.mojang.brigadier.arguments.StringArgumentType
+import com.mojang.blaze3d.platform.InputConstants
 import net.fabricmc.api.ClientModInitializer
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper
+import net.minecraft.client.KeyMapping
+import net.minecraft.resources.Identifier
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
@@ -18,8 +22,17 @@ object StructureMapClient : ClientModInitializer {
     private var minimapMarkersAdded = false
     private var hookChecked = false
 
+    /** Shows or hides the spawn boxes in the world. Unbound until you pick a key in Controls. */
+    private val spawnBoxesKey = KeyMapping(
+        "key.skysstructuremap.spawn_boxes",
+        InputConstants.Type.KEYSYM,
+        InputConstants.UNKNOWN.value,
+        KeyMapping.Category.register(Identifier.fromNamespaceAndPath("skysstructuremap", "structures")),
+    )
+
     override fun onInitializeClient() {
         Config.load()
+        KeyMappingHelper.registerKeyMapping(spawnBoxesKey)
 
         ClientPlayConnectionEvents.JOIN.register { _, _, client -> client.execute { StructureStore.open(client) } }
         ClientPlayConnectionEvents.DISCONNECT.register { _, client ->
@@ -83,6 +96,12 @@ object StructureMapClient : ClientModInitializer {
                 }
             }
             StructureShare.tick()
+            SpawnBoxes.tick(client)
+            while (spawnBoxesKey.consumeClick()) {
+                Config.spawnBoxesInWorld = !Config.spawnBoxesInWorld
+                Config.save()
+                Menus.say(if (Config.spawnBoxesInWorld) "Spawn boxes shown in the world" else "Spawn boxes hidden in the world")
+            }
             try {
                 Tracker.tick(client)
             } catch (e: Throwable) {

@@ -49,6 +49,43 @@ object Recognise {
         return (lowest..highest step 16).map { it - MONUMENT_OFFSET }
     }
 
+    /**
+     * A witch hut's box: as wide as its spruce walls and floor, from one block under the floor to
+     * five above it (seven high), as the game builds it. The stilts below are not part of it.
+     */
+    fun witchHutBox(seen: Box): Box = Box(seen.minX, seen.minY - 1, seen.minZ, seen.maxX, seen.minY + 5, seen.maxZ)
+
+    /**
+     * A pillager outpost's box: always 48 × 48 blocks of platforms, the middle one lined up with
+     * the chunk its watchtower stands in and one more on each side, and 30 blocks high from its
+     * base. The tower is the only part that stands high, so its middle gives the chunk. Null
+     * until the tower has been seen.
+     */
+    fun outpostBox(detection: Detection): Box? {
+        val seen = detection.bounds ?: return null
+        var minX = Int.MAX_VALUE
+        var maxX = Int.MIN_VALUE
+        var minZ = Int.MAX_VALUE
+        var maxZ = Int.MIN_VALUE
+        val iterator = detection.positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            if (net.minecraft.core.BlockPos.getY(key) < seen.minY + OUTPOST_TOWER_ABOVE) continue
+            val x = net.minecraft.core.BlockPos.getX(key)
+            val z = net.minecraft.core.BlockPos.getZ(key)
+            minX = minOf(minX, x); maxX = maxOf(maxX, x)
+            minZ = minOf(minZ, z); maxZ = maxOf(maxZ, z)
+        }
+        if (minX > maxX) return null
+        val chunkX = Math.floorDiv((minX + maxX) / 2, 16) * 16
+        val chunkZ = Math.floorDiv((minZ + maxZ) / 2, 16) * 16
+        return Box(chunkX - 16, seen.minY, chunkZ - 16, chunkX + 31, seen.minY + OUTPOST_HEIGHT - 1, chunkZ + 31)
+    }
+
+    /** Blocks this far above an outpost's base can only be its tower. */
+    private const val OUTPOST_TOWER_ABOVE = 8
+    private const val OUTPOST_HEIGHT = 30
+
     const val MONUMENT_SIZE = 58
     const val MONUMENT_OFFSET = 29
     const val MONUMENT_MIN_Y = 39

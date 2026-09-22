@@ -107,8 +107,8 @@ object Specs {
             Blocks.DARK_OAK_STAIRS, Blocks.WALL_BANNER.white(),
         ),
         minY = 55, merge = 24,
-        recognise = { d -> boundsIf(d, d.count >= 80 && has(d, Blocks.WALL_BANNER.white())) },
-        reach = Spec.Reach(2, 1, 4), waypointAtTop = true,
+        recognise = { d -> if (d.count >= 80 && has(d, Blocks.WALL_BANNER.white())) Recognise.outpostBox(d) else null },
+        reach = null, waypointAtTop = true,
     )
 
     private val MANSION = Spec(
@@ -121,8 +121,9 @@ object Specs {
     )
 
     /**
-     * Stone bricks underground, and the portal room's frames. Ocean ruins (stone bricks on the sea
-     * floor) are ruled out by biome; igloo basements and ruined portals are far smaller.
+     * Stone bricks underground, and the portal room's frames. Only the frames decide it: stone
+     * bricks alone were taken for a stronghold in a player's base. Once they are seen, the stone
+     * brick corridors around them make up the rest of its box.
      */
     private val STRONGHOLD = Spec(
         setOf(
@@ -131,16 +132,15 @@ object Specs {
             Blocks.INFESTED_CHISELED_STONE_BRICKS, Blocks.STONE_BRICK_STAIRS, Blocks.STONE_BRICK_SLAB, Blocks.END_PORTAL_FRAME,
         ),
         maxY = 60, notBiomes = listOf("ocean"), merge = 24,
-        recognise = { d -> boundsIf(d, has(d, Blocks.END_PORTAL_FRAME) || d.count >= 300) },
+        recognise = { d -> boundsIf(d, has(d, Blocks.END_PORTAL_FRAME)) },
     )
 
     /** Spruce planks and stairs on oak stilts, with the cauldron: nothing else in a swamp is spruce. */
     private val WITCH_HUT = Spec(
         setOf(Blocks.SPRUCE_PLANKS, Blocks.SPRUCE_STAIRS, Blocks.OAK_FENCE, Blocks.CAULDRON, Blocks.POTTED_RED_MUSHROOM, Blocks.CRAFTING_TABLE),
         biomes = listOf("swamp"), merge = 6,
-        // The stilts (oak logs, like the swamp's trees) are left out of the search, so reach down to them.
-        recognise = { d -> if (d.count >= 25 && has(d, Blocks.CAULDRON)) d.bounds?.grow(0, down = 4, up = 0) else null },
-        reach = Spec.Reach(1, 5, 3), waypointAtTop = true,
+        recognise = { d -> if (d.count >= 25 && has(d, Blocks.CAULDRON)) d.bounds?.let(Recognise::witchHutBox) else null },
+        reach = null, waypointAtTop = true,
     )
 
     /** Cobblestone and mossy cobblestone above ground in a jungle (dungeons are below), with its chiselled stone bricks. */
