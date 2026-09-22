@@ -11,18 +11,22 @@ import java.util.Base64
 import java.util.UUID
 
 /**
- * Sharing a structure the way Xaero shares a waypoint and Sky's Map Shapes shares a shape: a line
- * of chat with the name and coordinates for anyone to read, and a short code on the end. Anyone
- * with this mod sees a message with an [Add to my map] button instead, which puts the structure on
- * their map with its icon and box.
+ * Sharing a structure in chat: a plain line anyone can read, such as
+ * `Woodland Mansion: -894 90 742 (Overworld) · box -924 75 718 to -865 105 767`. Players without
+ * this mod see just that; anyone with it sees an [Add to my map] button beside it, which puts the
+ * structure on their map with its icon and box. (An earlier version put a coded string on the end,
+ * which read as random characters to everyone else; those old lines are still understood.)
  *
- * The code carries the structure's own dimension, so it always lands on the right map. Nothing is
+ * The line carries the structure's own dimension, so it always lands on the right map. Nothing is
  * added without the other player clicking.
  */
 object StructureShare {
 
-    /** The marker in a shared line of chat, followed by the code. */
+    /** How old versions marked a shared line: the code followed it. */
     private const val TAG = "SSM1:"
+
+    /** Between the readable part of a shared line and its box. */
+    private const val BOX = " · box "
 
     /** The client-side command the add button runs. */
     const val COMMAND = "skysstructuremap"
@@ -33,17 +37,44 @@ object StructureShare {
     /** What was shared: enough to make a saved structure. */
     class Shared(val type: StructureType, val dimension: String, val box: Box, val variant: String?)
 
-    /** The chat line for [marker]: readable to everyone, with the code on the end. */
-    fun message(marker: Marker): String = "${marker.name}: ${Menus.coordinates(marker)} · $TAG${encode(marker)}"
+    /** The chat line for [marker]: its name, where it is and its corners, readable to everyone. */
+    fun message(marker: Marker): String = line(marker.name, marker.dimension, marker.box, marker.y)
 
-    fun encode(marker: Marker): String {
+    fun line(name: String, dimension: String, b: Box, y: Int): String =
+        "$name: ${b.centreX} $y ${b.centreZ} (${dimensionName(dimension) ?: "Overworld"})$BOX${b.minX} ${b.minY} ${b.minZ} to ${b.maxX} ${b.maxY} ${b.maxZ}"
+
+    /** The code the add button's command carries (it never goes into chat). */
+    fun encode(shared: Shared): String {
         val json = JsonObject()
-        json.addProperty("t", marker.type.id)
-        json.addProperty("d", marker.dimension)
-        val b = marker.box
+        json.addProperty("t", shared.type.id)
+        json.addProperty("d", shared.dimension)
+        val b = shared.box
         json.add("b", JsonArray().also { a -> listOf(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ).forEach(a::add) })
-        (marker.structure?.variant ?: marker.detection?.variant)?.let { json.addProperty("v", it) }
+        shared.variant?.let { json.addProperty("v", it) }
         return encoder.encodeToString(json.toString().toByteArray(Charsets.UTF_8))
+    }
+
+    /** Longest names first, so "End City" is never read out of "End Gateway" or the like. */
+    private val names by lazy { StructureType.entries.sortedByDescending { it.displayName.length } }
+
+    private val LINE = Regex("""(.*?)(\S[^:]*): (-?\d+) (-?\d+) (-?\d+) \(([^)]+)\) · box (-?\d+) (-?\d+) (-?\d+) to (-?\d+) (-?\d+) (-?\d+)\s*$""")
+
+    /** A shared structure in a readable line of chat, and the part to show, or null when there is none. */
+    fun readLine(text: String): Pair<String, Shared>? {
+        val m = LINE.find(text) ?: return null
+        val g = m.groupValues
+        val named = g[2]
+        val type = names.firstOrNull { named.endsWith(it.displayName) } ?: return null
+        val n = (7..12).map { g[it].toInt() }
+        val box = Box(n[0], n[1], n[2], n[3], n[4], n[5])
+        if (box.minX > box.maxX || box.minY > box.maxY || box.minZ > box.maxZ) return null
+        val dimension = when (g[6]) {
+            "Overworld" -> OVERWORLD
+            "Nether" -> NETHER
+            "End" -> END
+            else -> g[6].let { if (':' in it) it else "minecraft:$it" }
+        }
+        return text.substringBefore(BOX).trim() to Shared(type, dimension, box, null)
     }
 
     /** A shared structure from a code, or null if it is not one of ours or is damaged. */
@@ -75,10 +106,12 @@ object StructureShare {
      * @return whether the original line should still be shown.
      */
     fun onChat(text: String): Boolean {
-        val code = codeIn(text) ?: return true
-        val shared = decode(code) ?: return true
-        // Who said it and the readable part, as chat shows it, without the code on the end.
-        val said = text.substringBefore(TAG).trim().removeSuffix("·").trim()
+        val (said, shared) = readLine(text) ?: run {
+            // An old line, with the code on the end: shown without it.
+            val shared = codeIn(text)?.let(::decode) ?: return true
+            text.substringBefore(TAG).trim().removeSuffix("·").trim() to shared
+        }
+        val code = encode(shared)
         val b = shared.box
         Minecraft.getInstance().gui.chatListener().handleSystemMessage(
             Component.literal("$said  ").append(
