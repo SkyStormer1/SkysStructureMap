@@ -188,8 +188,9 @@ object Specs {
             Blocks.SUSPICIOUS_GRAVEL, Blocks.BRICKS, Blocks.BRICK_SLAB, Blocks.BRICK_STAIRS, Blocks.BRICK_WALL,
         ) + Blocks.DYED_TERRACOTTA.asList() + Blocks.GLAZED_TERRACOTTA.asList(),
         biomes = setOf("taiga", "snowy_taiga", "old_growth_pine_taiga", "old_growth_spruce_taiga", "old_growth_birch_forest", "jungle"), merge = 16,
-        // Matching the game's towers ([TrailRuinsFit]) is not reliable yet (a real one got no votes).
-        recognise = { d -> boundsIf(d, d.count >= 40) },
+        // Set once one of the game's towers matches ([TrailRuinsFit]): a player's mud brick or
+        // terracotta build was taken for trail ruins, which the tower rules out.
+        recognise = { d -> d.box },
         reach = Spec.Reach(1, 1, 3),
     )
 
