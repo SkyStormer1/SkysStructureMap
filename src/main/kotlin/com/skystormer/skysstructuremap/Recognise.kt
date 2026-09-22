@@ -1,8 +1,8 @@
 package com.skystormer.skysstructuremap
 
 /**
- * When a [Detection] has seen enough to be called a structure, and what its box is. Shipwrecks
- * are recognised by [ShipwreckFit] instead, which matches them against the game's own templates.
+ * When a [Detection] has seen enough to be called a structure, and what its box is. Shipwrecks and
+ * pillager outposts are recognised by [TemplateFit] instead, which matches them against the game's designs.
  */
 object Recognise {
 
@@ -57,33 +57,15 @@ object Recognise {
 
     /**
      * A pillager outpost's box: always 48 × 48 blocks of platforms, the middle one lined up with
-     * the chunk its watchtower stands in and one more on each side, and 30 blocks high from its
-     * base. The tower is the only part that stands high, so its middle gives the chunk. Null
-     * until the tower has been seen.
+     * the chunk its watchtower stands in and one more on each side, and 30 blocks high from the
+     * tower's base. [tower] is the watchtower's box, as matched against the game's design.
      */
-    fun outpostBox(detection: Detection): Box? {
-        val seen = detection.bounds ?: return null
-        var minX = Int.MAX_VALUE
-        var maxX = Int.MIN_VALUE
-        var minZ = Int.MAX_VALUE
-        var maxZ = Int.MIN_VALUE
-        val iterator = detection.positions.iterator()
-        while (iterator.hasNext()) {
-            val key = iterator.nextLong()
-            if (net.minecraft.core.BlockPos.getY(key) < seen.minY + OUTPOST_TOWER_ABOVE) continue
-            val x = net.minecraft.core.BlockPos.getX(key)
-            val z = net.minecraft.core.BlockPos.getZ(key)
-            minX = minOf(minX, x); maxX = maxOf(maxX, x)
-            minZ = minOf(minZ, z); maxZ = maxOf(maxZ, z)
-        }
-        if (minX > maxX) return null
-        val chunkX = Math.floorDiv((minX + maxX) / 2, 16) * 16
-        val chunkZ = Math.floorDiv((minZ + maxZ) / 2, 16) * 16
-        return Box(chunkX - 16, seen.minY, chunkZ - 16, chunkX + 31, seen.minY + OUTPOST_HEIGHT - 1, chunkZ + 31)
+    fun outpostBox(tower: Box): Box {
+        val chunkX = Math.floorDiv(tower.centreX, 16) * 16
+        val chunkZ = Math.floorDiv(tower.centreZ, 16) * 16
+        return Box(chunkX - 16, tower.minY, chunkZ - 16, chunkX + 31, tower.minY + OUTPOST_HEIGHT - 1, chunkZ + 31)
     }
 
-    /** Blocks this far above an outpost's base can only be its tower. */
-    private const val OUTPOST_TOWER_ABOVE = 8
     private const val OUTPOST_HEIGHT = 30
 
     const val MONUMENT_SIZE = 58
