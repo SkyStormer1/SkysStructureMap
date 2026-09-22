@@ -286,3 +286,16 @@ object TownCentreFit : TemplateFit(
     agreement = 0.2,
     samples = 400,
 )
+
+/**
+ * The tower every trail ruins grows from, in its five designs. They are mostly gravel, coloured and
+ * glazed terracotta and bricks, and buried; the houses and roads around them vote too, hence the
+ * low agreement, with every placement checked block for block.
+ */
+object TrailRuinsFit : TemplateFit(
+    "trail_ruins",
+    (1..5).map { "tower/tower_$it" },
+    anyWood = false,
+    agreement = 0.2,
+    samples = 400,
+)

@@ -181,10 +181,14 @@ object Specs {
         reach = Spec.Reach(1, 1, 3), waypointAtTop = true,
     )
 
-    /** Mud bricks and suspicious gravel (away from the sea, where ocean ruins have it too). */
+    /** Mud bricks, bricks, coloured and glazed terracotta and suspicious gravel: what trail ruins are built of. */
     private val TRAIL_RUINS = Spec(
-        setOf(Blocks.MUD_BRICKS, Blocks.MUD_BRICK_STAIRS, Blocks.MUD_BRICK_SLAB, Blocks.MUD_BRICK_WALL, Blocks.PACKED_MUD, Blocks.SUSPICIOUS_GRAVEL),
+        setOf(
+            Blocks.MUD_BRICKS, Blocks.MUD_BRICK_STAIRS, Blocks.MUD_BRICK_SLAB, Blocks.MUD_BRICK_WALL, Blocks.PACKED_MUD,
+            Blocks.SUSPICIOUS_GRAVEL, Blocks.BRICKS, Blocks.BRICK_SLAB, Blocks.BRICK_STAIRS, Blocks.BRICK_WALL,
+        ) + Blocks.DYED_TERRACOTTA.asList() + Blocks.GLAZED_TERRACOTTA.asList(),
         biomes = setOf("taiga", "snowy_taiga", "old_growth_pine_taiga", "old_growth_spruce_taiga", "old_growth_birch_forest", "jungle"), merge = 16,
+        // Matching the game's towers ([TrailRuinsFit]) is not reliable yet (a real one got no votes).
         recognise = { d -> boundsIf(d, d.count >= 40) },
         reach = Spec.Reach(1, 1, 3),
     )
@@ -233,6 +237,39 @@ object Specs {
         recognise = { d -> boundsIf(d, has(d, Blocks.TRIAL_SPAWNER, Blocks.VAULT) || d.count >= 200) },
         reach = Spec.Reach(2, 1, 5),
     )
+
+    /**
+     * The least distance, in blocks, between two structures of this kind, from the game's
+     * structure sets: each sits somewhere in its own region of `spacing` chunks, at least
+     * `separation` chunks from the next region's edge, so two are never less than
+     * (separation + 1) chunks apart. Strongholds sit on rings far apart; end gateways in a ring 96
+     * blocks out, each 90-odd from the next.
+     */
+    private fun apart(type: StructureType): Int = 16 * when (type) {
+        StructureType.VILLAGE, StructureType.TRAIL_RUINS -> 9
+        StructureType.OUTPOST, StructureType.WITCH_HUT, StructureType.JUNGLE_TEMPLE,
+        StructureType.DESERT_TEMPLE, StructureType.ANCIENT_CITY -> 9
+        StructureType.MANSION -> 21
+        StructureType.STRONGHOLD -> 32
+        StructureType.TRIAL_CHAMBERS -> 13
+        StructureType.MONUMENT -> 6
+        StructureType.SHIPWRECK, StructureType.FORTRESS, StructureType.BASTION -> 5
+        StructureType.END_CITY -> 12
+        StructureType.END_GATEWAY -> 4
+    }
+
+    /**
+     * Whether two boxes of [type] are the same structure: close together (within its grouping
+     * distance, as blocks seen in one visit are), or with middles less than half the least distance
+     * two of them can be apart. The second is what joins a structure seen half on one visit and half
+     * on the next: in testing one trial chambers was saved twice, the halves about 70 blocks apart.
+     */
+    fun sameStructure(type: StructureType, a: Box, b: Box): Boolean {
+        if (a.grow(of(type).merge).overlaps(b)) return true
+        val dx = Math.abs(a.centreX - b.centreX)
+        val dz = Math.abs(a.centreZ - b.centreZ)
+        return maxOf(dx, dz) < apart(type) / 2
+    }
 
     fun of(type: StructureType): Spec = when (type) {
         StructureType.VILLAGE -> VILLAGE

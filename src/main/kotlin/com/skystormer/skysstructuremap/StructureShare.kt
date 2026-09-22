@@ -101,7 +101,7 @@ object StructureShare {
         val shared = decode(code) ?: return Menus.say("That structure code could not be read.")
         if (!StructureStore.isOpen) return Menus.say("Join a world first.")
         val existing = StructureStore.inDimension(shared.dimension)
-            .firstOrNull { it.type == shared.type && it.box.grow(8).overlaps(shared.box) }
+            .firstOrNull { it.type == shared.type && Specs.sameStructure(it.type, it.box, shared.box) }
         if (existing != null) return Menus.say("That ${shared.type.displayName} is already on your map.")
         // Adding it yourself undoes having deleted it.
         StructureStore.undelete(shared.type, shared.dimension, shared.box)
