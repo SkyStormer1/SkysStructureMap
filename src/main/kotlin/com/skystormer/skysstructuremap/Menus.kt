@@ -8,7 +8,7 @@ import xaero.map.gui.IRightClickableElement
 import xaero.map.gui.dropdown.rightclick.RightClickOption
 import java.util.UUID
 
-/** The right-click menu on a structure's badge on Xaero's world map. */
+/** The right-click menu on a structure's icon on Xaero's world map. */
 object Menus {
 
     fun addMarkerOptions(options: ArrayList<RightClickOption>, target: IRightClickableElement, marker: Marker) {

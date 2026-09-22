@@ -28,7 +28,7 @@ object Config {
     /** Off unless turned on in the legend: the icons are usually enough. */
     var outlines = false
 
-    /** Also show structures recognised nearby that you have not been inside yet, faintly. */
+    /** Also show structures recognised nearby that you have not discovered yet, faintly. */
     var showUndiscovered = false
 
     /** A chat line (seen only by you) whenever you discover one. */

@@ -10,7 +10,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
-/** A structure you have been inside, saved. */
+/** A structure you have discovered (or been sent), saved. */
 data class Structure(
     val id: String,
     val type: StructureType,
