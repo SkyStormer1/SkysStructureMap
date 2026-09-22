@@ -57,10 +57,15 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
 
     val count: Int get() = positions.size
 
+    /** How many of its blocks stand in a biome it can be in (see [Spec.biomeAsWhole]). */
+    var inBiome = 0
+    var biomeLogged = false
+
     /** Adds a block; false when it was already known. */
-    fun add(x: Int, y: Int, z: Int, block: Block?, keepBlock: Boolean = true): Boolean {
+    fun add(x: Int, y: Int, z: Int, block: Block?, keepBlock: Boolean = true, inBiome: Boolean = true): Boolean {
         val key = BlockPos.asLong(x, y, z)
         if (!positions.add(key)) return false
+        if (inBiome) this.inBiome++
         if (block != null) {
             if (keepBlock) blocks.put(key, block)
             kinds.merge(block, 1, Int::plus)
@@ -79,8 +84,9 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         val iterator = other.positions.iterator()
         while (iterator.hasNext()) {
             val key = iterator.nextLong()
-            add(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key), other.blocks.get(key))
+            add(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key), other.blocks.get(key), inBiome = false)
         }
+        inBiome += other.inBiome
         // Only shipwrecks keep each block; for the rest the counts are carried over as they are.
         if (other.blocks.isEmpty()) for ((block, n) in other.kinds) kinds.merge(block, n, Int::plus)
         if (storedId == null) storedId = other.storedId

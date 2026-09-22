@@ -25,6 +25,13 @@ class Spec(
     val biomes: Set<String>? = null,
     /** Never in biomes whose id contains one of these. */
     val notBiomes: List<String> = emptyList(),
+    /**
+     * The biome is asked of the group as a whole rather than of each block: blocks anywhere are
+     * kept, and it counts once [Tracker.BIOME_BLOCKS] of them stand in an allowed biome. The game
+     * asks only where the structure starts, so an outpost's tower can stand in a strip of beach or
+     * stony shore beside the plains it belongs to; checking each block lost that tower in testing.
+     */
+    val biomeAsWhole: Boolean = false,
     /** Blocks this close to a group join it rather than starting another. */
     val merge: Int,
     /** The structure's box once enough is seen, else null. */
@@ -110,6 +117,7 @@ object Specs {
             Blocks.BARREL, Blocks.HAY_BLOCK,
         ),
         tags = listOf(BlockTags.BEDS), biomes = setOf("plains", "meadow", "desert", "savanna", "snowy_plains", "taiga"), merge = 32,
+        biomeAsWhole = true,
         // Set once a town centre matches (see [TownCentreFit]).
         recognise = { d -> d.box },
         // Houses stand beside the streets, so a little way off the paths is still in the village.
@@ -123,10 +131,13 @@ object Specs {
      */
     private val OUTPOST = Spec(
         setOf(
-            Blocks.BIRCH_PLANKS, Blocks.DARK_OAK_PLANKS, Blocks.DARK_OAK_LOG, Blocks.DARK_OAK_FENCE, Blocks.DARK_OAK_SLAB,
+            // Not dark oak logs: with the biome asked of the whole group, a dark forest's trees beside
+            // the plains would join it. The tower's own logs still count when it is checked.
+            Blocks.BIRCH_PLANKS, Blocks.DARK_OAK_PLANKS, Blocks.DARK_OAK_FENCE, Blocks.DARK_OAK_SLAB,
             Blocks.DARK_OAK_STAIRS, Blocks.WALL_BANNER.white(),
         ),
         minY = 55, biomes = setOf("desert", "plains", "savanna", "snowy_plains", "taiga", "grove") + Biomes.MOUNTAIN, merge = 24,
+        biomeAsWhole = true,
         // Set by matching the watchtower (see [WatchtowerFit]).
         recognise = { d -> d.box },
         reach = null, waypointAtTop = true,

@@ -47,7 +47,7 @@ object Tracker {
                 detections = detections - near.drop(1).toSet()
                 Log.info("Joined {} groups of {} blocks into #{}", near.size, type.id, target.id)
             }
-            for (f in group) target.add(f.x, f.y, f.z, f.block, keepBlocks)
+            for (f in group) target.add(f.x, f.y, f.z, f.block, keepBlocks, f.inBiome)
         }
     }
 
@@ -81,6 +81,13 @@ object Tracker {
         val fitter = fitterFor(detection.type)
         if (fitter != null) {
             if (detection.blocks.size < TemplateFit.MIN_BLOCKS || ticks - detection.lastFitTick < 40) return
+            if (Specs.of(detection.type).biomeAsWhole && detection.inBiome < BIOME_BLOCKS) {
+                if (detection.blocks.size >= 100 && !detection.biomeLogged) {
+                    detection.biomeLogged = true
+                    Log.info("{} #{} at {}: only {} of {} blocks in its biomes, so not matched", detection.type.id, detection.id, detection.bounds, detection.inBiome, detection.count)
+                }
+                return
+            }
             detection.fitDirty = false
             detection.lastFitTick = ticks
             val started = System.nanoTime()
@@ -214,6 +221,9 @@ object Tracker {
         val dy = net.minecraft.core.BlockPos.getY(a) - net.minecraft.core.BlockPos.getY(b)
         return dx * dx + dz * dz <= reach * reach && Math.abs(dy) <= reach
     }
+
+    /** Blocks in an allowed biome a group needs, when the biome is asked of the whole group. */
+    const val BIOME_BLOCKS = 20
 
     /** Blocks this far above an outpost's base can only be its tower. */
     private const val OUTPOST_TOWER_FROM = 6

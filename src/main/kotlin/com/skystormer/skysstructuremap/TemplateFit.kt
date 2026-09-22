@@ -282,7 +282,12 @@ object ShipwreckFit : TemplateFit(
  * white banners are what a player might build with too (a house was taken for an outpost), but not
  * the tower itself.
  */
-object WatchtowerFit : TemplateFit("pillager_outpost", listOf("watchtower", "watchtower_overgrown"), anyWood = false)
+object WatchtowerFit : TemplateFit(
+    "pillager_outpost", listOf("watchtower", "watchtower_overgrown"), anyWood = false,
+    // Many voters, few needing to agree: a group can take in a player's build or a griefed tower's
+    // leftovers beside it, and 25 voters spread over all that never agreed on the tower in testing.
+    agreement = 0.2, samples = 400, minVotes = 25,
+)
 
 /**
  * A village's town centre, the meeting point or fountain with its bell that every village grows
