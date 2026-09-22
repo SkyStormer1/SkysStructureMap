@@ -103,11 +103,12 @@ object Specs {
      */
     private val OUTPOST = Spec(
         setOf(
-            Blocks.BIRCH_PLANKS, Blocks.DARK_OAK_PLANKS, Blocks.DARK_OAK_FENCE, Blocks.DARK_OAK_SLAB,
+            Blocks.BIRCH_PLANKS, Blocks.DARK_OAK_PLANKS, Blocks.DARK_OAK_LOG, Blocks.DARK_OAK_FENCE, Blocks.DARK_OAK_SLAB,
             Blocks.DARK_OAK_STAIRS, Blocks.WALL_BANNER.white(),
         ),
         minY = 55, merge = 24,
-        recognise = { d -> if (d.count >= 80 && has(d, Blocks.WALL_BANNER.white())) Recognise.outpostBox(d) else null },
+        // Set by matching the watchtower (see [WatchtowerFit]).
+        recognise = { d -> d.box },
         reach = null, waypointAtTop = true,
     )
 

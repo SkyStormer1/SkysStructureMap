@@ -34,7 +34,8 @@ object Tracker {
             detections = emptyList()
             this.dimension = dimension
         }
-        val keepBlocks = type == StructureType.SHIPWRECK
+        // Matched against the game's designs, which need to know each block.
+        val keepBlocks = type == StructureType.SHIPWRECK || type == StructureType.OUTPOST
         for (group in found.groupBy { Detection.cellKey(it.x, it.y, it.z) }.values) {
             var cell = Box.of(group[0].x, group[0].y, group[0].z)
             for (f in group) cell = cell.including(f.x, f.y, f.z)
@@ -62,7 +63,7 @@ object Tracker {
         ticks++
         if (ticks % 10 == 0L) {
             for (detection in detections) {
-                if (detection.changed || (detection.type == StructureType.SHIPWRECK && detection.fitDirty)) update(detection, level)
+                if (detection.changed || (fitterFor(detection.type) != null && detection.fitDirty)) update(detection, level)
             }
         }
         if (ticks % 4 == 0L) {
@@ -77,20 +78,26 @@ object Tracker {
     private fun update(detection: Detection, level: net.minecraft.world.level.Level) {
         detection.changed = false
         val before = detection.box
-        if (detection.type == StructureType.SHIPWRECK) {
-            if (detection.blocks.size < ShipwreckFit.MIN_BLOCKS || ticks - detection.lastFitTick < 40) return
+        val fitter = fitterFor(detection.type)
+        if (fitter != null) {
+            if (detection.blocks.size < TemplateFit.MIN_BLOCKS || ticks - detection.lastFitTick < 40) return
             detection.fitDirty = false
             detection.lastFitTick = ticks
             val started = System.nanoTime()
-            val match = ShipwreckFit.fit(detection, level)
+            // An outpost's cages, tents and log piles are the same wood as its tower; only the
+            // tower stands well above its base, so only those blocks vote.
+            val base = detection.bounds?.minY ?: 0
+            val match = if (detection.type == StructureType.OUTPOST) {
+                fitter.fit(detection, level) { key -> net.minecraft.core.BlockPos.getY(key) >= base + OUTPOST_TOWER_FROM }
+            } else fitter.fit(detection, level)
             val millis = (System.nanoTime() - started) / 1_000_000
             if (match != null) {
-                detection.box = match.box
                 detection.variant = match.template.name
+                detection.box = if (detection.type == StructureType.OUTPOST) Recognise.outpostBox(match.box) else match.box
             }
             if (match?.box != before || (match == null && detection.blocks.size >= 100)) {
-                Log.info("Shipwreck #{} at {}: {} in {} ms ({})", detection.id, detection.bounds,
-                    match?.let { "${it.template.name}, box ${it.box}" } ?: "no template fits", millis, ShipwreckFit.lastReport)
+                Log.info("{} #{} at {}: {} in {} ms ({})", detection.type.id, detection.id, detection.bounds,
+                    match?.let { "${it.template.name}, box ${detection.box}" } ?: "no template fits", millis, fitter.lastReport)
             }
         } else {
             detection.box = Recognise.box(detection)
@@ -165,6 +172,16 @@ object Tracker {
     private fun describeKinds(detection: Detection): String =
         detection.kinds.entries.sortedByDescending { it.value }.take(6)
             .joinToString(", ") { "${it.value} ${net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(it.key).path}" }
+
+    /** The game designs a kind is matched against, when it is matched that way. */
+    private fun fitterFor(type: StructureType): TemplateFit? = when (type) {
+        StructureType.SHIPWRECK -> ShipwreckFit
+        StructureType.OUTPOST -> WatchtowerFit
+        else -> null
+    }
+
+    /** Blocks this far above an outpost's base can only be its tower. */
+    private const val OUTPOST_TOWER_FROM = 6
 
     /** Recognised but not yet discovered, in [dimension]: shown faintly when that is turned on. */
     fun undiscovered(dimension: String): List<Detection> =

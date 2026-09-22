@@ -13,16 +13,25 @@ import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.Rotation
 
 /**
- * Recognises shipwrecks by matching the wood seen in the sea against the game's own shipwreck
- * templates, which are inside the Minecraft jar. The game places them turned (never mirrored) and
- * without changing any block, so a real wreck matches one of them almost block for block, and a
- * match gives its exact box.
+ * Recognises a structure by matching the blocks seen against the game's own designs for it (its
+ * templates, inside the Minecraft jar): shipwrecks, and pillager outposts' watchtowers. The game
+ * places them turned (never mirrored) and with few or no blocks changed, so a real one matches a
+ * design almost block for block, which a player's build never does, and a match gives its exact box.
  *
  * Matching is by voting: every seen block, paired with every block of the same kind in a
  * template, says where that template would have to start; the true start gets a vote from nearly
  * every block. The few best-voted starts are then checked block by block against the world.
  */
-object ShipwreckFit {
+open class TemplateFit(
+    /** The folder under `data/minecraft/structure/` its designs are in. */
+    private val folder: String,
+    private val names: List<String>,
+    /**
+     * Match shapes whatever the wood: shipwrecks are built in eight woods from one design, while a
+     * watchtower is always the same woods and is matched block for block.
+     */
+    private val anyWood: Boolean,
+) {
 
     /**
      * One shipwreck design. Its blocks are kept by [family] (stairs, planks, fence…) rather than by
@@ -35,24 +44,31 @@ object ShipwreckFit {
 
     private val families = HashMap<Block, String>()
 
-    private val WOODS = listOf("stripped_", "dark_oak_", "pale_oak_", "oak_", "spruce_", "birch_", "jungle_", "acacia_", "mangrove_", "cherry_", "bamboo_")
-
-    /** A block without its wood: `dark_oak_stairs` and `spruce_stairs` are both `stairs`. */
+    /** What a block is matched as: without its wood (`dark_oak_stairs` and `spruce_stairs` are both `stairs`) when [anyWood]. */
     fun family(block: Block): String = families.getOrPut(block) {
         var path = BuiltInRegistries.BLOCK.getKey(block).path
-        for (wood in WOODS) path = path.removePrefix(wood)
+        if (anyWood) for (wood in WOODS) path = path.removePrefix(wood)
         path
     }
 
-    private val NAMES = listOf(
-        "with_mast", "with_mast_degraded",
-        "rightsideup_full", "rightsideup_full_degraded", "rightsideup_fronthalf", "rightsideup_fronthalf_degraded",
-        "rightsideup_backhalf", "rightsideup_backhalf_degraded",
-        "sideways_full", "sideways_full_degraded", "sideways_fronthalf", "sideways_fronthalf_degraded",
-        "sideways_backhalf", "sideways_backhalf_degraded",
-        "upsidedown_full", "upsidedown_full_degraded", "upsidedown_fronthalf", "upsidedown_fronthalf_degraded",
-        "upsidedown_backhalf", "upsidedown_backhalf_degraded",
-    )
+    companion object {
+        /** At least this many blocks before trying, so a lone plank in the sea is not worth the work. */
+        const val MIN_BLOCKS = 12
+
+        /**
+         * How much of a design must be there, of the blocks in loaded chunks: real ones are often
+         * broken or built over (the first wreck tested had 405 of 598), so half will do, as long as
+         * the placement is one nearly every block seen agrees on, which chance never manages.
+         * Blocks added to it do not count against it.
+         */
+        private const val MIN_MATCH = 0.5
+        private const val MIN_MATCHED_BLOCKS = 60
+        private const val MIN_AGREEMENT = 0.8
+
+        private const val SAMPLES = 24
+
+        private val WOODS = listOf("stripped_", "dark_oak_", "pale_oak_", "oak_", "spruce_", "birch_", "jungle_", "acacia_", "mangrove_", "cherry_", "bamboo_")
+    }
 
     /** Blocks the game leaves out when placing a template, or that could be anywhere in the sea. */
     private val IGNORED = setOf(Blocks.AIR, Blocks.CAVE_AIR, Blocks.VOID_AIR, Blocks.STRUCTURE_BLOCK, Blocks.STRUCTURE_VOID, Blocks.JIGSAW, Blocks.WATER)
@@ -62,24 +78,10 @@ object ShipwreckFit {
     /** Every kind of block that is in some shipwreck: what chunks are searched for. */
     val signatureBlocks: Set<Block> by lazy {
         templates.flatMapTo(HashSet()) { it.woods }.also { blocks ->
-            Log.info("Searching the sea for {} kinds of shipwreck block: {}", blocks.size,
+            Log.info("Searching for {} kinds of {} block: {}", blocks.size, folder,
                 blocks.map { BuiltInRegistries.BLOCK.getKey(it).path }.sorted().joinToString(", "))
         }
     }
-
-    /** At least this many wood blocks before trying, so a lone plank in the sea is not worth the work. */
-    const val MIN_BLOCKS = 12
-
-    /**
-     * How much of a template must be there, of the blocks in loaded chunks. Real wrecks are
-     * missing plenty (the first one tested had 405 of 598), so the placement also has to be one
-     * nearly every block seen agrees on, which chance never manages.
-     */
-    private const val MIN_MATCH = 0.5
-    private const val MIN_MATCHED_BLOCKS = 60
-    private const val MIN_AGREEMENT = 0.8
-
-    private const val SAMPLES = 24
 
     class Match(val template: Template, val box: Box, val matched: Int, val known: Int)
 
@@ -87,14 +89,21 @@ object ShipwreckFit {
     var lastReport = ""
         private set
 
-    /** The best-matching template placement for [detection]'s blocks, or null for none. */
-    fun fit(detection: Detection, level: Level): Match? {
+    /**
+     * The best-matching placement of one of the designs for [detection]'s blocks, or null for
+     * none. Only blocks [votes] accepts help choose it; every block of the design is checked after.
+     */
+    fun fit(detection: Detection, level: Level, votes: (Long) -> Boolean = { true }): Match? {
         if (templates.isEmpty() || detection.blocks.size < MIN_BLOCKS) {
             lastReport = "${detection.blocks.size} blocks, too few"
             return null
         }
         // An even spread of the blocks seen, so one end of a wreck cannot outvote the rest.
-        val keys = detection.blocks.keys.toLongArray().also { it.sort() }
+        val keys = detection.blocks.keys.toLongArray().filter(votes).toLongArray().also { it.sort() }
+        if (keys.size < MIN_BLOCKS) {
+            lastReport = "${keys.size} blocks that may vote, too few"
+            return null
+        }
         val step = maxOf(1, keys.size / SAMPLES)
         val samples = (keys.indices step step).map { keys[it] }
 
@@ -171,18 +180,18 @@ object ShipwreckFit {
     }
 
     private fun load(): List<Template> {
-        val loaded = NAMES.mapNotNull { name ->
+        val loaded = names.mapNotNull { name ->
             try {
-                val stream = ShipwreckFit::class.java.getResourceAsStream("/data/minecraft/structure/shipwreck/$name.nbt")
-                    ?: return@mapNotNull null.also { Log.warn("Shipwreck template {} is not in the game jar", name) }
+                val stream = TemplateFit::class.java.getResourceAsStream("/data/minecraft/structure/$folder/$name.nbt")
+                    ?: return@mapNotNull null.also { Log.warn("Template {}/{} is not in the game jar", folder, name) }
                 val tag = stream.use { NbtIo.readCompressed(it, NbtAccounter.unlimitedHeap()) }
                 parse(name, tag)
             } catch (e: Exception) {
-                Log.error("Could not read shipwreck template $name", e)
+                Log.error("Could not read template $folder/$name", e)
                 null
             }
         }
-        Log.info("Loaded {} of {} shipwreck templates", loaded.size, NAMES.size)
+        Log.info("Loaded {} of {} {} templates", loaded.size, names.size, folder)
         return loaded
     }
 
@@ -212,3 +221,25 @@ object ShipwreckFit {
         return Template(name, size.getIntOr(0, 0), size.getIntOr(1, 0), size.getIntOr(2, 0), blocks, woods)
     }
 }
+
+/** The game's 20 shipwreck designs, each in eight woods. */
+object ShipwreckFit : TemplateFit(
+    "shipwreck",
+    listOf(
+        "with_mast", "with_mast_degraded",
+        "rightsideup_full", "rightsideup_full_degraded", "rightsideup_fronthalf", "rightsideup_fronthalf_degraded",
+        "rightsideup_backhalf", "rightsideup_backhalf_degraded",
+        "sideways_full", "sideways_full_degraded", "sideways_fronthalf", "sideways_fronthalf_degraded",
+        "sideways_backhalf", "sideways_backhalf_degraded",
+        "upsidedown_full", "upsidedown_full_degraded", "upsidedown_fronthalf", "upsidedown_fronthalf_degraded",
+        "upsidedown_backhalf", "upsidedown_backhalf_degraded",
+    ),
+    anyWood = true,
+)
+
+/**
+ * A pillager outpost's watchtower, plain or overgrown. Its birch and dark oak planks, fences and
+ * white banners are what a player might build with too (a house was taken for an outpost), but not
+ * the tower itself.
+ */
+object WatchtowerFit : TemplateFit("pillager_outpost", listOf("watchtower", "watchtower_overgrown"), anyWood = false)
