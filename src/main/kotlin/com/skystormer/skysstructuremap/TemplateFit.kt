@@ -39,6 +39,18 @@ open class TemplateFit(
     private val agreement: Double = MIN_AGREEMENT,
     /** How many of the blocks seen vote: more where most of them are not part of the design. */
     private val samples: Int = SAMPLES,
+    /**
+     * Blocks the game may swap in as it places a design, counted as the one they replace: trail
+     * ruins turn some gravel to dirt, coarse dirt or suspicious gravel and some mud bricks to packed mud.
+     */
+    private val aliases: Map<String, String> = emptyMap(),
+    /**
+     * Kinds that could be there anyway (gravel and dirt in the ground a trail ruins is buried in):
+     * the rest of a design must match on its own as well, so a spot in plain ground never passes.
+     */
+    private val loose: Set<String> = emptySet(),
+    /** Enough agreeing votes whatever the share, for designs that are a small part of what is seen. */
+    private val minVotes: Int = Int.MAX_VALUE,
 ) {
 
     /**
@@ -56,7 +68,7 @@ open class TemplateFit(
     fun family(block: Block): String = families.getOrPut(block) {
         var path = BuiltInRegistries.BLOCK.getKey(block).path
         if (anyWood) for (wood in WOODS) path = path.removePrefix(wood)
-        path
+        aliases[path] ?: path
     }
 
     companion object {
@@ -140,7 +152,7 @@ open class TemplateFit(
                 val iterator = votes.long2IntEntrySet().fastIterator()
                 while (iterator.hasNext()) {
                     val entry = iterator.next()
-                    if (entry.intValue < samples.size * agreement) continue
+                    if (entry.intValue < minOf(samples.size * agreement, minVotes.toDouble())) continue
                     if (top.size < TOP_STARTS || entry.intValue > top.last().second) {
                         top.add(entry.longKey to entry.intValue)
                         top.sortByDescending { it.second }
@@ -180,16 +192,24 @@ open class TemplateFit(
         val oz = BlockPos.getZ(origin)
         var known = 0
         var matched = 0
+        var knownFirm = 0
+        var matchedFirm = 0
         val cursor = BlockPos.MutableBlockPos()
         for ((pos, block) in template.blocks) {
             val turned = pos.rotate(rotation)
             cursor.set(ox + turned.x, oy + turned.y, oz + turned.z)
             if (!level.hasChunk(cursor.x shr 4, cursor.z shr 4)) continue
             known++
-            if (family(level.getBlockState(cursor).block) == block) matched++
+            val hit = family(level.getBlockState(cursor).block) == block
+            if (hit) matched++
+            if (block !in loose) {
+                knownFirm++
+                if (hit) matchedFirm++
+            }
         }
-        lastCheck = "$matched/$known of ${template.blocks.size} match"
+        lastCheck = "$matched/$known of ${template.blocks.size} match" + if (loose.isNotEmpty()) " ($matchedFirm/$knownFirm without ${loose.joinToString()})" else ""
         if (known < template.blocks.size * 0.6 || matched < known * MIN_MATCH || matched < MIN_MATCHED_BLOCKS) return null
+        if (loose.isNotEmpty() && matchedFirm < knownFirm * MIN_MATCH) return null
         val a = BlockPos.ZERO.rotate(rotation)
         val b = BlockPos(template.sizeX - 1, template.sizeY - 1, template.sizeZ - 1).rotate(rotation)
         val box = Box(
@@ -298,4 +318,7 @@ object TrailRuinsFit : TemplateFit(
     anyWood = false,
     agreement = 0.2,
     samples = 400,
+    aliases = mapOf("dirt" to "gravel", "coarse_dirt" to "gravel", "suspicious_gravel" to "gravel", "packed_mud" to "mud_bricks"),
+    loose = setOf("gravel"),
+    minVotes = 25,
 )

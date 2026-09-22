@@ -195,6 +195,7 @@ object Tracker {
         StructureType.SHIPWRECK -> ShipwreckFit
         StructureType.OUTPOST -> WatchtowerFit
         StructureType.VILLAGE -> TownCentreFit
+        StructureType.TRAIL_RUINS -> TrailRuinsFit
         else -> null
     }
 
