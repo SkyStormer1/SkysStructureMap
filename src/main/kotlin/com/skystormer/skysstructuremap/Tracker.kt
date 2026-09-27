@@ -118,7 +118,7 @@ object Tracker {
                 detection.box = when (detection.type) {
                     StructureType.OUTPOST -> Recognise.outpostBox(match.box)
                     // The town centre (or tower) proves it; the rest is everything seen around it.
-                    StructureType.VILLAGE, StructureType.TRAIL_RUINS, StructureType.END_CITY -> detection.bounds
+                    StructureType.VILLAGE, StructureType.TRAIL_RUINS, StructureType.END_CITY, StructureType.BASTION, StructureType.ANCIENT_CITY, StructureType.MANSION -> detection.bounds
                     else -> match.box
                 }
             }
@@ -216,11 +216,14 @@ object Tracker {
         StructureType.VILLAGE -> TownCentreFit
         StructureType.TRAIL_RUINS -> TrailRuinsFit
         StructureType.END_CITY -> EndCityFit
+        StructureType.BASTION -> BastionFit
+        StructureType.ANCIENT_CITY -> AncientCityFit
+        StructureType.MANSION -> MansionFit
         else -> null
     }
 
     /** Kinds proved once by one piece matching, whose box is then everything seen around it. */
-    private val PROVED_THEN_SEEN = setOf(StructureType.VILLAGE, StructureType.TRAIL_RUINS, StructureType.END_CITY)
+    private val PROVED_THEN_SEEN = setOf(StructureType.VILLAGE, StructureType.TRAIL_RUINS, StructureType.END_CITY, StructureType.BASTION, StructureType.ANCIENT_CITY, StructureType.MANSION)
 
     /**
      * The few places a village's blocks are thickest, at least a town centre apart: where to look

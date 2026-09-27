@@ -51,6 +51,13 @@ open class TemplateFit(
     private val loose: Set<String> = emptySet(),
     /** Enough agreeing votes whatever the share, for designs that are a small part of what is seen. */
     private val minVotes: Int = Int.MAX_VALUE,
+    /**
+     * Only these kinds vote, when some of a structure's blocks are far too common to be worth
+     * voting with: a bastion is thousands of polished blackstone bricks, and pairing each of them
+     * with every brick in a design would be slow and say little, while its stairs, chiselled and
+     * gilded blocks are few and in known places. Everything is still checked block for block.
+     */
+    private val votingKinds: Set<Block> = emptySet(),
 ) {
 
     /**
@@ -74,6 +81,9 @@ open class TemplateFit(
     companion object {
         /** At least this many blocks before trying, so a lone plank in the sea is not worth the work. */
         const val MIN_BLOCKS = 12
+
+        /** How many of the best-voted placements are checked block for block. */
+        private const val MAX_CHECKS = 24
 
         /**
          * How much of a design must be there, of the blocks in loaded chunks: real ones are often
@@ -122,7 +132,9 @@ open class TemplateFit(
             return null
         }
         // An even spread of the blocks seen, so one end of a wreck cannot outvote the rest.
-        val keys = detection.blocks.keys.toLongArray().filter(votes).toLongArray().also { it.sort() }
+        val keys = detection.blocks.keys.toLongArray()
+            .filter { votes(it) && (votingKinds.isEmpty() || detection.blocks.get(it) in votingKinds) }
+            .toLongArray().also { it.sort() }
         if (keys.size < MIN_BLOCKS) {
             lastReport = "${keys.size} blocks that may vote, too few"
             return null
@@ -172,8 +184,9 @@ open class TemplateFit(
         if (candidates.isEmpty()) return null
 
         var best: Match? = null
-        // Every well-voted placement is checked: a design heavy with paths can outvote the right one.
-        for (candidate in candidates.sortedByDescending { it.votes }) {
+        // The best-voted placements are checked: a design heavy with paths can outvote the right
+        // one, but checking hundreds of them block for block would hold up a frame.
+        for (candidate in candidates.sortedByDescending { it.votes }.take(MAX_CHECKS)) {
             val match = check(candidate.template, candidate.rotation, candidate.origin, level)
             lastReport += "; ${candidate.template.name} ${candidate.rotation}: " + (match?.let { "${it.matched}/${it.known}" } ?: lastCheck)
             if (match == null) continue
@@ -350,4 +363,89 @@ object EndCityFit : TemplateFit(
     agreement = 0.2,
     samples = 400,
     minVotes = 25,
+)
+
+/**
+ * A bastion remnant's ramparts, walls and bridge, for each of the four kinds the game builds
+ * (units, hoglin stable, treasure room, bridge). Only their stairs, slabs, walls and chiselled
+ * blocks vote: a bastion is thousands of polished blackstone bricks, which say little about where a
+ * design sits and would be slow to pair up. Gilded blackstone never votes either, because the game
+ * scatters that itself, one blackstone block in a hundred.
+ *
+ * What the game changes as it builds one is allowed for: it cracks three in ten of the polished
+ * bricks, and turns half the gilded blackstone back into plain blackstone (and one blackstone in a
+ * hundred into gilded), so those pairs count as the same block.
+ */
+object BastionFit : TemplateFit(
+    "bastion",
+    listOf(
+        "units/ramparts/ramparts_0", "units/ramparts/ramparts_1", "units/walls/wall_base",
+        "hoglin_stable/ramparts/ramparts_1", "hoglin_stable/ramparts/ramparts_2",
+        "hoglin_stable/walls/side_wall_0", "hoglin_stable/walls/side_wall_1", "hoglin_stable/walls/wall_base",
+        "bridge/starting_pieces/entrance", "bridge/ramparts/rampart_0", "bridge/ramparts/rampart_1",
+        "bridge/bridge_pieces/bridge",
+        "treasure/ramparts/mid_wall_main", "treasure/ramparts/mid_wall_side", "treasure/ramparts/top_wall",
+        "treasure/walls/bottom/wall_1",
+    ),
+    anyWood = false,
+    agreement = 0.2,
+    samples = 300,
+    aliases = mapOf(
+        "cracked_polished_blackstone_bricks" to "polished_blackstone_bricks",
+        "gilded_blackstone" to "blackstone",
+    ),
+    minVotes = 5,
+    votingKinds = setOf(
+        Blocks.POLISHED_BLACKSTONE_BRICK_STAIRS, Blocks.POLISHED_BLACKSTONE_BRICK_SLAB,
+        Blocks.POLISHED_BLACKSTONE_BRICK_WALL, Blocks.CHISELED_POLISHED_BLACKSTONE,
+    ),
+)
+
+/**
+ * An ancient city's middle, where its frame of reinforced deepslate stands, and the buildings and
+ * paths around it. Only the uncommon blocks vote: a city is tens of thousands of deepslate bricks
+ * and tiles, which say little about where a design sits.
+ */
+object AncientCityFit : TemplateFit(
+    "ancient_city",
+    listOf(
+        "city_center/city_center_1", "city_center/city_center_2", "city_center/city_center_3",
+        "city/entrance/entrance_path_1", "city/entrance/entrance_path_2", "city/entrance/entrance_path_3",
+        "city/entrance/entrance_path_4", "city/entrance/entrance_path_5", "city/entrance/entrance_connector",
+        "structures/sauna_1", "structures/barracks", "structures/large_ruin_1", "structures/medium_ruin_1",
+        "structures/small_statue", "structures/tall_ruin_1", "structures/ice_box_1",
+    ),
+    anyWood = false,
+    agreement = 0.2,
+    samples = 300,
+    aliases = mapOf(
+        "cracked_deepslate_bricks" to "deepslate_bricks",
+        "cracked_deepslate_tiles" to "deepslate_tiles",
+    ),
+    minVotes = 5,
+    votingKinds = setOf(
+        Blocks.CHISELED_DEEPSLATE, Blocks.REINFORCED_DEEPSLATE, Blocks.DEEPSLATE_TILE_WALL,
+        Blocks.DEEPSLATE_BRICK_WALL, Blocks.POLISHED_DEEPSLATE_WALL, Blocks.DEEPSLATE_BRICK_SLAB,
+    ),
+)
+
+/**
+ * A woodland mansion's rooms: its entrance hall and the big two-by-two rooms it is built from. A
+ * player's dark oak house has the same planks, but not a room laid out as the game lays it.
+ */
+object MansionFit : TemplateFit(
+    "woodland_mansion",
+    listOf(
+        "entrance", "2x2_a1", "2x2_a2", "2x2_a3", "2x2_a4", "2x2_b1", "2x2_b2", "2x2_b3", "2x2_b4", "2x2_b5",
+        "2x2_s1", "1x2_c_stairs", "1x2_d_stairs", "1x1_b1", "1x1_b2", "1x1_b3", "1x1_b4", "1x1_b5",
+        "1x2_a1", "1x2_b1", "1x2_c1", "1x2_d1", "1x2_se1",
+    ),
+    anyWood = false,
+    agreement = 0.2,
+    samples = 400,
+    minVotes = 15,
+    votingKinds = setOf(
+        Blocks.CARPET.red(), Blocks.POLISHED_ANDESITE, Blocks.WOOL.lightGray(), Blocks.WOOL.black(),
+        Blocks.BOOKSHELF, Blocks.BIRCH_STAIRS, Blocks.DARK_OAK_STAIRS,
+    ),
 )

@@ -97,15 +97,9 @@ object Specs {
             Blocks.POLISHED_BLACKSTONE_BRICK_SLAB, Blocks.CHISELED_POLISHED_BLACKSTONE, Blocks.GILDED_BLACKSTONE,
         ),
         biomes = setOf("crimson_forest", "nether_wastes", "soul_sand_valley", "warped_forest"), merge = 24,
-        recognise = { d ->
-            val b = d.bounds
-            // The game cracks about 30% of a bastion's polished blackstone bricks as it places it; a
-            // player's blackstone build has few or none cracked, or only cracked ones.
-            val polished = d.kinds[Blocks.POLISHED_BLACKSTONE_BRICKS] ?: 0
-            val cracked = d.kinds[Blocks.CRACKED_POLISHED_BLACKSTONE_BRICKS] ?: 0
-            val share = if (polished + cracked == 0) 0.0 else cracked.toDouble() / (polished + cracked)
-            boundsIf(d, b != null && d.count >= Recognise.BASTION_BLOCKS && maxOf(b.sizeX, b.sizeZ) >= Recognise.BASTION_WIDTH && share in 0.18..0.45)
-        },
+        // Set once one of its ramparts, walls or bridge matches (see [BastionFit]). Counting blocks
+        // and the share of them cracked was not enough: a player's blackstone build passed both.
+        recognise = { d -> d.box },
     )
 
     /** Streets (dirt paths, or smooth sandstone in the desert), beds, the bell and job-site blocks. */
@@ -152,10 +146,8 @@ object Specs {
         // A mansion is its mix at scale: red carpet down every corridor and several of these at once
         // (the test one had 943 red carpet among 12485 blocks), where a player's wooden house has
         // planks and stairs but little carpet.
-        recognise = { d ->
-            val carpet = d.kinds[Blocks.CARPET.red()] ?: 0
-            boundsIf(d, d.count >= 1000 && carpet >= 100 && d.kinds.values.count { it >= 20 } >= 5)
-        },
+        // Set once one of its rooms matches (see [MansionFit]).
+        recognise = { d -> d.box },
     )
 
     /**
@@ -229,7 +221,8 @@ object Specs {
             Blocks.POLISHED_DEEPSLATE_WALL, Blocks.WOOL.gray(), Blocks.REINFORCED_DEEPSLATE,
         ),
         maxY = 0, biomes = setOf("deep_dark"), merge = 32,
-        recognise = { d -> boundsIf(d, d.count >= 300) },
+        // Set once its middle, a path or one of its buildings matches (see [AncientCityFit]).
+        recognise = { d -> d.box },
         reach = Spec.Reach(2, 1, 5),
     )
 
