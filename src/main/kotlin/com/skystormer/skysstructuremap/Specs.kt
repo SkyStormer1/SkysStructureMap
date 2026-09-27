@@ -109,7 +109,15 @@ object Specs {
             Blocks.COMPOSTER, Blocks.LECTERN, Blocks.SMOKER, Blocks.BLAST_FURNACE, Blocks.CARTOGRAPHY_TABLE,
             Blocks.FLETCHING_TABLE, Blocks.GRINDSTONE, Blocks.LOOM, Blocks.SMITHING_TABLE, Blocks.STONECUTTER,
             Blocks.BARREL, Blocks.HAY_BLOCK,
+            // The blocks a snowy or taiga town centre is built of, so it can still be found when the
+            // bell has been taken: none of them grow in a village's own biomes by themselves.
+            // Not mossy cobblestone: a taiga's own boulders are made of it, and they dragged a
+            // village's box out across the woods and down into a dungeon in testing.
+            Blocks.LANTERN, Blocks.PACKED_ICE, Blocks.STRIPPED_SPRUCE_WOOD, Blocks.SPRUCE_TRAPDOOR,
         ),
+        // Villages stand on the surface, and only there: without a floor, the mossy cobblestone of a
+        // dungeon far below joined one in testing and dragged its box down with it.
+        minY = 45,
         tags = listOf(BlockTags.BEDS), biomes = setOf("plains", "meadow", "desert", "savanna", "snowy_plains", "taiga"), merge = 32,
         biomeAsWhole = true,
         // Set once a town centre matches (see [TownCentreFit]).
@@ -161,7 +169,9 @@ object Specs {
             Blocks.INFESTED_STONE_BRICKS, Blocks.INFESTED_MOSSY_STONE_BRICKS, Blocks.INFESTED_CRACKED_STONE_BRICKS,
             Blocks.INFESTED_CHISELED_STONE_BRICKS, Blocks.STONE_BRICK_STAIRS, Blocks.STONE_BRICK_SLAB, Blocks.END_PORTAL_FRAME,
         ),
-        maxY = 60, notBiomes = listOf("ocean"), merge = 24,
+        // No biome rule: the game puts strongholds on a ring wherever it falls, and one under an
+        // ocean was thrown away block by block in testing. Its end portal frames are proof enough.
+        maxY = 60, merge = 24,
         recognise = { d -> boundsIf(d, has(d, Blocks.END_PORTAL_FRAME)) },
     )
 
@@ -285,13 +295,45 @@ object Specs {
     }
 
     /**
+     * How wide a structure of each kind can be, from measuring every one the game had built in the
+     * test world (its saved structure starts, widest of x and z, rounded up for room): two sightings
+     * that would still fit inside this are the same structure, not two.
+     */
+    fun spanOf(type: StructureType): Int = span(type)
+
+    private fun span(type: StructureType): Int = when (type) {
+        StructureType.FORTRESS -> 256          // widest measured 219
+        StructureType.ANCIENT_CITY -> 256      // 225
+        StructureType.VILLAGE -> 200           // 161
+        StructureType.TRIAL_CHAMBERS -> 176    // 139
+        StructureType.STRONGHOLD -> 160        // 129
+        StructureType.END_CITY -> 160          // only two in the test world; a city with its ship reaches further
+        StructureType.BASTION -> 96            // 67
+        StructureType.MANSION -> 96            // 79
+        StructureType.TRAIL_RUINS -> 64        // 52
+        StructureType.MONUMENT -> 58           // always exactly this
+        StructureType.OUTPOST -> 48            // always exactly this
+        StructureType.SHIPWRECK -> 32          // 28
+        StructureType.DESERT_TEMPLE -> 24      // 21
+        StructureType.JUNGLE_TEMPLE -> 20      // 15
+        StructureType.WITCH_HUT -> 12          // 9
+        StructureType.END_GATEWAY -> 8
+    }
+
+    /**
      * Whether two boxes of [type] are the same structure: close together (within its grouping
-     * distance, as blocks seen in one visit are), or with middles less than half the least distance
-     * two of them can be apart. The second is what joins a structure seen half on one visit and half
-     * on the next: in testing one trial chambers was saved twice, the halves about 70 blocks apart.
+     * distance, as blocks seen in one visit are), both inside one structure's width (see [span]),
+     * or with middles less than half the least distance two of them can be apart.
+     *
+     * The width is what joins a big structure seen in pieces. A fortress reaches over 200 blocks and
+     * is only recognised where one of its crossroads is, so two visits can see two ends that never
+     * touch; going by the spacing alone, they were saved as two fortresses (and a structure marked
+     * as completed came back unmarked as the other copy).
      */
     fun sameStructure(type: StructureType, a: Box, b: Box): Boolean {
         if (a.grow(of(type).merge).overlaps(b)) return true
+        val both = a.union(b)
+        if (maxOf(both.sizeX, both.sizeZ) <= span(type)) return true
         val dx = Math.abs(a.centreX - b.centreX)
         val dz = Math.abs(a.centreZ - b.centreZ)
         return maxOf(dx, dz) < apart(type) / 2

@@ -93,6 +93,18 @@ open class TemplateFit(
          */
         private const val MIN_MATCH = 0.5
         private const val MIN_MATCHED_BLOCKS = 60
+
+        /** How many seen blocks of a kind are tried as the anchor, spread through those seen. */
+        private const val SEEDS = 6
+
+        /** A kind in more spots than this of a design says too little about where it sits. */
+        private const val MAX_SPOTS = 20
+
+        /** How many placements one anchored search may check block for block. */
+        private const val CHECK_BUDGET = 2000
+
+        /** Of a design smaller than that, this share of it is enough. */
+        private const val MIN_MATCHED_SHARE = 0.5
         const val MIN_AGREEMENT = 0.8
 
         const val SAMPLES = 24
@@ -126,6 +138,56 @@ open class TemplateFit(
      * The best-matching placement of one of the designs for [detection]'s blocks, or null for
      * none. Only blocks [votes] accepts help choose it; every block of the design is checked after.
      */
+    /**
+     * The design that fits with one of these blocks standing exactly where one was seen, or null.
+     *
+     * Where a structure has blocks that only sit in a few spots of a design, each of those says
+     * where the design is by itself, with nothing to vote on: a village's town centre has one bell,
+     * and a lantern, a trapdoor or a few blocks of packed ice when the bell has been taken. Every
+     * design and turn is tried with such a block on a seen one and checked block for block. The
+     * rarer a block is in a design, the fewer placements it means, so those are tried first and the
+     * work is capped ([CHECK_BUDGET]).
+     */
+    fun fitAnchored(detection: Detection, level: Level, kinds: List<Block>): Match? {
+        var budget = CHECK_BUDGET
+        val report = ArrayList<Triple<String, Int, Int>>()
+        for (kind in kinds) {
+            val seen = detection.blocks.long2ObjectEntrySet().filter { it.value == kind }.map { it.longKey }
+            if (seen.isEmpty()) continue
+            val step = maxOf(1, seen.size / SEEDS)
+            val anchors = seen.indices.step(step).map { seen[it] }
+            val work = templates.mapNotNull { template ->
+                val spots = template.byFamily[family(kind)].orEmpty()
+                if (spots.isEmpty() || spots.size > MAX_SPOTS) null else template to spots
+            }.sortedBy { it.second.size }
+            var best: Match? = null
+            for ((template, spots) in work) {
+                for (anchor in anchors) {
+                    val x = BlockPos.getX(anchor)
+                    val y = BlockPos.getY(anchor)
+                    val z = BlockPos.getZ(anchor)
+                    for (spot in spots) {
+                        for (rotation in Rotation.entries) {
+                            if (budget-- <= 0) break
+                            val turned = spot.rotate(rotation)
+                            val match = check(template, rotation, BlockPos.asLong(x - turned.x, y - turned.y, z - turned.z), level)
+                                ?: continue
+                            report.add(Triple("${template.name} $rotation", match.matched, match.known))
+                            if (best == null || match.matched > best.matched) best = match
+                        }
+                    }
+                }
+            }
+            if (best != null) {
+                lastReport = "anchored on ${BuiltInRegistries.BLOCK.getKey(kind).path}; " +
+                    report.sortedByDescending { it.second }.take(3).joinToString("; ") { "${it.first}: ${it.second}/${it.third}" }
+                return best
+            }
+        }
+        lastReport = "nothing fits any of ${kinds.joinToString { BuiltInRegistries.BLOCK.getKey(it).path }} that were seen"
+        return null
+    }
+
     fun fit(detection: Detection, level: Level, votes: (Long) -> Boolean = { true }): Match? {
         if (templates.isEmpty() || detection.blocks.size < MIN_BLOCKS) {
             lastReport = "${detection.blocks.size} blocks, too few"
@@ -199,6 +261,24 @@ open class TemplateFit(
 
     private var lastCheck = ""
 
+    /** How many of a design's blocks are there at this placement, and how many were looked at. */
+    private fun fitsOf(template: Template, rotation: Rotation, origin: Long, level: Level): Pair<Int, Int> {
+        val ox = BlockPos.getX(origin)
+        val oy = BlockPos.getY(origin)
+        val oz = BlockPos.getZ(origin)
+        var known = 0
+        var matched = 0
+        val cursor = BlockPos.MutableBlockPos()
+        for ((pos, block) in template.blocks) {
+            val turned = pos.rotate(rotation)
+            cursor.set(ox + turned.x, oy + turned.y, oz + turned.z)
+            if (!level.hasChunk(cursor.x shr 4, cursor.z shr 4)) continue
+            known++
+            if (family(level.getBlockState(cursor).block) == block) matched++
+        }
+        return matched to known
+    }
+
     private fun check(template: Template, rotation: Rotation, origin: Long, level: Level): Match? {
         val ox = BlockPos.getX(origin)
         val oy = BlockPos.getY(origin)
@@ -221,7 +301,10 @@ open class TemplateFit(
             }
         }
         lastCheck = "$matched/$known of ${template.blocks.size} match" + if (loose.isNotEmpty()) " ($matchedFirm/$knownFirm without ${loose.joinToString()})" else ""
-        if (known < template.blocks.size * 0.6 || matched < known * MIN_MATCH || matched < MIN_MATCHED_BLOCKS) return null
+        // Enough blocks to mean something, but never more than most of the design: a taiga village's
+        // meeting point is only 72 blocks, and asking for 60 matched threw away a real one at 49.
+        val enough = minOf(MIN_MATCHED_BLOCKS, (template.blocks.size * MIN_MATCHED_SHARE).toInt())
+        if (known < template.blocks.size * 0.6 || matched < known * MIN_MATCH || matched < enough) return null
         if (loose.isNotEmpty() && matchedFirm < knownFirm * MIN_MATCH) return null
         val a = BlockPos.ZERO.rotate(rotation)
         val b = BlockPos(template.sizeX - 1, template.sizeY - 1, template.sizeZ - 1).rotate(rotation)
@@ -448,4 +531,92 @@ object MansionFit : TemplateFit(
         Blocks.CARPET.red(), Blocks.POLISHED_ANDESITE, Blocks.WOOL.lightGray(), Blocks.WOOL.black(),
         Blocks.BOOKSHELF, Blocks.BIRCH_STAIRS, Blocks.DARK_OAK_STAIRS,
     ),
+)
+
+/**
+ * A village's working houses: the library, the smithy, the farm and the rest, for every kind of
+ * village. Each has its own job block in one or two spots, which says where the house sits, so a
+ * village is still known by a house when its town centre has been pulled down.
+ */
+object VillageHouseFit : TemplateFit(
+    "village",
+    listOf(
+        "desert/houses/desert_armorer_1",
+        "desert/houses/desert_butcher_shop_1",
+        "desert/houses/desert_cartographer_house_1",
+        "desert/houses/desert_farm_1",
+        "desert/houses/desert_farm_2",
+        "desert/houses/desert_fisher_1",
+        "desert/houses/desert_fletcher_house_1",
+        "desert/houses/desert_large_farm_1",
+        "desert/houses/desert_library_1",
+        "desert/houses/desert_mason_1",
+        "desert/houses/desert_shepherd_house_1",
+        "desert/houses/desert_tannery_1",
+        "desert/houses/desert_tool_smith_1",
+        "desert/houses/desert_weaponsmith_1",
+        "plains/houses/plains_armorer_house_1",
+        "plains/houses/plains_butcher_shop_1",
+        "plains/houses/plains_butcher_shop_2",
+        "plains/houses/plains_cartographer_1",
+        "plains/houses/plains_fisher_cottage_1",
+        "plains/houses/plains_fletcher_house_1",
+        "plains/houses/plains_large_farm_1",
+        "plains/houses/plains_library_1",
+        "plains/houses/plains_library_2",
+        "plains/houses/plains_masons_house_1",
+        "plains/houses/plains_shepherds_house_1",
+        "plains/houses/plains_small_farm_1",
+        "plains/houses/plains_tannery_1",
+        "plains/houses/plains_tool_smith_1",
+        "plains/houses/plains_weaponsmith_1",
+        "savanna/houses/savanna_armorer_1",
+        "savanna/houses/savanna_butchers_shop_1",
+        "savanna/houses/savanna_butchers_shop_2",
+        "savanna/houses/savanna_cartographer_1",
+        "savanna/houses/savanna_fisher_cottage_1",
+        "savanna/houses/savanna_fletcher_house_1",
+        "savanna/houses/savanna_large_farm_1",
+        "savanna/houses/savanna_large_farm_2",
+        "savanna/houses/savanna_library_1",
+        "savanna/houses/savanna_mason_1",
+        "savanna/houses/savanna_shepherd_1",
+        "savanna/houses/savanna_small_farm",
+        "savanna/houses/savanna_tannery_1",
+        "savanna/houses/savanna_tool_smith_1",
+        "savanna/houses/savanna_weaponsmith_1",
+        "savanna/houses/savanna_weaponsmith_2",
+        "snowy/houses/snowy_armorer_house_1",
+        "snowy/houses/snowy_armorer_house_2",
+        "snowy/houses/snowy_butchers_shop_1",
+        "snowy/houses/snowy_butchers_shop_2",
+        "snowy/houses/snowy_cartographer_house_1",
+        "snowy/houses/snowy_farm_1",
+        "snowy/houses/snowy_farm_2",
+        "snowy/houses/snowy_fisher_cottage",
+        "snowy/houses/snowy_fletcher_house_1",
+        "snowy/houses/snowy_library_1",
+        "snowy/houses/snowy_masons_house_1",
+        "snowy/houses/snowy_masons_house_2",
+        "snowy/houses/snowy_shepherds_house_1",
+        "snowy/houses/snowy_tannery_1",
+        "snowy/houses/snowy_tool_smith_1",
+        "taiga/houses/taiga_armorer_2",
+        "taiga/houses/taiga_armorer_house_1",
+        "taiga/houses/taiga_butcher_shop_1",
+        "taiga/houses/taiga_cartographer_house_1",
+        "taiga/houses/taiga_fisher_cottage_1",
+        "taiga/houses/taiga_fletcher_house_1",
+        "taiga/houses/taiga_large_farm_1",
+        "taiga/houses/taiga_large_farm_2",
+        "taiga/houses/taiga_library_1",
+        "taiga/houses/taiga_masons_house_1",
+        "taiga/houses/taiga_shepherds_house_1",
+        "taiga/houses/taiga_small_farm_1",
+        "taiga/houses/taiga_tannery_1",
+        "taiga/houses/taiga_tool_smith_1",
+        "taiga/houses/taiga_weaponsmith_1",
+        "taiga/houses/taiga_weaponsmith_2",
+    ),
+    anyWood = false,
 )

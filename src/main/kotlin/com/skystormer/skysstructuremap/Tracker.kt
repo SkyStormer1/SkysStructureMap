@@ -100,9 +100,11 @@ object Tracker {
                 // The town centre is around the bell; streets and houses further out do not vote.
                 // Each bell on its own: a village can have more than one, and pooling the blocks
                 // around both drowned out the town centre in testing.
-                StructureType.VILLAGE -> detection.blocks.long2ObjectEntrySet()
-                    .filter { it.value == net.minecraft.world.level.block.Blocks.BELL }.map { it.longKey }
-                    .firstNotNullOfOrNull { bell -> fitter.fit(detection, level) { key -> near(bell, key, TOWN_CENTRE_REACH) } }
+                // The bell says where a town centre is on its own, and the few other blocks the game
+                // puts there do the same when the bell has been taken, as players do.
+                StructureType.VILLAGE -> fitter.fitAnchored(detection, level, TOWN_CENTRE_ANCHORS)
+                    // Failing that, one of its working houses, each known by its own job block.
+                    ?: VillageHouseFit.also { used = it }.fitAnchored(detection, level, JOB_BLOCKS)
                     // A raided or looted village often has no bell left: then the town centre is looked
                     // for around the spots its blocks are thickest, where the streets meet, and still
                     // has to match as closely. Every block voting at once let the streets drown it out.
@@ -115,15 +117,20 @@ object Tracker {
             val millis = (System.nanoTime() - started) / 1_000_000
             if (match != null) {
                 detection.variant = match.template.name
+                detection.piece = match.box
                 detection.box = when (detection.type) {
                     StructureType.OUTPOST -> Recognise.outpostBox(match.box)
                     // The town centre (or tower) proves it; the rest is everything seen around it.
-                    StructureType.VILLAGE, StructureType.TRAIL_RUINS, StructureType.END_CITY, StructureType.BASTION, StructureType.ANCIENT_CITY, StructureType.MANSION -> detection.bounds
+                    StructureType.VILLAGE, StructureType.TRAIL_RUINS, StructureType.END_CITY, StructureType.BASTION, StructureType.ANCIENT_CITY, StructureType.MANSION ->
+                        detection.bounds?.let { around(detection.type, it, match.box) }
                     else -> match.box
                 }
             }
             // A village is proved once; after that its box is everything seen, as more of it loads.
-            if (match == null && detection.type in PROVED_THEN_SEEN && detection.variant != null) detection.box = detection.bounds
+            if (match == null && detection.type in PROVED_THEN_SEEN && detection.variant != null) {
+                val piece = detection.piece
+                detection.box = detection.bounds?.let { if (piece == null) it else around(detection.type, it, piece) }
+            }
             if (match?.box != before || (match == null && detection.blocks.size >= 100)) {
                 Log.info("{} #{} at {}: {} in {} ms ({})", detection.type.id, detection.id, detection.bounds,
                     match?.let { "${it.template.name}, box ${detection.box}" } ?: "no template fits", millis, used.lastReport)
@@ -181,7 +188,7 @@ object Tracker {
             // A fortress's bottom is worked out, not seen: the new one replaces any older guess.
             detection.type == StructureType.FORTRESS -> stored.box.union(box).let { if (box.minY == 48) it.copy(minY = 48) else it }
             else -> stored.box.union(box)
-        }
+        }.let { grown -> detection.piece?.let { around(detection.type, grown, it) } ?: grown }
         // Pieces are only ever added, so they stay after the structure is torn down.
         val pieces = stored.pieces + detection.pieces.filter { new -> stored.pieces.none { it.box == new.box } }
         if (better != stored.box || pieces.size != stored.pieces.size) StructureStore.put(stored.copy(box = better, pieces = pieces))
@@ -272,6 +279,46 @@ object Tracker {
 
     private const val BUSIEST_SPOTS = 8
     private const val SPOTS_APART = 16
+
+    /**
+     * Blocks a village's town centre has in only a few places, so one of them says where the centre
+     * is: the bell first, then what is left when someone has taken it (snowy centres are built of
+     * packed ice and stripped wood, taiga ones of mossy cobblestone, with lanterns and trapdoors).
+     */
+    private val TOWN_CENTRE_ANCHORS = listOf(
+        net.minecraft.world.level.block.Blocks.BELL,
+        net.minecraft.world.level.block.Blocks.LANTERN,
+        net.minecraft.world.level.block.Blocks.SPRUCE_TRAPDOOR,
+        net.minecraft.world.level.block.Blocks.PACKED_ICE,
+        net.minecraft.world.level.block.Blocks.STRIPPED_SPRUCE_WOOD,
+    )
+
+    /**
+     * Everything seen, within one structure's width of the piece that matched (see [Specs.spanOf],
+     * measured from the structures the game had built in the test world): a taiga village's box ran
+     * 262 blocks across and 127 high, picking up whatever lay near its streets, and no village is
+     * that big.
+     */
+    private fun around(type: StructureType, seen: Box, piece: Box): Box {
+        val reach = Specs.spanOf(type) / 2
+        return Box(
+            maxOf(seen.minX, piece.centreX - reach), maxOf(seen.minY, piece.minY - HEIGHT_REACH), maxOf(seen.minZ, piece.centreZ - reach),
+            minOf(seen.maxX, piece.centreX + reach), minOf(seen.maxY, piece.maxY + HEIGHT_REACH), minOf(seen.maxZ, piece.centreZ + reach),
+        )
+    }
+
+    /** How far above or below the piece that matched a structure still reaches. */
+    private const val HEIGHT_REACH = 64
+
+    /** The job blocks of a village's working houses, one or two to a design. */
+    private val JOB_BLOCKS = listOf(
+        net.minecraft.world.level.block.Blocks.LECTERN, net.minecraft.world.level.block.Blocks.SMITHING_TABLE,
+        net.minecraft.world.level.block.Blocks.GRINDSTONE, net.minecraft.world.level.block.Blocks.BLAST_FURNACE,
+        net.minecraft.world.level.block.Blocks.SMOKER, net.minecraft.world.level.block.Blocks.CARTOGRAPHY_TABLE,
+        net.minecraft.world.level.block.Blocks.FLETCHING_TABLE, net.minecraft.world.level.block.Blocks.LOOM,
+        net.minecraft.world.level.block.Blocks.STONECUTTER, net.minecraft.world.level.block.Blocks.COMPOSTER,
+        net.minecraft.world.level.block.Blocks.BARREL,
+    )
 
     /** How far from a bell, sideways, a village's town centre reaches. */
     private const val TOWN_CENTRE_REACH = 12
