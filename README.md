@@ -16,22 +16,23 @@ As you explore, the mod recognises structures from the blocks your game has alre
 seed, a server plugin or any help from the server, and nothing in it works out or uses the world seed. When you
 come within 32 blocks of a structure, it's saved as discovered and shows up on your map.
 
-Each kind of structure is recognised from blocks that only it generates, chosen by counting the blocks in the
-game's own structure designs:
+Each kind of structure is checked against the way the game builds it, using the designs and code in your own
+copy of Minecraft:
 
 - **Ocean monuments** are always the same building on the same grid, so their exact box is known.
-- **Shipwrecks, pillager outposts, villages, trail ruins and end cities** are matched against the game's own
-  designs: a wreck in any wood, an outpost's watchtower, a village's town centre around its bell (or where its
-  streets meet, if a raid took the bell), a trail ruins tower, an end city's rooms, towers or ship. The match allows for broken or added blocks, but a player's build
-  that only uses the same blocks does not pass.
-- **Nether fortresses** need a bridge crossroads, **strongholds** their end portal frames, **trial chambers** a
-  trial spawner or vault, and **witch huts** their exact size.
-- **Bastions** need the share of cracked bricks the game leaves when it builds one, and **woodland mansions** their
-  mix of materials at scale, red carpet down every corridor included.
-- **Everything else** is mapped out from its blocks as you see more of it.
-- Each kind is only looked for in the biomes the game generates it in, so a player's base elsewhere is never
-  taken for one. Outposts and villages only need part of themselves in the right biome, since they often reach
-  over into a beach or river beside it.
+- **Villages, pillager outposts, shipwrecks, trail ruins, end cities, bastion remnants, ancient cities and woodland
+  mansions** are matched against the game's own designs, block by block. A village is found by its town centre or by
+  one of its working houses, so it still counts when the bell has been taken or the square pulled down.
+- **Nether fortresses** need a real bridge crossroads, railings and open walkway included; **desert temples** the
+  terracotta cross over their hidden chamber; **jungle temples** their lever wall and trap; **witch huts** their exact
+  size and fittings.
+- **Strongholds, trial chambers and end gateways** go by blocks no player can place in survival: end portal frames,
+  trial spawners and vaults, the gateway itself.
+- Each kind is only looked for in the biomes the game builds it in, so a player's base elsewhere is never taken for
+  one. Outposts and villages only need part of themselves in the right biome, since they often reach into a beach or
+  river beside it.
+- Blocks are never proof on their own. They only say where to try: the game's design is then laid over that spot and
+  has to match.
 
 ## Features
 
