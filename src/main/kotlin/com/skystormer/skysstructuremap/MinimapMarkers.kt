@@ -26,18 +26,21 @@ object MinimapMarkers {
         var markers: List<Marker> = emptyList()
         var next = 0
         var icons: MultiTextureRenderTypeRenderer? = null
+        /** The dimension the minimap itself is showing, taken from Xaero before each frame's elements. */
+        var dimension: String? = null
     }
 
     /**
-     * The dimension the minimap is showing: the world map's current one, which is what the
-     * minimap's terrain comes from, else the one you are in.
+     * The dimension the minimap is showing, which Xaero gives with each frame. The world map's own
+     * dimension is not it: with the map left on the overworld, nether structures were dropped and
+     * overworld ones scattered across the nether minimap at their overworld coordinates.
      */
-    private fun dimension(): String? =
-        Markers.mapDimension() ?: Minecraft.getInstance().level?.dimension()?.identifier()?.toString()
+    private fun dimension(context: Context): String? =
+        context.dimension ?: Minecraft.getInstance().level?.dimension()?.identifier()?.toString()
 
     class Provider : MinimapElementRenderProvider<Marker, Context>() {
         override fun begin(location: MinimapElementRenderLocation, context: Context) {
-            context.markers = dimension()?.let(Markers::visibleIn) ?: emptyList()
+            context.markers = dimension(context)?.let(Markers::visibleIn) ?: emptyList()
             context.next = 0
         }
 
@@ -90,6 +93,8 @@ object MinimapMarkers {
             location == MinimapElementRenderLocation.OVER_MINIMAP || location == MinimapElementRenderLocation.IN_MINIMAP
 
         override fun preRender(info: MinimapElementRenderInfo, buffers: XaeroBufferProvider, renderers: MultiTextureRenderTypeRendererProvider) {
+            // Xaero calls this before it asks the provider for the elements, so the provider has it.
+            context.dimension = info.mapDimension?.identifier()?.toString()
             context.icons = renderers.getRenderer(CustomRenderTypes.GUI_NEAREST)
         }
 
