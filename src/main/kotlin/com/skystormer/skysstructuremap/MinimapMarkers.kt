@@ -38,6 +38,9 @@ object MinimapMarkers {
     private fun dimension(context: Context): String? =
         context.dimension ?: Minecraft.getInstance().level?.dimension()?.identifier()?.toString()
 
+    /** What the last frame's minimap was showing, so the diagnostic line is logged only on a change. */
+    private var lastNote: String? = null
+
     class Provider : MinimapElementRenderProvider<Marker, Context>() {
         override fun begin(location: MinimapElementRenderLocation, context: Context) {
             context.markers = dimension(context)?.let(Markers::visibleIn) ?: emptyList()
@@ -95,6 +98,11 @@ object MinimapMarkers {
         override fun preRender(info: MinimapElementRenderInfo, buffers: XaeroBufferProvider, renderers: MultiTextureRenderTypeRendererProvider) {
             // Xaero calls this before it asks the provider for the elements, so the provider has it.
             context.dimension = info.mapDimension?.identifier()?.toString()
+            val note = "map ${context.dimension}, entity ${info.renderEntityDimension?.identifier()}, entityScale ${info.renderEntityDimensionScale}, background ${info.backgroundCoordinateScale}, pos ${info.renderPos}, entityPos ${info.renderEntityPos}"
+            if (note.substringBefore(", pos") != lastNote) {
+                lastNote = note.substringBefore(", pos")
+                Log.info("Minimap: {}", note)
+            }
             context.icons = renderers.getRenderer(CustomRenderTypes.GUI_NEAREST)
         }
 

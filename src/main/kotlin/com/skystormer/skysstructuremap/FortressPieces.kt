@@ -29,6 +29,17 @@ object FortressPieces {
     /** How much of the corners around the plus may be nether bricks: a castle floor is all bricks there. */
     private const val MAX_CORNERS = 0.2
 
+    /**
+     * How much of the railings must still stand. The game walls both sides of every arm, one block
+     * high, two above the deck (`x7` and `x11`, `z7` and `z11` of the piece), leaving a walkway
+     * three wide between them. That wall is what tells a crossroads from a player's nether brick
+     * platform, which has the deck but nothing around it.
+     */
+    private const val MIN_RAILINGS = 0.6
+
+    /** How much of the walkway between the railings may be nether bricks: the game leaves it open. */
+    private const val MAX_WALKWAY = 0.25
+
     /** Every crossroads among [detection]'s blocks, as its piece box. */
     fun crossroads(detection: Detection, level: Level): List<Box> {
         val found = ArrayList<Pair<Box, Double>>()
@@ -48,6 +59,7 @@ object FortressPieces {
             val box = Box(x - 9, y - 3, z - 9, x + 9, y + 6, z + 9)
             if (found.any { it.first == box }) continue
             val score = deckScore(level, x, y, z) ?: continue
+            if (!railings(level, x, y, z)) continue
             found.add(box to score)
         }
         // A spot a block or two off a real centre can pass too; of overlapping ones, the best is it.
@@ -90,6 +102,43 @@ object FortressPieces {
         if (cells == 0 || bricks < cells * MIN_DECK) return null
         if (corners > 0 && cornerBricks > corners * MAX_CORNERS) return null
         return bricks.toDouble() / cells - (if (corners > 0) cornerBricks.toDouble() / corners else 0.0)
+    }
+
+    /**
+     * Whether a crossroads' railings stand around ([cx], [y], [cz]) and its walkway is open: the
+     * walls two blocks above the deck along both sides of each arm, and the three-wide lane between
+     * them left clear for its whole height. Only blocks in loaded chunks are counted.
+     */
+    private fun railings(level: Level, cx: Int, y: Int, cz: Int): Boolean {
+        val cursor = BlockPos.MutableBlockPos()
+        var railCells = 0
+        var rails = 0
+        var laneCells = 0
+        var laneBricks = 0
+        for (along in -9..9) {
+            // Nothing is checked across the crossing itself, where the arms meet.
+            if (Math.abs(along) < 2) continue
+            for (side in listOf(-2, 2)) {
+                for (pair in listOf(cx + side to cz + along, cx + along to cz + side)) {
+                    cursor.set(pair.first, y + 2, pair.second)
+                    if (!level.hasChunk(cursor.x shr 4, cursor.z shr 4)) continue
+                    railCells++
+                    if (level.getBlockState(cursor).`is`(Blocks.NETHER_BRICKS)) rails++
+                }
+            }
+            for (lane in -1..1) {
+                for (dy in 2..4) {
+                    for (pair in listOf(cx + lane to cz + along, cx + along to cz + lane)) {
+                        cursor.set(pair.first, y + dy, pair.second)
+                        if (!level.hasChunk(cursor.x shr 4, cursor.z shr 4)) continue
+                        laneCells++
+                        if (level.getBlockState(cursor).`is`(Blocks.NETHER_BRICKS)) laneBricks++
+                    }
+                }
+            }
+        }
+        if (railCells == 0 || rails < railCells * MIN_RAILINGS) return false
+        return laneCells == 0 || laneBricks <= laneCells * MAX_WALKWAY
     }
 
     /** The fortress's whole box from its seen blocks and crossroads (see the class notes). */
