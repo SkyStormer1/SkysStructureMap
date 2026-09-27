@@ -59,16 +59,16 @@ object MinimapMarkers {
     class Reader : MinimapElementReader<Marker, Context>() {
         override fun isHidden(marker: Marker, context: Context): Boolean = false
         /**
-         * Xaero converts an element's coordinates from the dimension you are standing in into the
-         * one the minimap is showing, as it does for its own waypoints. These are read from the
-         * dimension being shown already, so there is nothing to convert: letting it convert them
-         * anyway threw them eight times too far out and off the minimap whenever it was switched
-         * between the nether and the overworld.
+         * Xaero places an element at its coordinates times this, divided by the scale of the
+         * background it is drawing (8 while the minimap shows the nether and you are in the
+         * overworld, 1 in your own dimension), and the minimap is already centred on your position
+         * converted into the dimension it is showing. These markers are read from that dimension
+         * too, so matching the background's scale leaves them exactly where they are. Returning 1
+         * instead drew them eight times too close to the middle, and the default (the scale of the
+         * dimension you are standing in) has the same fault.
          */
-        override fun getCoordinateScale(marker: Marker, context: Context, info: MinimapElementRenderInfo): Double = 1.0
-
-        /** For the same reason, your movement between blocks is not scaled either (as for waypoints). */
-        override fun shouldScalePartialCoordinates(marker: Marker, context: Context, info: MinimapElementRenderInfo): Boolean = false
+        override fun getCoordinateScale(marker: Marker, context: Context, info: MinimapElementRenderInfo): Double =
+            info.backgroundCoordinateScale
 
         override fun getRenderX(marker: Marker, context: Context, partialTicks: Float): Double = (marker.box.minX + marker.box.maxX + 1) / 2.0
         override fun getRenderY(marker: Marker, context: Context, partialTicks: Float): Double = marker.y.toDouble()
