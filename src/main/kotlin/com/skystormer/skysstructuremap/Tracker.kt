@@ -135,6 +135,16 @@ object Tracker {
             }
         } else {
             detection.box = Recognise.box(detection)
+            // The two temples the game builds in code: their blocks are what players build with in
+            // a desert or a jungle, so a piece of the game's own layout has to be there as well.
+            if (detection.box != null && !detection.proved) {
+                detection.proved = when (detection.type) {
+                    StructureType.DESERT_TEMPLE -> TemplePieces.desertCross(detection, level)
+                    StructureType.JUNGLE_TEMPLE -> TemplePieces.jungleTrap(detection, level)
+                    else -> true
+                }
+                if (!detection.proved) detection.box = null
+            }
             val bricks = detection.bounds
             if (detection.type == StructureType.FORTRESS && detection.box != null && bricks != null) {
                 val crossroads = FortressPieces.crossroads(detection, level)

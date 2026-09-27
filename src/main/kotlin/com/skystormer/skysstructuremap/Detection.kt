@@ -61,6 +61,9 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
     var inBiome = 0
     var biomeLogged = false
 
+    /** Temples: the game's own layout has been found in it, so it stays recognised. */
+    var proved = false
+
     /** Adds a block; false when it was already known. */
     fun add(x: Int, y: Int, z: Int, block: Block?, keepBlock: Boolean = true, inBiome: Boolean = true): Boolean {
         val key = BlockPos.asLong(x, y, z)

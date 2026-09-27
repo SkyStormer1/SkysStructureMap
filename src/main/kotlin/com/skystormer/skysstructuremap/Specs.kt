@@ -173,7 +173,10 @@ object Specs {
         recognise = { d ->
             val b = d.bounds
             val size = if (b == null) emptyList() else listOf(b.sizeX, b.sizeZ).sorted()
-            if (b != null && d.count >= 25 && has(d, Blocks.CAULDRON) && size == listOf(7, 9) && b.sizeY <= 6) Recognise.witchHutBox(b) else null
+            // The game furnishes every hut the same: the cauldron, the crafting table and the
+            // potted red mushroom. Two of the three, so one taken does not lose the hut.
+            val furniture = listOf(Blocks.CAULDRON, Blocks.CRAFTING_TABLE, Blocks.POTTED_RED_MUSHROOM).count { has(d, it) }
+            if (b != null && d.count >= 25 && furniture >= 2 && size == listOf(7, 9) && b.sizeY <= 6) Recognise.witchHutBox(b) else null
         },
         reach = null, waypointAtTop = true,
     )
