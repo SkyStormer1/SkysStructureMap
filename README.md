@@ -71,6 +71,13 @@ copy of Minecraft:
 - **Look again around me**, in the settings: goes through the chunks loaded around you once more, as if they had just
   arrived, and lets anything you deleted there be found again. Worth a try after an update, or when something plainly
   there has not been picked up.
+- **Scan Bobby's cache**, in the settings (or `/skysstructuremap bobby`): if you use the
+  [Bobby](https://modrinth.com/mod/bobby) mod, this goes through every chunk Bobby saved of the server you're on
+  and finds the structures you passed before installing this mod, the same way it finds them live. They're saved
+  as discovered straight away. Structures you already have are kept, and ones you deleted stay deleted. Your saved
+  structures are backed up to `config/skysstructuremap/backups/` first. The scan runs in the background while you
+  play, and `/skysstructuremap bobby stop` stops it. Chunks Bobby saved in an older Minecraft version are skipped:
+  run Bobby's `/bobby upgrade`, then scan again.
 - Discoveries are saved per server, in `config/skysstructuremap/`.
 
 ## Structures

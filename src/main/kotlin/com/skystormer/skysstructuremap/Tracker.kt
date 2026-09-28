@@ -3,7 +3,6 @@ package com.skystormer.skysstructuremap
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.network.chat.Component
-import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.Blocks
 import java.util.UUID
 
@@ -16,43 +15,29 @@ import java.util.UUID
  */
 object Tracker {
 
-    /** Blocks of the same kind this close to a group join it rather than starting another. */
-    private fun mergeDistance(type: StructureType): Int = Specs.of(type).merge
+    private val groups = Groups()
 
     /** The groups in the dimension you are in. Chunks are sent again on changing dimension, so this starts over. */
-    var detections: List<Detection> = emptyList()
-        private set
+    val detections: List<Detection> get() = groups.detections
 
     private var dimension: String? = null
-    private var nextId = 1
     private var ticks = 0L
 
     fun clear() {
-        detections = emptyList()
+        groups.clear()
         dimension = null
     }
 
     fun addBlocks(type: StructureType, dimension: String, found: List<ChunkScanner.Found>) {
         if (dimension != this.dimension) {
-            detections = emptyList()
+            groups.clear()
             this.dimension = dimension
         }
-        // Matched against the game's designs, which need to know each block.
-        val keepBlocks = fitterFor(type) != null
-        for (group in found.groupBy { Detection.cellKey(it.x, it.y, it.z) }.values) {
-            var cell = Box.of(group[0].x, group[0].y, group[0].z)
-            for (f in group) cell = cell.including(f.x, f.y, f.z)
-            val reach = mergeDistance(type)
-            val near = detections.filter { it.type == type && it.bounds?.grow(reach)?.overlaps(cell) == true }
-            val target = near.firstOrNull() ?: Detection(nextId++, type, dimension).also { detections = detections + it }
-            if (near.size > 1) {
-                for (other in near.drop(1)) target.absorb(other)
-                detections = detections - near.drop(1).toSet()
-                Log.info("Joined {} groups of {} blocks into #{}", near.size, type.id, target.id)
-            }
-            for (f in group) target.add(f.x, f.y, f.z, f.block, keepBlocks, f.inBiome)
-        }
+        groups.add(type, dimension, found, keepsBlocks(type))
     }
+
+    /** Matched against the game's designs, which need to know each block. */
+    fun keepsBlocks(type: StructureType): Boolean = fitterFor(type) != null
 
     fun tick(minecraft: Minecraft) {
         val player = minecraft.player ?: return
@@ -60,13 +45,14 @@ object Tracker {
         val here = level.dimension().identifier().toString()
         if (here != dimension) {
             if (detections.isNotEmpty()) Log.info("Changed dimension to {}; starting over on {} group(s)", here, detections.size)
-            detections = emptyList()
+            groups.clear()
             dimension = here
         }
         ticks++
         if (ticks % 10 == 0L) {
+            val blocks = BlockSource.of(level)
             for (detection in detections) {
-                if (detection.changed || (fitterFor(detection.type) != null && detection.fitDirty)) update(detection, level)
+                if (detection.changed || (fitterFor(detection.type) != null && detection.fitDirty)) update(detection, blocks)
             }
         }
         if (ticks % 4 == 0L) {
@@ -82,11 +68,8 @@ object Tracker {
      * Looks at one group again: works out whether it is a structure and what its box is, then ties
      * it to what is already saved and keeps that up to date.
      */
-    private fun update(detection: Detection, level: Level) {
-        detection.changed = false
-        val before = detection.box
-        val fitter = fitterFor(detection.type)
-        if (fitter != null) matchDesign(detection, level, fitter) else proveInWorld(detection, level, before)
+    private fun update(detection: Detection, level: BlockSource) {
+        recognise(detection, level)
         val box = detection.box ?: return
         if (detection.storedId == null) link(detection, box)
         val stored = detection.storedId?.let(StructureStore::byId) ?: return
@@ -94,11 +77,23 @@ object Tracker {
     }
 
     /**
+     * Works out whether a group is a structure, and what its box is ([Detection.box], null when it
+     * is not one). [now]: without waiting since the last try, for a group whose blocks have all
+     * been read already (from Bobby's cache, which calls this from its own thread).
+     */
+    fun recognise(detection: Detection, level: BlockSource, now: Boolean = false) {
+        detection.changed = false
+        val before = detection.box
+        val fitter = fitterFor(detection.type)
+        if (fitter != null) matchDesign(detection, level, fitter, now) else proveInWorld(detection, level, before)
+    }
+
+    /**
      * For the kinds matched against the game's own designs: fits one, and takes the box from it.
      * Tried at most every other second per group, and only once enough of it is in the right biome.
      */
-    private fun matchDesign(detection: Detection, level: Level, fitter: TemplateFit) {
-        if (detection.blocks.size < TemplateFit.MIN_BLOCKS || ticks - detection.lastFitTick < FIT_EVERY) return
+    private fun matchDesign(detection: Detection, level: BlockSource, fitter: TemplateFit, now: Boolean) {
+        if (detection.blocks.size < TemplateFit.MIN_BLOCKS || (!now && ticks - detection.lastFitTick < FIT_EVERY)) return
         if (Specs.of(detection.type).biomeAsWhole && detection.inBiome < BIOME_BLOCKS) {
             if (detection.blocks.size >= LOG_FROM && !detection.biomeLogged) {
                 detection.biomeLogged = true
@@ -160,7 +155,7 @@ object Tracker {
      * For the kinds the game builds in code rather than from a design: the blocks it is made of,
      * and then a piece of the game's own layout, which is what tells it from a player's build.
      */
-    private fun proveInWorld(detection: Detection, level: Level, before: Box?) {
+    private fun proveInWorld(detection: Detection, level: BlockSource, before: Box?) {
         detection.box = Recognise.box(detection)
         if (detection.box != null && !detection.proved) {
             detection.proved = when (detection.type) {
@@ -216,7 +211,43 @@ object Tracker {
         if (better != stored.box || pieces.size != stored.pieces.size) StructureStore.put(stored.copy(box = better, pieces = pieces))
     }
 
-    private fun discover(detection: Detection) {
+    /** What became of a group found in Bobby's cache ([takeIn]). */
+    enum class Taken { NEW, KNOWN, DELETED, NOT_ONE }
+
+    /**
+     * Saves a group recognised in Bobby's cache as discovered, without waiting for you to come near
+     * it: you were there once, when Bobby saved it. One already saved is kept (its box grows if
+     * more of it was seen), and one you deleted stays deleted, just as when you walk up to them.
+     */
+    fun takeIn(detection: Detection): Taken {
+        val box = detection.box ?: return Taken.NOT_ONE
+        link(detection, box)
+        when (val id = detection.storedId) {
+            Menus.DELETED -> return Taken.DELETED
+            null -> {
+                discover(detection, announce = false)
+                return if (detection.storedId.isNullOrEmpty() || detection.storedId == Menus.DELETED) Taken.NOT_ONE else Taken.NEW
+            }
+            else -> {
+                StructureStore.byId(id)?.let { keepUpToDate(detection, it, box) }
+                return Taken.KNOWN
+            }
+        }
+    }
+
+    /**
+     * Ties the groups recognised around you but not yet discovered to what is saved, after
+     * structures were saved without you coming near them (a scan of Bobby's cache): one of them
+     * may be among those, and should not be shown faintly beside it.
+     */
+    fun relinkUndiscovered() {
+        for (detection in detections) {
+            val box = detection.box ?: continue
+            if (detection.storedId == null) link(detection, box)
+        }
+    }
+
+    private fun discover(detection: Detection, announce: Boolean = Config.announce) {
         val box = detection.box ?: return
         if (!StructureStore.isOpen) {
             Log.warn("Inside {} #{}, but no structures file is open (not in a world?)", detection.type.id, detection.id)
@@ -240,7 +271,7 @@ object Tracker {
         StructureStore.put(structure)
         detection.storedId = structure.id
         Log.info("Discovered {} #{} at {} {} {}, box {}", detection.type.id, detection.id, box.centreX, structure.waypointY, box.centreZ, box)
-        if (Config.announce) {
+        if (announce) {
             Minecraft.getInstance().player?.sendSystemMessage(
                 Component.literal("Discovered ").withStyle { it.withColor(0xAAAAAA) }
                     .append(Component.literal(structure.name).withStyle { it.withColor(structure.type.colour and 0xFFFFFF) })

@@ -9,6 +9,8 @@ import net.minecraft.client.Minecraft
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 /** A structure you have discovered (or been sent), saved. */
 data class Structure(
@@ -158,6 +160,24 @@ object StructureStore {
         } catch (e: Exception) {
             Log.error("Could not save $path", e)
         }
+    }
+
+    /**
+     * Copies this world's structures file, as saved right now, into `backups/` beside it, named
+     * after the world, the time and [label]; answers the copy. Done before a scan of Bobby's cache
+     * adds to it. Put back by hand: with the game closed, copy it over `<world>.json`.
+     */
+    fun backup(label: String): Path {
+        val path = file ?: error("Not in a world")
+        saveNow()
+        if (!Files.exists(path)) error("Could not save $path")
+        val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"))
+        val name = path.fileName.toString().removeSuffix(".json")
+        val target = path.resolveSibling("backups").resolve("${name}_${stamp}_${safe(label)}.json")
+        Files.createDirectories(target.parent)
+        Files.copy(path, target, StandardCopyOption.REPLACE_EXISTING)
+        Log.info("Backed up {} structure(s) to {}", all.size, target)
+        return target
     }
 
     /** The server address as typed in the server list, or the single-player world's folder. */

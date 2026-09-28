@@ -1,5 +1,6 @@
 package com.skystormer.skysstructuremap.gui
 
+import com.skystormer.skysstructuremap.BobbyScan
 import com.skystormer.skysstructuremap.ChunkScanner
 import com.skystormer.skysstructuremap.Config
 import com.skystormer.skysstructuremap.Menus
@@ -27,7 +28,7 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
     override fun init() {
         val left = width / 2 - WIDTH / 2
         val half = (WIDTH - GAP) / 2
-        var y = maxOf(4, (height - 235) / 2)
+        var y = maxOf(4, (height - 257) / 2)
         addRenderableWidget(StringWidget(left, y, WIDTH, font.lineHeight, title, font))
         y += font.lineHeight + GAP * 3
 
@@ -66,6 +67,18 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
             "Goes through the chunks loaded around you again, as if they had just arrived, and lets anything you " +
                 "deleted here be found again. Worth a try after an update, or if something plainly there is missing."
         ) { lookAgain() }
+        y += ROW + GAP
+        if (BobbyScan.isRunning) {
+            button(left, y, "Stop scanning Bobby's cache",
+                "Stops looking through Bobby's cache. What it has already saved stays."
+            ) { BobbyScan.stop(); onClose() }
+        } else {
+            button(left, y, "Scan Bobby's cache for structures",
+                "Looks through every chunk the Bobby mod saved of this server for structures you passed before " +
+                    "installing this mod, and saves them as discovered. Backs up your structures first. " +
+                    "Ones you already have are kept, and ones you deleted stay deleted."
+            ) { BobbyScan.start(); onClose() }
+        }
         y += ROW + GAP
         addRenderableWidget(Button.builder(CommonComponents.GUI_DONE) { onClose() }.bounds(left, y, WIDTH, ROW).build())
     }

@@ -7,7 +7,6 @@ import net.minecraft.nbt.CompoundTag
 import net.minecraft.nbt.NbtAccounter
 import net.minecraft.nbt.NbtIo
 import net.minecraft.resources.Identifier
-import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.Rotation
@@ -69,7 +68,8 @@ open class TemplateFit(
         val byFamily: Map<String, List<BlockPos>> = blocks.groupBy({ it.second }, { it.first })
     }
 
-    private val families = HashMap<Block, String>()
+    /** Read from the scan of Bobby's cache as well as on the main thread, so safe for both. */
+    private val families = java.util.concurrent.ConcurrentHashMap<Block, String>()
 
     /** What a block is matched as: without its wood (`dark_oak_stairs` and `spruce_stairs` are both `stairs`) when [anyWood]. */
     fun family(block: Block): String = families.getOrPut(block) {
@@ -148,7 +148,7 @@ open class TemplateFit(
      * rarer a block is in a design, the fewer placements it means, so those are tried first and the
      * work is capped ([CHECK_BUDGET]).
      */
-    fun fitAnchored(detection: Detection, level: Level, kinds: List<Block>): Match? {
+    fun fitAnchored(detection: Detection, level: BlockSource, kinds: List<Block>): Match? {
         var budget = CHECK_BUDGET
         val report = ArrayList<Triple<String, Int, Int>>()
         for (kind in kinds) {
@@ -188,7 +188,7 @@ open class TemplateFit(
         return null
     }
 
-    fun fit(detection: Detection, level: Level, votes: (Long) -> Boolean = { true }): Match? {
+    fun fit(detection: Detection, level: BlockSource, votes: (Long) -> Boolean = { true }): Match? {
         if (templates.isEmpty() || detection.blocks.size < MIN_BLOCKS) {
             lastReport = "${detection.blocks.size} blocks, too few"
             return null
@@ -261,7 +261,7 @@ open class TemplateFit(
 
     private var lastCheck = ""
 
-    private fun check(template: Template, rotation: Rotation, origin: Long, level: Level): Match? {
+    private fun check(template: Template, rotation: Rotation, origin: Long, level: BlockSource): Match? {
         val ox = BlockPos.getX(origin)
         val oy = BlockPos.getY(origin)
         val oz = BlockPos.getZ(origin)

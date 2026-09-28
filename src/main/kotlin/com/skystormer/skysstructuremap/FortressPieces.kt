@@ -1,7 +1,6 @@
 package com.skystormer.skysstructuremap
 
 import net.minecraft.core.BlockPos
-import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.Blocks
 
 /**
@@ -49,7 +48,7 @@ object FortressPieces {
     private const val MIN_UNDER = 0.6
 
     /** Every crossroads among [detection]'s blocks, as its piece box. */
-    fun crossroads(detection: Detection, level: Level): List<Box> {
+    fun crossroads(detection: Detection, level: BlockSource): List<Box> {
         val found = ArrayList<Pair<Box, Double>>()
         val positions = detection.positions
         val iterator = positions.iterator()
@@ -83,7 +82,7 @@ object FortressPieces {
      * the plus must be nether bricks in both layers, and the four corners around it open (air or
      * lava). The corners are what tell a crossroads from a castle's solid floor.
      */
-    private fun deckScore(level: Level, cx: Int, y: Int, cz: Int): Double? {
+    private fun deckScore(level: BlockSource, cx: Int, y: Int, cz: Int): Double? {
         val cursor = BlockPos.MutableBlockPos()
         var cells = 0
         var bricks = 0
@@ -117,7 +116,7 @@ object FortressPieces {
      * along both sides of each arm, the three-wide lane between them left clear for its whole
      * height, and the brick the game lays under each arm. Only blocks in loaded chunks are counted.
      */
-    private fun railings(level: Level, cx: Int, y: Int, cz: Int): Boolean {
+    private fun railings(level: BlockSource, cx: Int, y: Int, cz: Int): Boolean {
         val cursor = BlockPos.MutableBlockPos()
         var railCells = 0
         var rails = 0
@@ -151,7 +150,7 @@ object FortressPieces {
     }
 
     /** Whether the brick the game lays under each arm is there (see [MIN_UNDER]). */
-    private fun carried(level: Level, cursor: BlockPos.MutableBlockPos, cx: Int, y: Int, cz: Int): Boolean {
+    private fun carried(level: BlockSource, cursor: BlockPos.MutableBlockPos, cx: Int, y: Int, cz: Int): Boolean {
         var cells = 0
         var bricks = 0
         for (out in 4..9) {

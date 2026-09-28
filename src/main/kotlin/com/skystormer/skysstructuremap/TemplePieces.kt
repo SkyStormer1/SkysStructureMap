@@ -1,7 +1,6 @@
 package com.skystormer.skysstructuremap
 
 import net.minecraft.core.BlockPos
-import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.Blocks
 
 /**
@@ -27,7 +26,7 @@ object TemplePieces {
     private const val CROSS_NEEDED = 10
 
     /** Whether a desert pyramid's floor cross is among [detection]'s blocks. */
-    fun desertCross(detection: Detection, level: Level): Boolean {
+    fun desertCross(detection: Detection, level: BlockSource): Boolean {
         val cursor = BlockPos.MutableBlockPos()
         val iterator = detection.positions.iterator()
         while (iterator.hasNext()) {
@@ -49,7 +48,7 @@ object TemplePieces {
         return false
     }
 
-    private fun isTerracotta(level: Level, pos: BlockPos): Boolean {
+    private fun isTerracotta(level: BlockSource, pos: BlockPos): Boolean {
         if (!level.hasChunk(pos.x shr 4, pos.z shr 4)) return false
         val block = level.getBlockState(pos).block
         return block == Blocks.DYED_TERRACOTTA.orange() || block == Blocks.DYED_TERRACOTTA.blue()
@@ -61,7 +60,7 @@ object TemplePieces {
      * under the temple (`JungleTemplePiece`), and a jungle's cobblestone ruins of a player's making
      * have neither.
      */
-    fun jungleTrap(detection: Detection, level: Level): Boolean {
+    fun jungleTrap(detection: Detection, level: BlockSource): Boolean {
         val cursor = BlockPos.MutableBlockPos()
         val iterator = detection.positions.iterator()
         while (iterator.hasNext()) {
@@ -81,7 +80,7 @@ object TemplePieces {
     }
 
     /** A sticky piston within [PISTON_REACH] of the lever wall, as the game's trap has. */
-    private fun pistonNear(level: Level, cursor: BlockPos.MutableBlockPos, x: Int, y: Int, z: Int): Boolean {
+    private fun pistonNear(level: BlockSource, cursor: BlockPos.MutableBlockPos, x: Int, y: Int, z: Int): Boolean {
         for (dx in -PISTON_REACH..PISTON_REACH) {
             for (dy in -PISTON_REACH..PISTON_REACH) {
                 for (dz in -PISTON_REACH..PISTON_REACH) {
@@ -94,6 +93,6 @@ object TemplePieces {
 
     private const val PISTON_REACH = 5
 
-    private fun isBlock(level: Level, pos: BlockPos, block: net.minecraft.world.level.block.Block): Boolean =
+    private fun isBlock(level: BlockSource, pos: BlockPos, block: net.minecraft.world.level.block.Block): Boolean =
         level.hasChunk(pos.x shr 4, pos.z shr 4) && level.getBlockState(pos).block == block
 }

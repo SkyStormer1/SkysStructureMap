@@ -46,6 +46,7 @@ object StructureMapClient : ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register { _, _, client -> client.execute { StructureStore.open(client) } }
         ClientPlayConnectionEvents.DISCONNECT.register { _, client ->
             client.execute {
+                BobbyScan.stop(quietly = true)
                 StructureStore.close()
                 StructureShare.clear()
                 Tracker.clear()
@@ -59,12 +60,21 @@ object StructureMapClient : ClientModInitializer {
         ClientReceiveMessageEvents.ALLOW_GAME.register { message, _ -> StructureShare.onChat(message.string) }
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(
-                ClientCommands.literal(StructureShare.COMMAND).then(
-                    ClientCommands.argument("code", StringArgumentType.word()).executes { context ->
+                ClientCommands.literal(StructureShare.COMMAND)
+                    // Named first: a word that is one of these is never read as a structure code.
+                    .then(ClientCommands.literal("bobby")
+                        .executes {
+                            BobbyScan.start()
+                            1
+                        }
+                        .then(ClientCommands.literal("stop").executes {
+                            BobbyScan.stop()
+                            1
+                        }))
+                    .then(ClientCommands.argument("code", StringArgumentType.word()).executes { context ->
                         StructureShare.accept(StringArgumentType.getString(context, "code"))
                         1
-                    }
-                )
+                    })
             )
         }
     }
