@@ -109,8 +109,7 @@ object StructureStore {
     }
 
     /** The last one deleted, kept so a delete by accident can be undone (this session only). */
-    var lastDeleted: Structure? = null
-        private set
+    private var lastDeleted: Structure? = null
 
     /** Deletes a structure for good: it goes on [deleted], so it is not added back when seen again. */
     fun remove(id: String) {
