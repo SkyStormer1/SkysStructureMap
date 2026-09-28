@@ -2,6 +2,7 @@ package com.skystormer.skysstructuremap
 
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.ConfirmScreen
+import net.minecraft.network.chat.ClickEvent
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 import xaero.map.gui.IRightClickableElement
@@ -88,7 +89,7 @@ object Menus {
                     // Not discovered again this session, even though it is still there.
                     Tracker.detections.filter { it.storedId == structure.id }.forEach { it.storedId = DELETED }
                     Log.info("Deleted {} {}", structure.type.id, structure.id)
-                    say("Deleted ${structure.name}")
+                    sayWithUndo(structure)
                 }
                 open(parent)
             },
@@ -108,6 +109,35 @@ object Menus {
     }
 
     /** A message on the action bar, which only this client sees. */
+    /** Says what was deleted, with a button to put it back, for a delete by accident. */
+    private fun sayWithUndo(structure: Structure) {
+        Minecraft.getInstance().player?.sendSystemMessage(
+            Component.literal("Deleted ${structure.name}  ").withStyle { it.withColor(0xAAAAAA) }.append(
+                Component.literal("[Undo]").withStyle {
+                    it.withColor(structure.type.colour and 0xFFFFFF).withBold(true)
+                        .withClickEvent(ClickEvent.RunCommand("/${StructureShare.COMMAND} ${UNDO}"))
+                }
+            )
+        )
+    }
+
+    /** What the undo button runs, and what [undo] answers to. */
+    const val UNDO = "undo"
+
+    /** Puts the last deleted structure back, from the button or the command. */
+    fun undo() {
+        val back = StructureStore.undoDelete()
+        if (back == null) {
+            say("Nothing has been deleted to bring back")
+            return
+        }
+        // It may still be in view: that sighting is the one that came back, not a new one.
+        Tracker.detections.filter { it.storedId == DELETED && it.type == back.type && it.box?.overlaps(back.box) == true }
+            .forEach { it.storedId = back.id }
+        Log.info("Brought back {} {}", back.type.id, back.id)
+        say("Brought back the ${back.name}")
+    }
+
     fun say(message: String) {
         Minecraft.getInstance().player?.sendOverlayMessage(Component.literal(message))
     }

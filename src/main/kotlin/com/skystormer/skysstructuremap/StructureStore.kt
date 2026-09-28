@@ -108,11 +108,32 @@ object StructureStore {
         dirty = true
     }
 
+    /** The last one deleted, kept so a delete by accident can be undone (this session only). */
+    var lastDeleted: Structure? = null
+        private set
+
     /** Deletes a structure for good: it goes on [deleted], so it is not added back when seen again. */
     fun remove(id: String) {
-        byId(id)?.let { gone -> deleted = deleted + gone }
+        byId(id)?.let { gone ->
+            deleted = deleted + gone
+            lastDeleted = gone
+        }
         all = all.filter { it.id != id }
         saveNow()
+    }
+
+    /**
+     * Puts the last deleted structure back on the map, off the deleted list, as it was. Answers
+     * what came back, or null when there is nothing to undo.
+     */
+    fun undoDelete(): Structure? {
+        val back = lastDeleted ?: return null
+        lastDeleted = null
+        // By its own id: this is the very structure deleted, not merely one where it stood.
+        deleted = deleted.filterNot { it.id == back.id }
+        put(back)
+        saveNow()
+        return back
     }
 
     /** Called every few seconds: writes the file if anything changed. */

@@ -1,6 +1,9 @@
 package com.skystormer.skysstructuremap.gui
 
+import com.skystormer.skysstructuremap.ChunkScanner
 import com.skystormer.skysstructuremap.Config
+import com.skystormer.skysstructuremap.Menus
+import com.skystormer.skysstructuremap.StructureStore
 import net.minecraft.client.gui.components.AbstractSliderButton
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.components.CycleButton
@@ -84,7 +87,31 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
         addRenderableWidget(command)
         y += ROW + GAP * 3
 
+        addRenderableWidget(
+            Button.builder(Component.literal("Look again around me")) { lookAgain() }
+                .bounds(left, y, WIDTH, ROW).build()
+                .also { it.setTooltip(Tooltip.create(Component.literal(
+                    "Goes through the chunks loaded around you again, as if they had just arrived. Worth a try after " +
+                        "an update, or if something that is plainly there has not been found."
+                ))) }
+        )
+        y += ROW + GAP
         addRenderableWidget(Button.builder(CommonComponents.GUI_DONE) { onClose() }.bounds(left, y, WIDTH, ROW).build())
+    }
+
+    /** Looks through the loaded chunks again, and says what came of it. */
+    private fun lookAgain() {
+        val minecraft = net.minecraft.client.Minecraft.getInstance()
+        val level = minecraft.level
+        val player = minecraft.player
+        if (level == null || player == null) {
+            Menus.say("Join a world first")
+            return
+        }
+        val before = StructureStore.all.size
+        val chunks = ChunkScanner.lookAgain(level, player.blockPosition(), LOOK_AGAIN_CHUNKS)
+        Menus.say("Looked through $chunks chunks around you again" + if (StructureStore.all.size > before) "" else "; anything found will show in a moment")
+        onClose()
     }
 
     override fun onClose() {
@@ -141,6 +168,9 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
     }
 
     private companion object {
+        /** How far out, in chunks, "Look again" goes: the whole of most render distances. */
+        const val LOOK_AGAIN_CHUNKS = 16
+
         const val WIDTH = 240
         const val ROW = 20
         const val GAP = 2

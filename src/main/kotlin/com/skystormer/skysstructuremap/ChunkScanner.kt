@@ -17,6 +17,28 @@ object ChunkScanner {
 
     private var failed = false
 
+    /**
+     * Looks again at every chunk loaded around you, as if it had just arrived. Everything found so
+     * far in this dimension is let go of first, so a structure whose blocks were there all along
+     * gets another chance: after the mod has been updated, or when part of it loaded oddly.
+     *
+     * Answers how many chunks were looked at.
+     */
+    fun lookAgain(level: ClientLevel, around: net.minecraft.core.BlockPos, chunks: Int): Int {
+        Tracker.clear()
+        var looked = 0
+        val middleX = around.x shr 4
+        val middleZ = around.z shr 4
+        for (x in middleX - chunks..middleX + chunks) {
+            for (z in middleZ - chunks..middleZ + chunks) {
+                val chunk = level.chunkSource.getChunk(x, z, false) ?: continue
+                scan(level, chunk)
+                looked++
+            }
+        }
+        return looked
+    }
+
     fun scan(level: ClientLevel, chunk: LevelChunk) {
         try {
             val dimension = level.dimension().identifier().toString()

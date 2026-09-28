@@ -131,6 +131,7 @@ object StructureShare {
 
     /** Adds a shared structure to your map, unless it is already there. Run by the add button. */
     fun accept(code: String) {
+        if (code == Menus.UNDO) return Menus.undo()
         val shared = decode(code) ?: return Menus.say("That structure code could not be read.")
         if (!StructureStore.isOpen) return Menus.say("Join a world first.")
         val existing = StructureStore.inDimension(shared.dimension)
