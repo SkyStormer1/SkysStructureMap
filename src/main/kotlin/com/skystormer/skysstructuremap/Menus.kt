@@ -138,8 +138,14 @@ object Menus {
         say("Brought back the ${back.name}")
     }
 
+    /** A line above the hotbar: for small confirmations while you are looking at the map. */
     fun say(message: String) {
         Minecraft.getInstance().player?.sendOverlayMessage(Component.literal(message))
+    }
+
+    /** A line in the chat, which stays there: for anything worth reading after the screen closes. */
+    fun tell(message: String) {
+        Minecraft.getInstance().player?.sendSystemMessage(Component.literal(message).withStyle { it.withColor(0xAAAAAA) })
     }
 
     fun option(name: String, index: Int, target: IRightClickableElement, action: (Screen) -> Unit) =

@@ -91,8 +91,8 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
             Button.builder(Component.literal("Look again around me")) { lookAgain() }
                 .bounds(left, y, WIDTH, ROW).build()
                 .also { it.setTooltip(Tooltip.create(Component.literal(
-                    "Goes through the chunks loaded around you again, as if they had just arrived. Worth a try after " +
-                        "an update, or if something that is plainly there has not been found."
+                    "Goes through the chunks loaded around you again, as if they had just arrived, and lets anything " +
+                        "you deleted here be found again. Worth a try after an update, or if something plainly there is missing."
                 ))) }
         )
         y += ROW + GAP
@@ -108,9 +108,16 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
             Menus.say("Join a world first")
             return
         }
-        val before = StructureStore.all.size
-        val chunks = ChunkScanner.lookAgain(level, player.blockPosition(), LOOK_AGAIN_CHUNKS)
-        Menus.say("Looked through $chunks chunks around you again" + if (StructureStore.all.size > before) "" else "; anything found will show in a moment")
+        val here = player.blockPosition()
+        // Anything deleted around here gets another chance, or looking again could not find it.
+        val forgotten = StructureStore.forgetDeletedNear(
+            level.dimension().identifier().toString(), here.x, here.z, LOOK_AGAIN_CHUNKS * 16.0,
+        )
+        val chunks = ChunkScanner.lookAgain(level, here, LOOK_AGAIN_CHUNKS)
+        Menus.tell(
+            "Looked again through $chunks chunks around you" +
+                if (forgotten > 0) ", and $forgotten you had deleted here can be found again" else ""
+        )
         onClose()
     }
 

@@ -206,6 +206,18 @@ object StructureStore {
     fun isDeleted(type: StructureType, dimension: String, box: Box): Boolean =
         deleted.any { it.type == type && it.dimension == dimension && Specs.sameStructure(type, it.box, box) }
 
+    /**
+     * Forgets the structures deleted within [reach] of a spot, so they can be found again. Answers
+     * how many. This is what "look again" does: a delete otherwise stands for good, and a group
+     * found where one was deleted is thrown away without a word.
+     */
+    fun forgetDeletedNear(dimension: String, x: Int, z: Int, reach: Double): Int {
+        val near = deleted.filter { it.dimension == dimension && it.box.horizontalDistance(x.toDouble(), z.toDouble()) <= reach }
+        deleted = deleted - near.toSet()
+        if (near.isNotEmpty()) saveNow()
+        return near.size
+    }
+
     /** Takes [type] at [box] off the deleted list, when you add it back yourself (from a share). */
     fun undelete(type: StructureType, dimension: String, box: Box) {
         deleted = deleted.filterNot { it.type == type && it.dimension == dimension && Specs.sameStructure(type, it.box, box) }
