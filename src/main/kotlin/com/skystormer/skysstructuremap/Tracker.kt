@@ -1,7 +1,10 @@
 package com.skystormer.skysstructuremap
 
 import net.minecraft.client.Minecraft
+import net.minecraft.core.BlockPos
 import net.minecraft.network.chat.Component
+import net.minecraft.world.level.Level
+import net.minecraft.world.level.block.Blocks
 import java.util.UUID
 
 /**
@@ -75,106 +78,137 @@ object Tracker {
         if (ticks % 100 == 0L) StructureStore.saveIfChanged()
     }
 
-    private fun update(detection: Detection, level: net.minecraft.world.level.Level) {
+    /**
+     * Looks at one group again: works out whether it is a structure and what its box is, then ties
+     * it to what is already saved and keeps that up to date.
+     */
+    private fun update(detection: Detection, level: Level) {
         detection.changed = false
         val before = detection.box
         val fitter = fitterFor(detection.type)
-        if (fitter != null) {
-            if (detection.blocks.size < TemplateFit.MIN_BLOCKS || ticks - detection.lastFitTick < 40) return
-            if (Specs.of(detection.type).biomeAsWhole && detection.inBiome < BIOME_BLOCKS) {
-                if (detection.blocks.size >= 100 && !detection.biomeLogged) {
-                    detection.biomeLogged = true
-                    Log.info("{} #{} at {}: only {} of {} blocks in its biomes, so not matched", detection.type.id, detection.id, detection.bounds, detection.inBiome, detection.count)
-                }
-                return
+        if (fitter != null) matchDesign(detection, level, fitter) else proveInWorld(detection, level, before)
+        val box = detection.box ?: return
+        if (detection.storedId == null) link(detection, box)
+        val stored = detection.storedId?.let(StructureStore::byId) ?: return
+        keepUpToDate(detection, stored, box)
+    }
+
+    /**
+     * For the kinds matched against the game's own designs: fits one, and takes the box from it.
+     * Tried at most every other second per group, and only once enough of it is in the right biome.
+     */
+    private fun matchDesign(detection: Detection, level: Level, fitter: TemplateFit) {
+        if (detection.blocks.size < TemplateFit.MIN_BLOCKS || ticks - detection.lastFitTick < FIT_EVERY) return
+        if (Specs.of(detection.type).biomeAsWhole && detection.inBiome < BIOME_BLOCKS) {
+            if (detection.blocks.size >= LOG_FROM && !detection.biomeLogged) {
+                detection.biomeLogged = true
+                Log.info("{} #{} at {}: only {} of {} blocks in its biomes, so not matched",
+                    detection.type.id, detection.id, detection.bounds, detection.inBiome, detection.count)
             }
-            detection.fitDirty = false
-            detection.lastFitTick = ticks
-            val started = System.nanoTime()
+            return
+        }
+        detection.fitDirty = false
+        detection.lastFitTick = ticks
+        val before = detection.box
+        val started = System.nanoTime()
+        var used: TemplateFit = fitter
+        val match = when (detection.type) {
             // An outpost's cages, tents and log piles are the same wood as its tower; only the
             // tower stands well above its base, so only those blocks vote.
-            val base = detection.bounds?.minY ?: 0
-            var used: TemplateFit = fitter
-            val match = when (detection.type) {
-                StructureType.OUTPOST -> fitter.fit(detection, level) { key -> net.minecraft.core.BlockPos.getY(key) >= base + OUTPOST_TOWER_FROM }
-                // The town centre is around the bell; streets and houses further out do not vote.
-                // Each bell on its own: a village can have more than one, and pooling the blocks
-                // around both drowned out the town centre in testing.
-                // The bell says where a town centre is on its own, and the few other blocks the game
-                // puts there do the same when the bell has been taken, as players do.
-                StructureType.VILLAGE -> fitter.fitAnchored(detection, level, TOWN_CENTRE_ANCHORS)
-                    // Failing that, one of its working houses, each known by its own job block.
-                    ?: VillageHouseFit.also { used = it }.fitAnchored(detection, level, JOB_BLOCKS)
-                else -> fitter.fit(detection, level)
+            StructureType.OUTPOST -> {
+                val base = detection.bounds?.minY ?: 0
+                fitter.fit(detection, level) { key -> BlockPos.getY(key) >= base + OUTPOST_TOWER_FROM }
             }
-            val millis = (System.nanoTime() - started) / 1_000_000
-            if (match != null) {
-                detection.variant = match.template.name
-                detection.piece = match.box
-                detection.box = when (detection.type) {
-                    StructureType.OUTPOST -> Recognise.outpostBox(match.box)
-                    // The town centre (or tower) proves it; the rest is everything seen around it.
-                    StructureType.VILLAGE, StructureType.TRAIL_RUINS, StructureType.END_CITY, StructureType.BASTION, StructureType.ANCIENT_CITY, StructureType.MANSION ->
-                        detection.bounds?.let { around(detection.type, it, match.box) }
-                    else -> match.box
-                }
-            }
-            // A village is proved once; after that its box is everything seen, as more of it loads.
-            if (match == null && detection.type in PROVED_THEN_SEEN && detection.variant != null) {
-                val piece = detection.piece
-                detection.box = detection.bounds?.let { if (piece == null) it else around(detection.type, it, piece) }
-            }
-            if (match?.box != before || (match == null && detection.blocks.size >= 100)) {
-                Log.info("{} #{} at {}: {} in {} ms ({})", detection.type.id, detection.id, detection.bounds,
-                    match?.let { "${it.template.name}, box ${detection.box}" } ?: "no template fits", millis, used.lastReport)
-            }
-        } else {
-            detection.box = Recognise.box(detection)
-            // The two temples the game builds in code: their blocks are what players build with in
-            // a desert or a jungle, so a piece of the game's own layout has to be there as well.
-            if (detection.box != null && !detection.proved) {
-                detection.proved = when (detection.type) {
-                    StructureType.DESERT_TEMPLE -> TemplePieces.desertCross(detection, level)
-                    StructureType.JUNGLE_TEMPLE -> TemplePieces.jungleTrap(detection, level)
-                    else -> true
-                }
-                if (!detection.proved) detection.box = null
-            }
-            val bricks = detection.bounds
-            if (detection.type == StructureType.FORTRESS && detection.box != null && bricks != null) {
-                val crossroads = FortressPieces.crossroads(detection, level)
-                if (crossroads.size != detection.pieces.size) Log.info("Fortress #{}: {} crossroads {}", detection.id, crossroads.size, crossroads)
-                detection.pieces = crossroads.map { Piece(FortressPieces.CROSSROADS, it) }
-                detection.box = FortressPieces.outerBox(bricks, crossroads)
-                // Every fortress starts from a crossroads; nether bricks without one are a build.
-                if (crossroads.isEmpty()) detection.box = null
-            }
-            if (detection.box != null && before == null) {
-                Log.info("Recognised {} #{} from {} blocks ({}), seen {}: box {}", detection.type.id, detection.id, detection.count, describeKinds(detection), detection.bounds, detection.box)
-            }
+            // The bell says where a town centre is on its own, and the few other blocks the game
+            // puts there do the same once the bell has been taken, as players do. Failing all of
+            // them, one of the village's working houses, each known by its own job block.
+            StructureType.VILLAGE -> fitter.fitAnchored(detection, level, TOWN_CENTRE_ANCHORS)
+                ?: VillageHouseFit.also { used = it }.fitAnchored(detection, level, JOB_BLOCKS)
+            else -> fitter.fit(detection, level)
         }
-        val box = detection.box ?: return
-        if (detection.storedId == null) {
-            // Found again after rejoining, or seen from another side: it is the one already saved.
-            val saved = StructureStore.inDimension(detection.dimension)
-                .firstOrNull { it.type == detection.type && Specs.sameStructure(it.type, it.box, box) }
-            if (saved != null) {
-                detection.storedId = saved.id
-                Log.info("{} #{} is the one discovered before ({})", detection.type.id, detection.id, saved.id)
-            } else if (StructureStore.isDeleted(detection.type, detection.dimension, box)) {
-                // Deleted on purpose: never shown or discovered again.
-                detection.storedId = Menus.DELETED
-                Log.info("{} #{} is one you deleted; ignoring it", detection.type.id, detection.id)
-            }
+        if (match != null) {
+            detection.variant = match.template.name
+            detection.piece = match.box
         }
-        val stored = detection.storedId?.let(StructureStore::byId) ?: return
+        detection.box = boxFrom(detection, match)
+        if (match?.box != before || (match == null && detection.blocks.size >= LOG_FROM)) {
+            Log.info("{} #{} at {}: {} in {} ms ({})", detection.type.id, detection.id, detection.bounds,
+                match?.let { "${it.template.name}, box ${detection.box}" } ?: "no template fits",
+                (System.nanoTime() - started) / 1_000_000, used.lastReport)
+        }
+    }
+
+    /**
+     * The box after a design has, or has not, fitted this time: the matched piece itself for the
+     * kinds whose shape it fixes, and everything seen around that piece for the kinds that sprawl.
+     * Those keep their box once proved, growing as more of them loads.
+     */
+    private fun boxFrom(detection: Detection, match: TemplateFit.Match?): Box? {
+        if (match == null) {
+            if (detection.type !in PROVED_THEN_SEEN || detection.variant == null) return detection.box
+            val piece = detection.piece ?: return detection.bounds
+            return detection.bounds?.let { around(detection.type, it, piece) }
+        }
+        return when (detection.type) {
+            StructureType.OUTPOST -> Recognise.outpostBox(match.box)
+            in PROVED_THEN_SEEN -> detection.bounds?.let { around(detection.type, it, match.box) }
+            else -> match.box
+        }
+    }
+
+    /**
+     * For the kinds the game builds in code rather than from a design: the blocks it is made of,
+     * and then a piece of the game's own layout, which is what tells it from a player's build.
+     */
+    private fun proveInWorld(detection: Detection, level: Level, before: Box?) {
+        detection.box = Recognise.box(detection)
+        if (detection.box != null && !detection.proved) {
+            detection.proved = when (detection.type) {
+                StructureType.DESERT_TEMPLE -> TemplePieces.desertCross(detection, level)
+                StructureType.JUNGLE_TEMPLE -> TemplePieces.jungleTrap(detection, level)
+                else -> true
+            }
+            if (!detection.proved) detection.box = null
+        }
+        val bricks = detection.bounds
+        if (detection.type == StructureType.FORTRESS && detection.box != null && bricks != null) {
+            val crossroads = FortressPieces.crossroads(detection, level)
+            if (crossroads.size != detection.pieces.size) Log.info("Fortress #{}: {} crossroads {}", detection.id, crossroads.size, crossroads)
+            detection.pieces = crossroads.map { Piece(FortressPieces.CROSSROADS, it) }
+            // Every fortress starts from a crossroads; nether bricks without one are a build.
+            detection.box = if (crossroads.isEmpty()) null else FortressPieces.outerBox(bricks, crossroads)
+        }
+        if (detection.box != null && before == null) {
+            Log.info("Recognised {} #{} from {} blocks ({}), seen {}: box {}", detection.type.id, detection.id,
+                detection.count, describeKinds(detection), detection.bounds, detection.box)
+        }
+    }
+
+    /** Ties a group to the structure already saved where it stands, or to one deleted on purpose. */
+    private fun link(detection: Detection, box: Box) {
+        // Found again after rejoining, or seen from another side: it is the one already saved.
+        val saved = StructureStore.inDimension(detection.dimension)
+            .firstOrNull { it.type == detection.type && Specs.sameStructure(it.type, it.box, box) }
+        if (saved != null) {
+            detection.storedId = saved.id
+            Log.info("{} #{} is the one discovered before ({})", detection.type.id, detection.id, saved.id)
+        } else if (StructureStore.isDeleted(detection.type, detection.dimension, box)) {
+            // Deleted on purpose: never shown or discovered again.
+            detection.storedId = Menus.DELETED
+            Log.info("{} #{} is one you deleted; ignoring it", detection.type.id, detection.id)
+        }
+    }
+
+    /** Grows a saved structure's box and pieces as more of it is seen. */
+    private fun keepUpToDate(detection: Detection, stored: Structure, box: Box) {
         // More seen of a structure whose shape comes from what is seen makes its box bigger; an
         // exact box (a monument) can only get more certain, and a wreck's matched box stays.
         val better = when {
             detection.type == StructureType.SHIPWRECK -> stored.box
             Specs.of(detection.type).reach == null -> box
             // A fortress's bottom is worked out, not seen: the new one replaces any older guess.
-            detection.type == StructureType.FORTRESS -> stored.box.union(box).let { if (box.minY == 48) it.copy(minY = 48) else it }
+            detection.type == StructureType.FORTRESS ->
+                stored.box.union(box).let { if (box.minY == FORTRESS_BOTTOM) it.copy(minY = FORTRESS_BOTTOM) else it }
             else -> stored.box.union(box)
         }.let { grown -> detection.piece?.let { around(detection.type, grown, it) } ?: grown }
         // Pieces are only ever added, so they stay after the structure is torn down.
@@ -236,11 +270,11 @@ object Tracker {
      * packed ice and stripped wood, taiga ones of mossy cobblestone, with lanterns and trapdoors).
      */
     private val TOWN_CENTRE_ANCHORS = listOf(
-        net.minecraft.world.level.block.Blocks.BELL,
-        net.minecraft.world.level.block.Blocks.LANTERN,
-        net.minecraft.world.level.block.Blocks.SPRUCE_TRAPDOOR,
-        net.minecraft.world.level.block.Blocks.PACKED_ICE,
-        net.minecraft.world.level.block.Blocks.STRIPPED_SPRUCE_WOOD,
+        Blocks.BELL,
+        Blocks.LANTERN,
+        Blocks.SPRUCE_TRAPDOOR,
+        Blocks.PACKED_ICE,
+        Blocks.STRIPPED_SPRUCE_WOOD,
     )
 
     /**
@@ -262,16 +296,25 @@ object Tracker {
 
     /** The job blocks of a village's working houses, one or two to a design. */
     private val JOB_BLOCKS = listOf(
-        net.minecraft.world.level.block.Blocks.LECTERN, net.minecraft.world.level.block.Blocks.SMITHING_TABLE,
-        net.minecraft.world.level.block.Blocks.GRINDSTONE, net.minecraft.world.level.block.Blocks.BLAST_FURNACE,
-        net.minecraft.world.level.block.Blocks.SMOKER, net.minecraft.world.level.block.Blocks.CARTOGRAPHY_TABLE,
-        net.minecraft.world.level.block.Blocks.FLETCHING_TABLE, net.minecraft.world.level.block.Blocks.LOOM,
-        net.minecraft.world.level.block.Blocks.STONECUTTER, net.minecraft.world.level.block.Blocks.COMPOSTER,
-        net.minecraft.world.level.block.Blocks.BARREL,
+        Blocks.LECTERN, Blocks.SMITHING_TABLE,
+        Blocks.GRINDSTONE, Blocks.BLAST_FURNACE,
+        Blocks.SMOKER, Blocks.CARTOGRAPHY_TABLE,
+        Blocks.FLETCHING_TABLE, Blocks.LOOM,
+        Blocks.STONECUTTER, Blocks.COMPOSTER,
+        Blocks.BARREL,
     )
 
     /** Blocks in an allowed biome a group needs, when the biome is asked of the whole group. */
     const val BIOME_BLOCKS = 20
+
+    /** Ticks between two tries at fitting one group against the designs. */
+    private const val FIT_EVERY = 40
+
+    /** A group of this many blocks is worth a line in the log when nothing fits it. */
+    private const val LOG_FROM = 100
+
+    /** The y a fortress's box starts at once its top says so (see [FortressPieces]). */
+    private const val FORTRESS_BOTTOM = 48
 
     /** Blocks this far above an outpost's base can only be its tower. */
     private const val OUTPOST_TOWER_FROM = 6
