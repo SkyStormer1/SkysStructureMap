@@ -223,6 +223,11 @@ object Tracker {
             detection.storedId = ""
             return
         }
+        // Asked again here, not only when it was first recognised: the file of what you have found
+        // (and deleted) is read a moment after joining, and a structure recognised in that moment
+        // was saved afresh, so one deleted on purpose came back.
+        link(detection, box)
+        if (detection.storedId != null) return
         val structure = Structure(
             id = UUID.randomUUID().toString(),
             type = detection.type,

@@ -40,6 +40,14 @@ object FortressPieces {
     /** How much of the walkway between the railings may be nether bricks: the game leaves it open. */
     private const val MAX_WALKWAY = 0.25
 
+    /**
+     * How much of the brick under the arms must still be there. The game lays a floor right below
+     * the deck of each arm's outer half, and pillars below that, so a crossroads is carried from
+     * underneath. All five real ones in the test world are whole (120 of 120); a walkway a player
+     * has laid across the nether has nothing underneath it at all.
+     */
+    private const val MIN_UNDER = 0.6
+
     /** Every crossroads among [detection]'s blocks, as its piece box. */
     fun crossroads(detection: Detection, level: Level): List<Box> {
         val found = ArrayList<Pair<Box, Double>>()
@@ -105,9 +113,9 @@ object FortressPieces {
     }
 
     /**
-     * Whether a crossroads' railings stand around ([cx], [y], [cz]) and its walkway is open: the
-     * walls two blocks above the deck along both sides of each arm, and the three-wide lane between
-     * them left clear for its whole height. Only blocks in loaded chunks are counted.
+     * Whether a crossroads stands around ([cx], [y], [cz]): the walls two blocks above the deck
+     * along both sides of each arm, the three-wide lane between them left clear for its whole
+     * height, and the brick the game lays under each arm. Only blocks in loaded chunks are counted.
      */
     private fun railings(level: Level, cx: Int, y: Int, cz: Int): Boolean {
         val cursor = BlockPos.MutableBlockPos()
@@ -138,7 +146,27 @@ object FortressPieces {
             }
         }
         if (railCells == 0 || rails < railCells * MIN_RAILINGS) return false
-        return laneCells == 0 || laneBricks <= laneCells * MAX_WALKWAY
+        if (laneCells > 0 && laneBricks > laneCells * MAX_WALKWAY) return false
+        return carried(level, cursor, cx, y, cz)
+    }
+
+    /** Whether the brick the game lays under each arm is there (see [MIN_UNDER]). */
+    private fun carried(level: Level, cursor: BlockPos.MutableBlockPos, cx: Int, y: Int, cz: Int): Boolean {
+        var cells = 0
+        var bricks = 0
+        for (out in 4..9) {
+            for (side in -2..2) {
+                for (along in listOf(-out, out)) {
+                    for (pair in listOf(cx + side to cz + along, cx + along to cz + side)) {
+                        cursor.set(pair.first, y - 1, pair.second)
+                        if (!level.hasChunk(cursor.x shr 4, cursor.z shr 4)) continue
+                        cells++
+                        if (level.getBlockState(cursor).`is`(Blocks.NETHER_BRICKS)) bricks++
+                    }
+                }
+            }
+        }
+        return cells > 0 && bricks >= cells * MIN_UNDER
     }
 
     /** The fortress's whole box from its seen blocks and crossroads (see the class notes). */
