@@ -261,24 +261,6 @@ open class TemplateFit(
 
     private var lastCheck = ""
 
-    /** How many of a design's blocks are there at this placement, and how many were looked at. */
-    private fun fitsOf(template: Template, rotation: Rotation, origin: Long, level: Level): Pair<Int, Int> {
-        val ox = BlockPos.getX(origin)
-        val oy = BlockPos.getY(origin)
-        val oz = BlockPos.getZ(origin)
-        var known = 0
-        var matched = 0
-        val cursor = BlockPos.MutableBlockPos()
-        for ((pos, block) in template.blocks) {
-            val turned = pos.rotate(rotation)
-            cursor.set(ox + turned.x, oy + turned.y, oz + turned.z)
-            if (!level.hasChunk(cursor.x shr 4, cursor.z shr 4)) continue
-            known++
-            if (family(level.getBlockState(cursor).block) == block) matched++
-        }
-        return matched to known
-    }
-
     private fun check(template: Template, rotation: Rotation, origin: Long, level: Level): Match? {
         val ox = BlockPos.getX(origin)
         val oy = BlockPos.getY(origin)
@@ -406,14 +388,6 @@ object TownCentreFit : TemplateFit(
     anyWood = false,
     agreement = 0.2,
     samples = 400,
-)
-
-/**
- * The same town centres, for a village whose bell is gone. Only paths are left to vote with, and a
- * path votes for every path in a design, so fewer need to agree; what matches is checked as closely.
- */
-object BelllessTownCentreFit : TemplateFit(
-    "village", TownCentreFit.names, anyWood = false, agreement = 0.2, samples = 400, minVotes = 15,
 )
 
 /**

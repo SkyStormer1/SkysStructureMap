@@ -105,13 +105,6 @@ object Tracker {
                 StructureType.VILLAGE -> fitter.fitAnchored(detection, level, TOWN_CENTRE_ANCHORS)
                     // Failing that, one of its working houses, each known by its own job block.
                     ?: VillageHouseFit.also { used = it }.fitAnchored(detection, level, JOB_BLOCKS)
-                    // A raided or looted village often has no bell left: then the town centre is looked
-                    // for around the spots its blocks are thickest, where the streets meet, and still
-                    // has to match as closely. Every block voting at once let the streets drown it out.
-                    ?: busiestSpots(detection).firstNotNullOfOrNull { spot ->
-                        used = BelllessTownCentreFit
-                        BelllessTownCentreFit.fit(detection, level) { key -> near(spot, key, TOWN_CENTRE_REACH) }
-                    }
                 else -> fitter.fit(detection, level)
             }
             val millis = (System.nanoTime() - started) / 1_000_000
@@ -134,11 +127,6 @@ object Tracker {
             if (match?.box != before || (match == null && detection.blocks.size >= 100)) {
                 Log.info("{} #{} at {}: {} in {} ms ({})", detection.type.id, detection.id, detection.bounds,
                     match?.let { "${it.template.name}, box ${detection.box}" } ?: "no template fits", millis, used.lastReport)
-                if (match == null && detection.type == StructureType.VILLAGE) Log.info("  bells seen: {}", detection.blocks.long2ObjectEntrySet()
-                    .filter { it.value == net.minecraft.world.level.block.Blocks.BELL }
-                    .joinToString { "${net.minecraft.core.BlockPos.getX(it.longKey)} ${net.minecraft.core.BlockPos.getY(it.longKey)} ${net.minecraft.core.BlockPos.getZ(it.longKey)}" })
-                if (match == null && detection.type == StructureType.VILLAGE) Log.info("  busiest spots: {}", busiestSpots(detection)
-                    .joinToString { "${net.minecraft.core.BlockPos.getX(it)} ${net.minecraft.core.BlockPos.getY(it)} ${net.minecraft.core.BlockPos.getZ(it)}" })
             }
         } else {
             detection.box = Recognise.box(detection)
@@ -243,44 +231,6 @@ object Tracker {
     private val PROVED_THEN_SEEN = setOf(StructureType.VILLAGE, StructureType.TRAIL_RUINS, StructureType.END_CITY, StructureType.BASTION, StructureType.ANCIENT_CITY, StructureType.MANSION)
 
     /**
-     * The few places a village's blocks are thickest, at least a town centre apart: where to look
-     * for its town centre when there is no bell to go by.
-     */
-    private fun busiestSpots(detection: Detection): List<Long> {
-        val keys = detection.blocks.keys.toLongArray()
-        if (keys.isEmpty()) return emptyList()
-        // Counted on a 4-block grid, each block adding to every grid point within reach.
-        val counts = it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap()
-        val y = detection.bounds?.minY ?: 0
-        for (key in keys) {
-            val x = net.minecraft.core.BlockPos.getX(key)
-            val z = net.minecraft.core.BlockPos.getZ(key)
-            for (gx in Math.floorDiv(x - TOWN_CENTRE_REACH, 4)..Math.floorDiv(x + TOWN_CENTRE_REACH, 4)) {
-                for (gz in Math.floorDiv(z - TOWN_CENTRE_REACH, 4)..Math.floorDiv(z + TOWN_CENTRE_REACH, 4)) {
-                    val dx = gx * 4 - x
-                    val dz = gz * 4 - z
-                    if (dx * dx + dz * dz <= TOWN_CENTRE_REACH * TOWN_CENTRE_REACH) counts.addTo(net.minecraft.core.BlockPos.asLong(gx * 4, 0, gz * 4), 1)
-                }
-            }
-        }
-        val spots = ArrayList<Long>()
-        for (entry in counts.long2IntEntrySet().sortedByDescending { it.intValue }) {
-            val x = net.minecraft.core.BlockPos.getX(entry.longKey)
-            val z = net.minecraft.core.BlockPos.getZ(entry.longKey)
-            if (spots.any { Math.abs(net.minecraft.core.BlockPos.getX(it) - x) < SPOTS_APART && Math.abs(net.minecraft.core.BlockPos.getZ(it) - z) < SPOTS_APART }) continue
-            // The height of the blocks there, so the height check in [near] lets them vote.
-            val height = keys.filter { k -> Math.abs(net.minecraft.core.BlockPos.getX(k) - x) <= 4 && Math.abs(net.minecraft.core.BlockPos.getZ(k) - z) <= 4 }
-                .map { net.minecraft.core.BlockPos.getY(it) }.sorted().let { if (it.isEmpty()) y else it[it.size / 2] }
-            spots.add(net.minecraft.core.BlockPos.asLong(x, height, z))
-            if (spots.size == BUSIEST_SPOTS) break
-        }
-        return spots
-    }
-
-    private const val BUSIEST_SPOTS = 8
-    private const val SPOTS_APART = 16
-
-    /**
      * Blocks a village's town centre has in only a few places, so one of them says where the centre
      * is: the bell first, then what is left when someone has taken it (snowy centres are built of
      * packed ice and stripped wood, taiga ones of mossy cobblestone, with lanterns and trapdoors).
@@ -319,16 +269,6 @@ object Tracker {
         net.minecraft.world.level.block.Blocks.STONECUTTER, net.minecraft.world.level.block.Blocks.COMPOSTER,
         net.minecraft.world.level.block.Blocks.BARREL,
     )
-
-    /** How far from a bell, sideways, a village's town centre reaches. */
-    private const val TOWN_CENTRE_REACH = 12
-
-    private fun near(a: Long, b: Long, reach: Int): Boolean {
-        val dx = net.minecraft.core.BlockPos.getX(a) - net.minecraft.core.BlockPos.getX(b)
-        val dz = net.minecraft.core.BlockPos.getZ(a) - net.minecraft.core.BlockPos.getZ(b)
-        val dy = net.minecraft.core.BlockPos.getY(a) - net.minecraft.core.BlockPos.getY(b)
-        return dx * dx + dz * dz <= reach * reach && Math.abs(dy) <= reach
-    }
 
     /** Blocks in an allowed biome a group needs, when the biome is asked of the whole group. */
     const val BIOME_BLOCKS = 20

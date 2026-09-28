@@ -10,13 +10,6 @@ object Recognise {
     const val MONUMENT_BLOCKS = 60
     const val FORTRESS_BLOCKS = 40
 
-    /**
-     * Nether ruined portals are built from the same polished blackstone bricks (the game swaps
-     * them in for stone bricks), but even the giant ones are small; a bastion is far bigger.
-     */
-    const val BASTION_BLOCKS = 200
-    const val BASTION_WIDTH = 20
-
     /** The box for [detection] if it is recognised now, else null. */
     fun box(detection: Detection): Box? = Specs.of(detection.type).recognise(detection)
 
