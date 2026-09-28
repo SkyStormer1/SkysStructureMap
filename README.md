@@ -66,7 +66,11 @@ copy of Minecraft:
   - how close counts as discovering a structure (or only when you're inside it),
   - a chat line when you discover one,
   - the command used for private shares (`tell` by default).
-- **Deleting** a structure is for good: it does not come back when you return.
+- **Deleting** a structure is for good: it does not come back when you return. The chat line after a delete has an
+  **[Undo]** button, in case it was a slip.
+- **Look again around me**, in the settings: goes through the chunks loaded around you once more, as if they had just
+  arrived, and lets anything you deleted there be found again. Worth a try after an update, or when something plainly
+  there has not been picked up.
 - Discoveries are saved per server, in `config/skysstructuremap/`.
 
 ## Structures
