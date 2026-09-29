@@ -29,10 +29,12 @@ object Outlines {
             val markers = Markers.visibleIn(dimension).filter {
                 Config.outlines || it.outlined || (Config.spawnBoxesOnMap && SpawnBoxes.hasSpawns(it.type))
             }
+            if (markers.isEmpty() && !BobbyCoverage.shown) return
+            val buffer = XaeroLib.INSTANCE.client.bufferProvider.getBuffer(CustomRenderTypes.MAP_COLOR_OVERLAY)
+            BobbyCoverage.drawWorldMap(dimension, buffer, matrix, originX, originZ)
             if (markers.isEmpty()) return
             val blocksPerUnit = Matrix4f(matrix).invert().transformDirection(Vector3f(1f, 0f, 0f)).length().coerceAtLeast(1e-4f)
             val half = (LINE_WIDTH * blocksPerUnit / 2).toDouble()
-            val buffer = XaeroLib.INSTANCE.client.bufferProvider.getBuffer(CustomRenderTypes.MAP_COLOR_OVERLAY)
             for (marker in markers) {
                 val alpha = if (marker.discovered) 1f else 0.45f
                 val boxes = if (Config.spawnBoxesOnMap && SpawnBoxes.hasSpawns(marker.type)) SpawnBoxes.boxesOf(marker)

@@ -61,6 +61,9 @@ object Config {
     /** The command a private share is sent with, without its slash: `tell`, or `msg` or `w` on servers that change it. */
     var privateShareCommand = "tell"
 
+    /** Tints the chunks Bobby has saved on the world map ([BobbyCoverage]); only offered with Bobby installed. */
+    var bobbyCoverage = false
+
     const val MIN_SCALE = 0.5f
     const val MAX_SCALE = 3f
     const val DEFAULT_DISCOVER_DISTANCE = 32
@@ -92,6 +95,7 @@ object Config {
             iconScale = (json.get("iconScale")?.asFloat ?: iconScale).coerceIn(MIN_SCALE, MAX_SCALE)
             minimapIconScale = (json.get("minimapIconScale")?.asFloat ?: minimapIconScale).coerceIn(MIN_SCALE, MAX_SCALE)
             privateShareCommand = json.get("privateShareCommand")?.asString?.trim()?.removePrefix("/")?.takeIf { it.isNotEmpty() } ?: privateShareCommand
+            bobbyCoverage = json.get("bobbyCoverage")?.asBoolean ?: bobbyCoverage
             discoverDistance = (json.get("discoverDistance")?.asInt ?: discoverDistance).coerceIn(0, MAX_DISCOVER_DISTANCE)
         } catch (e: Exception) {
             Log.error("Could not read $path; using the defaults", e)
@@ -117,6 +121,7 @@ object Config {
             json.addProperty("minimapIconScale", minimapIconScale)
             json.addProperty("discoverDistance", discoverDistance)
             json.addProperty("privateShareCommand", privateShareCommand)
+            json.addProperty("bobbyCoverage", bobbyCoverage)
             Files.writeString(path, GSON.toJson(json))
         } catch (e: Exception) {
             Log.error("Could not save $path", e)

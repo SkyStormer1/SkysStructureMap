@@ -1,5 +1,6 @@
 package com.skystormer.skysstructuremap.gui
 
+import com.skystormer.skysstructuremap.BobbyCoverage
 import com.skystormer.skysstructuremap.BobbyScan
 import com.skystormer.skysstructuremap.ChunkScanner
 import com.skystormer.skysstructuremap.Config
@@ -28,7 +29,7 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
     override fun init() {
         val left = width / 2 - WIDTH / 2
         val half = (WIDTH - GAP) / 2
-        var y = maxOf(4, (height - 257) / 2)
+        var y = maxOf(4, (height - 257 - if (BobbyCoverage.available) ROW + GAP else 0) / 2)
         addRenderableWidget(StringWidget(left, y, WIDTH, font.lineHeight, title, font))
         y += font.lineHeight + GAP * 3
 
@@ -80,6 +81,14 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
             ) { BobbyScan.start(); onClose() }
         }
         y += ROW + GAP
+        if (BobbyCoverage.available) {
+            onOff(left, y, WIDTH, "Show Bobby's saved chunks on the map", Config.bobbyCoverage,
+                "A debug tint on the world map over every chunk Bobby has saved of this server. Anywhere your map " +
+                    "shows without it, Bobby has nothing, so a Bobby scan cannot find structures there. Pointing at " +
+                    "a chunk says when Bobby saved it."
+            ) { if (it != Config.bobbyCoverage) BobbyCoverage.toggle() }
+            y += ROW + GAP
+        }
         addRenderableWidget(Button.builder(CommonComponents.GUI_DONE) { onClose() }.bounds(left, y, WIDTH, ROW).build())
     }
 

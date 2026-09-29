@@ -47,6 +47,7 @@ object StructureMapClient : ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register { _, client ->
             client.execute {
                 BobbyScan.stop(quietly = true)
+                BobbyCoverage.clear()
                 StructureStore.close()
                 StructureShare.clear()
                 Tracker.clear()
@@ -70,7 +71,14 @@ object StructureMapClient : ClientModInitializer {
                         .then(ClientCommands.literal("stop").executes {
                             BobbyScan.stop()
                             1
-                        }))
+                        })
+                        .apply {
+                            // Only with Bobby installed: it shows Bobby's saved chunks as you play.
+                            if (BobbyCoverage.available) then(ClientCommands.literal("overlay").executes {
+                                BobbyCoverage.toggle()
+                                1
+                            })
+                        })
                     .then(ClientCommands.argument("code", StringArgumentType.word()).executes { context ->
                         StructureShare.accept(StringArgumentType.getString(context, "code"))
                         1
@@ -84,6 +92,7 @@ object StructureMapClient : ClientModInitializer {
             if (screen.javaClass.name == "xaero.map.gui.GuiMap") {
                 try {
                     Legend.addTo(screen)
+                    BobbyCoverage.addTo(screen)
                 } catch (e: Throwable) {
                     Log.error("Could not add the legend to Xaero's world map", e)
                 }
@@ -95,6 +104,7 @@ object StructureMapClient : ClientModInitializer {
         addToXaero()
         StructureShare.tick()
         SpawnBoxes.tick(client)
+        BobbyCoverage.tick(client)
         while (spawnBoxesKey.consumeClick()) {
             Config.spawnBoxesInWorld = !Config.spawnBoxesInWorld
             Config.save()
