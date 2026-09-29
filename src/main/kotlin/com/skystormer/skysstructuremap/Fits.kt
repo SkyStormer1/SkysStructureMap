@@ -268,7 +268,7 @@ object VillageHouseFit : TemplateFit(
  * water the game builds it of planks. Tested on 19 farms in villages of all five kinds, each with
  * 6 to 9 of the 9, and on the player's farm that was taken for a village, with none.
  *
- * Even on a street a farm is never all a village is known by: see `Tracker.farmUnconfirmed`.
+ * Even on a street a farm is never all a village is known by: see `Tracker.farmConfirmable`.
  */
 object VillageFarmFit : TemplateFit(
     "village",
@@ -292,21 +292,16 @@ object VillageFarmFit : TemplateFit(
 
     /** Why [match] is not a village's farm (no street at its entrance), or null when it is. */
     fun refuse(match: Match, level: BlockSource): String? {
-        val entrances = match.entrances()
-        if (entrances.isEmpty()) return "no entrance"
         val cursor = BlockPos.MutableBlockPos()
-        for ((entrance, facing) in entrances) {
+        for ((entrance, facing) in match.entrances()) {
             val side = facing.clockWise
             var street = 0
-            var known = 0
             for (out in 1..3) for (across in -1..1) {
                 val x = entrance.x + facing.stepX * out + side.stepX * across
                 val z = entrance.z + facing.stepZ * out + side.stepZ * across
-                if (!level.hasChunk(x shr 4, z shr 4)) continue
-                known++
+                if (!level.hasChunk(x shr 4, z shr 4)) return "street not loaded"
                 if ((entrance.y - REACH_Y..entrance.y + REACH_Y).any { y -> isStreet(level, cursor.set(x, y, z)) }) street++
             }
-            if (known < 9) return "street not loaded"
             if (street >= STREET_NEEDED) return null
         }
         return "no street at its entrance"

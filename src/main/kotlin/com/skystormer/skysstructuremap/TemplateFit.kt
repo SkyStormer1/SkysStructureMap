@@ -14,7 +14,8 @@ import net.minecraft.world.level.block.Rotation
 
 /**
  * Recognises a structure by matching the blocks seen against the game's own designs for it (its
- * templates, inside the Minecraft jar): shipwrecks, and pillager outposts' watchtowers. The game
+ * templates, inside the Minecraft jar): shipwrecks, outposts' watchtowers, villages, trail ruins,
+ * end cities, bastions, ancient cities and mansions (the designs are in `Fits`). The game
  * places them turned (never mirrored) and with few or no blocks changed, so a real one matches a
  * design almost block for block, which a player's build never does, and a match gives its exact box.
  *

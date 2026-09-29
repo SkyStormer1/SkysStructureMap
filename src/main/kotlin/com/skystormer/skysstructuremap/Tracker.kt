@@ -122,7 +122,8 @@ object Tracker {
             // street, and the group must hold something else of a village as well.
             StructureType.VILLAGE -> fitter.fitAnchored(detection, level, TOWN_CENTRE_ANCHORS)
                 ?: VillageHouseFit.also { used = it }.fitAnchored(detection, level, JOB_BLOCKS)
-                ?: VillageFarmFit.also { used = it }.fitAnchored(detection, level, listOf(Blocks.COMPOSTER)) { VillageFarmFit.refuse(it, level) ?: farmUnconfirmed(detection) }
+                ?: VillageFarmFit.takeIf { farmConfirmable(detection) }?.also { used = it }
+                    ?.fitAnchored(detection, level, listOf(Blocks.COMPOSTER)) { VillageFarmFit.refuse(it, level) }
             else -> fitter.fit(detection, level)
         }
         if (match != null) {
@@ -335,12 +336,11 @@ object Tracker {
     private const val HEIGHT_REACH = 64
 
     /**
-     * Null when a group with a farm in it holds something else of a village: a bell, or a job block
-     * whose house was not enough to go on by itself. A farm and a street alone are what a player's
-     * farm with a path to it is as well, so neither the farm nor the other block counts on its own.
+     * Whether a group holds something else of a village for a farm to go with: a bell, or a job
+     * block whose house was not enough to go on by itself. A farm and a street alone are what a
+     * player's farm with a path to it is as well, so neither the farm nor the other block counts on its own.
      */
-    private fun farmUnconfirmed(detection: Detection): String? =
-        if (detection.blocks.values.any { it in FARM_CONFIRMED_BY }) null else "nothing else of a village with it"
+    private fun farmConfirmable(detection: Detection): Boolean = detection.blocks.values.any { it in FARM_CONFIRMED_BY }
 
     /** What confirms a farm: not barrels, which players put everywhere, nor the farm's own composter. */
     private val FARM_CONFIRMED_BY: Set<Block> by lazy { setOf(Blocks.BELL) + JOB_BLOCKS - Blocks.BARREL }
