@@ -11,10 +11,10 @@ import java.util.EnumMap
  * To monitor: nothing stops a group growing far past any one structure. Where players have built
  * all over (paths, doors, barrels, workstations), village blocks chain from one build to the next,
  * and a group becomes one [Detection] however many villages it holds, tried from only a few
- * anchors (`TemplateFit.fitAnchored`). A scan of Bobby's cache for a survival server (2026-09-29)
- * joined the whole area around spawn, 1440 × 1360 blocks from -1106, -140 to 338, 1223, into one
- * village group and found no village in it, missing a real one at -975, 303 that live detection,
- * which only sees the chunks around you, had found. If it keeps happening, the fix in mind is to
+ * anchors (`TemplateFit.fitAnchored`). On a busy survival server, a scan of Bobby's cache has
+ * joined the whole area around spawn, well over a thousand blocks across, into one village group
+ * and found no village in it, missing a real one there that live detection, which only sees the
+ * chunks around you, had found. If it keeps happening, the fix in mind is to
  * look at a group much bigger than its kind can be ([Specs.spanOf]) in pieces of that size, one
  * structure to a piece. Not done yet, by choice: watch for groups like it first ("village #… at
  * Box(…)" lines far wider than a village in the log).

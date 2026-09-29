@@ -7,24 +7,24 @@ import org.junit.jupiter.api.Test
 
 class ShareTest {
 
-    private val temple = Structure("id", StructureType.DESERT_TEMPLE, OVERWORLD, Box(-5424, 49, 832, -5404, 73, 849), 0L)
+    private val temple = Structure("id", StructureType.DESERT_TEMPLE, OVERWORLD, Box(1000, 49, 2000, 1020, 73, 2017), 0L)
 
     @Test
     fun lineIsPlainAndCarriesTypeDimensionAndBox() {
         val line = StructureShare.line(temple.name, temple.dimension, temple.box, 74)
-        assertTrue(line.startsWith("Desert Temple: -5414 "), line)
-        assertTrue(line.endsWith("(Overworld) · box -5424 49 832 to -5404 73 849"), line)
+        assertTrue(line.startsWith("Desert Temple: 1010 "), line)
+        assertTrue(line.endsWith("(Overworld) · box 1000 49 2000 to 1020 73 2017"), line)
         assertTrue(line.length <= StructureShare.MAX_CHAT)
         val (said, shared) = StructureShare.readLine("<Steve> $line")!!
         assertEquals(StructureType.DESERT_TEMPLE, shared.type)
         assertEquals(OVERWORLD, shared.dimension)
         assertEquals(temple.box, shared.box)
-        assertTrue(said.startsWith("<Steve> Desert Temple: -5414"), said)
+        assertTrue(said.startsWith("<Steve> Desert Temple: 1010"), said)
     }
 
     @Test
     fun whisperedAndOtherDimensionsAreRead() {
-        val (_, shared) = StructureShare.readLine("Steve whispers to you: End City: 10 80 -20 (End) · box 0 60 -30 to 20 100 -10")!!
+        val (_, shared) = StructureShare.readLine("Alex whispers to you: End City: 10 80 -20 (End) · box 0 60 -30 to 20 100 -10")!!
         assertEquals(StructureType.END_CITY, shared.type)
         assertEquals(END, shared.dimension)
     }
@@ -40,14 +40,14 @@ class ShareTest {
     @Test
     fun oldCodedLinesAreStillFound() {
         val code = StructureShare.encode(StructureShare.Shared(StructureType.DESERT_TEMPLE, OVERWORLD, temple.box, null))
-        assertEquals(code, StructureShare.codeIn("<Steve> Desert Temple: -5414 74 840 (Overworld) · SSM1:$code"))
+        assertEquals(code, StructureShare.codeIn("<Steve> Desert Temple: 1010 74 2008 (Overworld) · SSM1:$code"))
     }
 
     @Test
     fun ordinaryChatIsLeftAlone() {
-        assertNull(StructureShare.readLine("<Steve> Desert Temple: -5414 74 840 (Overworld)"))
+        assertNull(StructureShare.readLine("<Steve> Desert Temple: 1010 74 2008 (Overworld)"))
         assertNull(StructureShare.readLine("<Steve> meet me at 10 64 20 (Overworld) · box 1 2 3 to 4 5 6"))
-        assertNull(StructureShare.codeIn("<Steve> Desert Temple: -5414 74 840 (Overworld)"))
+        assertNull(StructureShare.codeIn("<Steve> Desert Temple: 1010 74 2008 (Overworld)"))
         assertNull(StructureShare.decode("not a code"))
     }
 }

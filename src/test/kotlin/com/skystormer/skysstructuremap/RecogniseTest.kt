@@ -19,11 +19,11 @@ class RecogniseTest {
 
     @Test
     fun partOfAMonumentIsNotEnough() {
-        // The monument tested in game (edge z -877): seen only from -861 to -820 it could still
+        // A monument with its edge at z 147: seen only from 163 to 204 it could still
         // be one chunk further south, which is what the old best-guess picked.
-        val edges = Recognise.monumentEdges(-861, -820)
-        assertTrue(edges.size > 1 && realEdge(-848) in edges)
-        assertNull(Recognise.monumentBox(Box(-253, 40, -861, -196, 60, -820)))
+        val edges = Recognise.monumentEdges(163, 204)
+        assertTrue(edges.size > 1 && realEdge(176) in edges)
+        assertNull(Recognise.monumentBox(Box(771, 40, 163, 828, 60, 204)))
     }
 
     @Test
@@ -33,8 +33,8 @@ class RecogniseTest {
 
     @Test
     fun monumentBoxIsTheFixedSize() {
-        val box = Recognise.monumentBox(Box(131, 40, -189, 188, 60, -132))
-        assertEquals(Box(131, 39, -189, 188, 61, -132), box)
+        val box = Recognise.monumentBox(Box(1155, 40, 835, 1212, 60, 892))
+        assertEquals(Box(1155, 39, 835, 1212, 61, 892), box)
         assertEquals(58, box!!.sizeX)
         assertEquals(23, box.sizeY)
     }

@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
  */
 class StoreTest {
 
-    private val hut = Structure("hut-id", StructureType.WITCH_HUT, OVERWORLD, Box(-416, 67, 352, -409, 73, 360), 1L)
+    private val hut = Structure("hut-id", StructureType.WITCH_HUT, OVERWORLD, Box(96, 67, -160, 103, 73, -152), 1L)
 
     @Test
     fun undoBringsTheLastDeleteBack() {
