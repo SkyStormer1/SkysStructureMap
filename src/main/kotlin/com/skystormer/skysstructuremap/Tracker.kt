@@ -3,6 +3,7 @@ package com.skystormer.skysstructuremap
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.network.chat.Component
+import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
 import java.util.UUID
 
@@ -116,11 +117,12 @@ object Tracker {
             }
             // The bell says where a town centre is on its own, and the few other blocks the game
             // puts there do the same once the bell has been taken, as players do. Failing all of
-            // them, one of the village's working houses, each known by its own job block, and last
-            // a farm, which only counts where the game would have put it: on a street.
+            // them, one of the village's working houses, each known by its own job block. Last a
+            // farm, which is never enough by itself: it must stand where the game puts one, on a
+            // street, and the group must hold something else of a village as well.
             StructureType.VILLAGE -> fitter.fitAnchored(detection, level, TOWN_CENTRE_ANCHORS)
                 ?: VillageHouseFit.also { used = it }.fitAnchored(detection, level, JOB_BLOCKS)
-                ?: VillageFarmFit.also { used = it }.fitAnchored(detection, level, listOf(Blocks.COMPOSTER)) { VillageFarmFit.refuse(it, level) }
+                ?: VillageFarmFit.also { used = it }.fitAnchored(detection, level, listOf(Blocks.COMPOSTER)) { VillageFarmFit.refuse(it, level) ?: farmUnconfirmed(detection) }
             else -> fitter.fit(detection, level)
         }
         if (match != null) {
@@ -331,6 +333,17 @@ object Tracker {
 
     /** How far above or below the piece that matched a structure still reaches. */
     private const val HEIGHT_REACH = 64
+
+    /**
+     * Null when a group with a farm in it holds something else of a village: a bell, or a job block
+     * whose house was not enough to go on by itself. A farm and a street alone are what a player's
+     * farm with a path to it is as well, so neither the farm nor the other block counts on its own.
+     */
+    private fun farmUnconfirmed(detection: Detection): String? =
+        if (detection.blocks.values.any { it in FARM_CONFIRMED_BY }) null else "nothing else of a village with it"
+
+    /** What confirms a farm: not barrels, which players put everywhere, nor the farm's own composter. */
+    private val FARM_CONFIRMED_BY: Set<Block> by lazy { setOf(Blocks.BELL) + JOB_BLOCKS - Blocks.BARREL }
 
     /** The job blocks of a village's working houses, one or two to a design. */
     private val JOB_BLOCKS = listOf(

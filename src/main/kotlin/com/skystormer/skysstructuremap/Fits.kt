@@ -267,6 +267,8 @@ object VillageHouseFit : TemplateFit(
  * blocks above or below the entrance (6 in a savanna village tested); and where a street crosses
  * water the game builds it of planks. Tested on 19 farms in villages of all five kinds, each with
  * 6 to 9 of the 9, and on the player's farm that was taken for a village, with none.
+ *
+ * Even on a street a farm is never all a village is known by: see `Tracker.farmUnconfirmed`.
  */
 object VillageFarmFit : TemplateFit(
     "village",
