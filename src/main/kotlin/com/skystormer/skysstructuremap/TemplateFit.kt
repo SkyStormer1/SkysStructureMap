@@ -2,6 +2,7 @@ package com.skystormer.skysstructuremap
 
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap
 import net.minecraft.core.BlockPos
+import net.minecraft.core.Direction
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.nbt.NbtAccounter
@@ -64,7 +65,14 @@ open class TemplateFit(
      * wood: the game builds each design in eight woods (a template holds eight palettes), and
      * matching the shape alone finds every one of them.
      */
-    class Template(val name: String, val sizeX: Int, val sizeY: Int, val sizeZ: Int, val blocks: List<Pair<BlockPos, String>>, val woods: Set<Block>) {
+    class Template(
+        val name: String, val sizeX: Int, val sizeY: Int, val sizeZ: Int, val blocks: List<Pair<BlockPos, String>>, val woods: Set<Block>,
+        /**
+         * Where a village house joins its street: the jigsaw named `building_entrance`, and the way
+         * it faces, towards the street. Empty for designs that are not village houses.
+         */
+        val entrances: List<Pair<BlockPos, Direction>> = emptyList(),
+    ) {
         val byFamily: Map<String, List<BlockPos>> = blocks.groupBy({ it.second }, { it.first })
     }
 
@@ -112,6 +120,8 @@ open class TemplateFit(
         /** How many of the best-voted starts for each design and turn are checked. */
         private const val TOP_STARTS = 3
 
+        private const val BUILDING_ENTRANCE = "minecraft:building_entrance"
+
         private val WOODS = listOf("stripped_", "dark_oak_", "pale_oak_", "oak_", "spruce_", "birch_", "jungle_", "acacia_", "mangrove_", "cherry_", "bamboo_")
     }
 
@@ -128,7 +138,14 @@ open class TemplateFit(
         }
     }
 
-    class Match(val template: Template, val box: Box, val matched: Int, val known: Int)
+    class Match(val template: Template, val box: Box, val matched: Int, val known: Int, val rotation: Rotation, val origin: Long) {
+
+        /** The design's [Template.entrances] where it was placed: each in the world, and the way it faces. */
+        fun entrances(): List<Pair<BlockPos, Direction>> = template.entrances.map { (pos, facing) ->
+            val turned = pos.rotate(rotation)
+            BlockPos(BlockPos.getX(origin) + turned.x, BlockPos.getY(origin) + turned.y, BlockPos.getZ(origin) + turned.z) to rotation.rotate(facing)
+        }
+    }
 
     /** Why the last [fit] came out as it did, for the log. */
     var lastReport = ""
@@ -148,7 +165,7 @@ open class TemplateFit(
      * rarer a block is in a design, the fewer placements it means, so those are tried first and the
      * work is capped ([CHECK_BUDGET]).
      */
-    fun fitAnchored(detection: Detection, level: BlockSource, kinds: List<Block>): Match? {
+    fun fitAnchored(detection: Detection, level: BlockSource, kinds: List<Block>, accept: (Match) -> String? = { null }): Match? {
         var budget = CHECK_BUDGET
         val report = ArrayList<Triple<String, Int, Int>>()
         for (kind in kinds) {
@@ -172,8 +189,9 @@ open class TemplateFit(
                             val turned = spot.rotate(rotation)
                             val match = check(template, rotation, BlockPos.asLong(x - turned.x, y - turned.y, z - turned.z), level)
                                 ?: continue
-                            report.add(Triple("${template.name} $rotation", match.matched, match.known))
-                            if (best == null || match.matched > best.matched) best = match
+                            val refused = accept(match)
+                            report.add(Triple("${template.name} $rotation" + (refused?.let { " ($it)" } ?: ""), match.matched, match.known))
+                            if (refused == null && (best == null || match.matched > best.matched)) best = match
                         }
                     }
                 }
@@ -184,7 +202,11 @@ open class TemplateFit(
                 return best
             }
         }
-        lastReport = "nothing fits any of ${kinds.joinToString { BuiltInRegistries.BLOCK.getKey(it).path }} that were seen"
+        lastReport = if (report.isNotEmpty()) {
+            "fits, but none accepted: " + report.sortedByDescending { it.second }.take(3).joinToString("; ") { "${it.first}: ${it.second}/${it.third}" }
+        } else {
+            "nothing fits any of ${kinds.joinToString { BuiltInRegistries.BLOCK.getKey(it).path }} that were seen"
+        }
         return null
     }
 
@@ -294,7 +316,7 @@ open class TemplateFit(
             ox + minOf(a.x, b.x), oy + minOf(a.y, b.y), oz + minOf(a.z, b.z),
             ox + maxOf(a.x, b.x), oy + maxOf(a.y, b.y), oz + maxOf(a.z, b.z),
         )
-        return Match(template, box, matched, known)
+        return Match(template, box, matched, known, rotation, origin)
     }
 
     private fun load(): List<Template> {
@@ -328,14 +350,23 @@ open class TemplateFit(
         val palette = blockPalettes.firstOrNull() ?: emptyList()
         val blocksTag = tag.getListOrEmpty("blocks")
         val blocks = ArrayList<Pair<BlockPos, String>>()
+        val entrances = ArrayList<Pair<BlockPos, Direction>>()
         for (i in 0 until blocksTag.size) {
             val entry = blocksTag.getCompoundOrEmpty(i)
-            val block = palette.getOrNull(entry.getIntOr("state", -1)) ?: continue
-            if (block in IGNORED) continue
+            val state = entry.getIntOr("state", -1)
+            val block = palette.getOrNull(state) ?: continue
             val pos = entry.getListOrEmpty("pos")
-            blocks.add(BlockPos(pos.getIntOr(0, 0), pos.getIntOr(1, 0), pos.getIntOr(2, 0)) to family(block))
+            val at = BlockPos(pos.getIntOr(0, 0), pos.getIntOr(1, 0), pos.getIntOr(2, 0))
+            if (block == Blocks.JIGSAW && entry.getCompoundOrEmpty("nbt").getStringOr("name", "") == BUILDING_ENTRANCE) {
+                // Its orientation is the way it faces then which way is up, as `west_up`.
+                val facing = palettes.first().getCompoundOrEmpty(state).getCompoundOrEmpty("Properties")
+                    .getStringOr("orientation", "").substringBefore('_')
+                Direction.entries.firstOrNull { it.serializedName == facing }?.let { entrances.add(at to it) }
+            }
+            if (block in IGNORED) continue
+            blocks.add(at to family(block))
         }
         val woods = blockPalettes.flatten().filterTo(HashSet()) { it !in IGNORED }
-        return Template(name, size.getIntOr(0, 0), size.getIntOr(1, 0), size.getIntOr(2, 0), blocks, woods)
+        return Template(name, size.getIntOr(0, 0), size.getIntOr(1, 0), size.getIntOr(2, 0), blocks, woods, entrances)
     }
 }

@@ -116,9 +116,11 @@ object Tracker {
             }
             // The bell says where a town centre is on its own, and the few other blocks the game
             // puts there do the same once the bell has been taken, as players do. Failing all of
-            // them, one of the village's working houses, each known by its own job block.
+            // them, one of the village's working houses, each known by its own job block, and last
+            // a farm, which only counts where the game would have put it: on a street.
             StructureType.VILLAGE -> fitter.fitAnchored(detection, level, TOWN_CENTRE_ANCHORS)
                 ?: VillageHouseFit.also { used = it }.fitAnchored(detection, level, JOB_BLOCKS)
+                ?: VillageFarmFit.also { used = it }.fitAnchored(detection, level, listOf(Blocks.COMPOSTER)) { VillageFarmFit.refuse(it, level) }
             else -> fitter.fit(detection, level)
         }
         if (match != null) {
@@ -336,8 +338,7 @@ object Tracker {
         Blocks.GRINDSTONE, Blocks.BLAST_FURNACE,
         Blocks.SMOKER, Blocks.CARTOGRAPHY_TABLE,
         Blocks.FLETCHING_TABLE, Blocks.LOOM,
-        Blocks.STONECUTTER, Blocks.COMPOSTER,
-        Blocks.BARREL,
+        Blocks.STONECUTTER, Blocks.BARREL,
     )
 
     /** Blocks in an allowed biome a group needs, when the biome is asked of the whole group. */

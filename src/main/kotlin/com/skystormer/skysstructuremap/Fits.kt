@@ -4,6 +4,8 @@
 
 package com.skystormer.skysstructuremap
 
+import net.minecraft.core.BlockPos
+import net.minecraft.core.Direction
 import net.minecraft.world.level.block.Blocks
 
 /** The game's 20 shipwreck designs, each in eight woods. */
@@ -174,9 +176,9 @@ object MansionFit : TemplateFit(
 )
 
 /**
- * A village's working houses: the library, the smithy, the farm and the rest, for every kind of
- * village. Each has its own job block in one or two spots, which says where the house sits, so a
- * village is still known by a house when its town centre has been pulled down.
+ * A village's working houses: the library, the smithy and the rest, for every kind of village.
+ * Each has its own job block in one or two spots, which says where the house sits, so a village is
+ * still known by a house when its town centre has been pulled down. The farms are [VillageFarmFit].
  */
 object VillageHouseFit : TemplateFit(
     "village",
@@ -184,11 +186,8 @@ object VillageHouseFit : TemplateFit(
         "desert/houses/desert_armorer_1",
         "desert/houses/desert_butcher_shop_1",
         "desert/houses/desert_cartographer_house_1",
-        "desert/houses/desert_farm_1",
-        "desert/houses/desert_farm_2",
         "desert/houses/desert_fisher_1",
         "desert/houses/desert_fletcher_house_1",
-        "desert/houses/desert_large_farm_1",
         "desert/houses/desert_library_1",
         "desert/houses/desert_mason_1",
         "desert/houses/desert_shepherd_house_1",
@@ -201,12 +200,10 @@ object VillageHouseFit : TemplateFit(
         "plains/houses/plains_cartographer_1",
         "plains/houses/plains_fisher_cottage_1",
         "plains/houses/plains_fletcher_house_1",
-        "plains/houses/plains_large_farm_1",
         "plains/houses/plains_library_1",
         "plains/houses/plains_library_2",
         "plains/houses/plains_masons_house_1",
         "plains/houses/plains_shepherds_house_1",
-        "plains/houses/plains_small_farm_1",
         "plains/houses/plains_tannery_1",
         "plains/houses/plains_tool_smith_1",
         "plains/houses/plains_weaponsmith_1",
@@ -216,12 +213,9 @@ object VillageHouseFit : TemplateFit(
         "savanna/houses/savanna_cartographer_1",
         "savanna/houses/savanna_fisher_cottage_1",
         "savanna/houses/savanna_fletcher_house_1",
-        "savanna/houses/savanna_large_farm_1",
-        "savanna/houses/savanna_large_farm_2",
         "savanna/houses/savanna_library_1",
         "savanna/houses/savanna_mason_1",
         "savanna/houses/savanna_shepherd_1",
-        "savanna/houses/savanna_small_farm",
         "savanna/houses/savanna_tannery_1",
         "savanna/houses/savanna_tool_smith_1",
         "savanna/houses/savanna_weaponsmith_1",
@@ -231,8 +225,6 @@ object VillageHouseFit : TemplateFit(
         "snowy/houses/snowy_butchers_shop_1",
         "snowy/houses/snowy_butchers_shop_2",
         "snowy/houses/snowy_cartographer_house_1",
-        "snowy/houses/snowy_farm_1",
-        "snowy/houses/snowy_farm_2",
         "snowy/houses/snowy_fisher_cottage",
         "snowy/houses/snowy_fletcher_house_1",
         "snowy/houses/snowy_library_1",
@@ -247,12 +239,9 @@ object VillageHouseFit : TemplateFit(
         "taiga/houses/taiga_cartographer_house_1",
         "taiga/houses/taiga_fisher_cottage_1",
         "taiga/houses/taiga_fletcher_house_1",
-        "taiga/houses/taiga_large_farm_1",
-        "taiga/houses/taiga_large_farm_2",
         "taiga/houses/taiga_library_1",
         "taiga/houses/taiga_masons_house_1",
         "taiga/houses/taiga_shepherds_house_1",
-        "taiga/houses/taiga_small_farm_1",
         "taiga/houses/taiga_tannery_1",
         "taiga/houses/taiga_tool_smith_1",
         "taiga/houses/taiga_weaponsmith_1",
@@ -260,3 +249,80 @@ object VillageHouseFit : TemplateFit(
     ),
     anyWood = false,
 )
+
+/**
+ * A village's farms, every kind. A farm is farmland, water, crops, logs and a composter, which is
+ * what a player's farm is too (one was taken for a village at 58%, barely ahead of a desert farm),
+ * so the design fitting is not enough: the farm must also stand where the game puts one, with a
+ * street running from its entrance.
+ *
+ * The game joins every village house to a street at the house's `building_entrance` jigsaw, face
+ * to face with the street's own; under the street's jigsaw and on into the street lies its path
+ * (dirt path, or smooth sandstone in the desert), in all 182 such joins in the game's street
+ * designs. So of the 3 × 3 columns just in front of the entrance, a real farm has 7 to 9 of path;
+ * the game turns up to a fifth of a street's path back to grass, and 3 is still enough for all
+ * but about one farm in a thousand. A farm on its own in a field has none.
+ *
+ * The street follows the ground while the farm is laid flat, so on a slope the path can be several
+ * blocks above or below the entrance (6 in a savanna village tested); and where a street crosses
+ * water the game builds it of planks. Tested on 19 farms in villages of all five kinds, each with
+ * 6 to 9 of the 9, and on the player's farm that was taken for a village, with none.
+ */
+object VillageFarmFit : TemplateFit(
+    "village",
+    listOf(
+        "desert/houses/desert_farm_1",
+        "desert/houses/desert_farm_2",
+        "desert/houses/desert_large_farm_1",
+        "plains/houses/plains_large_farm_1",
+        "plains/houses/plains_small_farm_1",
+        "savanna/houses/savanna_large_farm_1",
+        "savanna/houses/savanna_large_farm_2",
+        "savanna/houses/savanna_small_farm",
+        "snowy/houses/snowy_farm_1",
+        "snowy/houses/snowy_farm_2",
+        "taiga/houses/taiga_large_farm_1",
+        "taiga/houses/taiga_large_farm_2",
+        "taiga/houses/taiga_small_farm_1",
+    ),
+    anyWood = false,
+) {
+
+    /** Why [match] is not a village's farm (no street at its entrance), or null when it is. */
+    fun refuse(match: Match, level: BlockSource): String? {
+        val entrances = match.entrances()
+        if (entrances.isEmpty()) return "no entrance"
+        val cursor = BlockPos.MutableBlockPos()
+        for ((entrance, facing) in entrances) {
+            val side = facing.clockWise
+            var street = 0
+            var known = 0
+            for (out in 1..3) for (across in -1..1) {
+                val x = entrance.x + facing.stepX * out + side.stepX * across
+                val z = entrance.z + facing.stepZ * out + side.stepZ * across
+                if (!level.hasChunk(x shr 4, z shr 4)) continue
+                known++
+                if ((entrance.y - REACH_Y..entrance.y + REACH_Y).any { y -> isStreet(level, cursor.set(x, y, z)) }) street++
+            }
+            if (known < 9) return "street not loaded"
+            if (street >= STREET_NEEDED) return null
+        }
+        return "no street at its entrance"
+    }
+
+    /** A block of street: path, or the planks the game lays in its place over water. */
+    private fun isStreet(level: BlockSource, pos: BlockPos): Boolean {
+        val block = level.getBlockState(pos).block
+        if (block in STREET) return true
+        if (block !in BRIDGE) return false
+        return (listOf(pos.below()) + Direction.Plane.HORIZONTAL.map { pos.relative(it) })
+            .any { level.getBlockState(it).block == Blocks.WATER }
+    }
+
+    private val STREET = setOf(Blocks.DIRT_PATH, Blocks.SMOOTH_SANDSTONE)
+    private val BRIDGE = setOf(Blocks.OAK_PLANKS, Blocks.SPRUCE_PLANKS, Blocks.ACACIA_PLANKS)
+    private const val STREET_NEEDED = 3
+
+    /** How far above or below the entrance its street may lie. */
+    private const val REACH_Y = 8
+}
