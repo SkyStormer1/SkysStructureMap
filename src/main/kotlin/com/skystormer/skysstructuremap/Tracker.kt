@@ -73,7 +73,7 @@ object Tracker {
         val box = detection.box ?: return
         if (detection.storedId == null) link(detection, box)
         val stored = detection.storedId?.let(StructureStore::byId) ?: return
-        keepUpToDate(detection, stored, box)
+        keepUpToDate(detection, stored, box, level)
     }
 
     /**
@@ -197,7 +197,7 @@ object Tracker {
     }
 
     /** Grows a saved structure's box and pieces as more of it is seen. */
-    private fun keepUpToDate(detection: Detection, stored: Structure, box: Box) {
+    private fun keepUpToDate(detection: Detection, stored: Structure, box: Box, level: BlockSource? = null) {
         // More seen of a structure whose shape comes from what is seen makes its box bigger; an
         // exact box (a monument) can only get more certain, and a wreck's matched box stays.
         val better = when {
@@ -208,9 +208,21 @@ object Tracker {
                 stored.box.union(box).let { if (box.minY == FORTRESS_BOTTOM) it.copy(minY = FORTRESS_BOTTOM) else it }
             else -> stored.box.union(box)
         }.let { grown -> detection.piece?.let { around(detection.type, grown, it) } ?: grown }
-        // Pieces are only ever added, so they stay after the structure is torn down.
-        val pieces = stored.pieces + detection.pieces.filter { new -> stored.pieces.none { it.box == new.box } }
-        if (better != stored.box || pieces.size != stored.pieces.size) StructureStore.put(stored.copy(box = better, pieces = pieces))
+        // Pieces are only ever added, so they stay after the structure is torn down. Two kinds of
+        // saved one go: a room crossing taken for a crossroads before that could be told, once its
+        // middle can be seen; and one a block or two off a crossroads found now, which is the same
+        // piece (each look keeps the best of overlapping spots, but an earlier look may have saved
+        // a worse one).
+        val kept = stored.pieces.filterNot { old ->
+            old.kind == FortressPieces.CROSSROADS && (
+                (level != null && FortressPieces.isRoomCrossing(level, old.box)) ||
+                    detection.pieces.any { it.kind == old.kind && it.box != old.box && it.box.overlaps(old.box) })
+        }
+        if (kept.size != stored.pieces.size) {
+            Log.info("{}: dropped {} saved crossroads (room crossings, or off a better one)", stored.name, stored.pieces.size - kept.size)
+        }
+        val pieces = kept + detection.pieces.filter { new -> kept.none { it.box == new.box } }
+        if (better != stored.box || pieces != stored.pieces) StructureStore.put(stored.copy(box = better, pieces = pieces))
     }
 
     /** What became of a group found in Bobby's cache ([takeIn]). */

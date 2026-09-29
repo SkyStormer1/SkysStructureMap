@@ -47,6 +47,18 @@ object FortressPieces {
      */
     private const val MIN_UNDER = 0.6
 
+    /**
+     * How much of the ring three blocks out from the crossing's middle, three to six above the
+     * deck, may be nether bricks or fences. A crossroads is open there. A room crossing (`nerc`, a
+     * 7 × 9 × 7 room with fenced windows the game sets where bridges meet) has its walls there,
+     * and its floor and the bridges around it make the same plus, with the bridges' walls where a
+     * crossroads' railings are, so every other check passes it. Measured on the pieces two
+     * single-player worlds and the test server saved: all 222 crossroads that passed the other
+     * checks had at most 18% of the ring walled (all but one none); all 27 room crossings that did
+     * had 79%.
+     */
+    private const val MAX_ROOM_WALLS = 0.4
+
     /** Every crossroads among [detection]'s blocks, as its piece box. */
     fun crossroads(detection: Detection, level: BlockSource): List<Box> {
         val found = ArrayList<Pair<Box, Double>>()
@@ -67,6 +79,7 @@ object FortressPieces {
             if (found.any { it.first == box }) continue
             val score = deckScore(level, x, y, z) ?: continue
             if (!railings(level, x, y, z)) continue
+            if (roomCrossing(level, x, y, z) != false) continue
             found.add(box to score)
         }
         // A spot a block or two off a real centre can pass too; of overlapping ones, the best is it.
@@ -148,6 +161,34 @@ object FortressPieces {
         if (laneCells > 0 && laneBricks > laneCells * MAX_WALKWAY) return false
         return carried(level, cursor, cx, y, cz)
     }
+
+    /**
+     * Whether the middle of a plus at ([cx], [y], [cz]) is walled like a room crossing's (see
+     * [MAX_ROOM_WALLS]), or null when part of it is not loaded yet.
+     */
+    private fun roomCrossing(level: BlockSource, cx: Int, y: Int, cz: Int): Boolean? {
+        val cursor = BlockPos.MutableBlockPos()
+        var walls = 0
+        var cells = 0
+        for (along in -3..3) {
+            for ((dx, dz) in listOf(3 to along, -3 to along, along to 3, along to -3)) {
+                if (!level.hasChunk((cx + dx) shr 4, (cz + dz) shr 4)) return null
+                for (dy in 3..6) {
+                    cells++
+                    val state = level.getBlockState(cursor.set(cx + dx, y + dy, cz + dz))
+                    if (state.`is`(Blocks.NETHER_BRICKS) || state.`is`(Blocks.NETHER_BRICK_FENCE)) walls++
+                }
+            }
+        }
+        return walls >= cells * MAX_ROOM_WALLS
+    }
+
+    /**
+     * Whether a saved crossroads' box is really a room crossing's junction, now that its middle can
+     * be seen: saved before [roomCrossing] was checked. Unknown (false) while it is not loaded.
+     */
+    fun isRoomCrossing(level: BlockSource, crossroads: Box): Boolean =
+        roomCrossing(level, crossroads.minX + 9, crossroads.minY + 3, crossroads.minZ + 9) == true
 
     /** Whether the brick the game lays under each arm is there (see [MIN_UNDER]). */
     private fun carried(level: BlockSource, cursor: BlockPos.MutableBlockPos, cx: Int, y: Int, cz: Int): Boolean {
