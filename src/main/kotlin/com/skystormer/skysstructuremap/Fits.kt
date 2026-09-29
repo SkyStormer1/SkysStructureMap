@@ -176,9 +176,15 @@ object MansionFit : TemplateFit(
 )
 
 /**
- * A village's working houses: the library, the smithy and the rest, for every kind of village.
- * Each has its own job block in one or two spots, which says where the house sits, so a village is
- * still known by a house when its town centre has been pulled down. The farms are [VillageFarmFit].
+ * A village's houses: homes, workplaces, temples and stables, for every kind of village; every
+ * design with a door or a job block to find it by (the animal pens, the plain temples and the
+ * two open-air meeting points have neither). A door or a job block only says where a design would
+ * have to sit; the design decides, block for block, so a player's house never passes. Doors are
+ * what players leave, where they take bells and workstations. The farms are [VillageFarmFit].
+ *
+ * Tried by door alone on real villages of all five kinds and three on a survival server, with
+ * bells and job blocks left out: every one was found, its houses matching 89 to 100%; around four
+ * player bases and a player's farm nothing fitted at all.
  */
 object VillageHouseFit : TemplateFit(
     "village",
@@ -190,11 +196,22 @@ object VillageHouseFit : TemplateFit(
         "desert/houses/desert_fletcher_house_1",
         "desert/houses/desert_library_1",
         "desert/houses/desert_mason_1",
+        "desert/houses/desert_medium_house_1",
+        "desert/houses/desert_medium_house_2",
         "desert/houses/desert_shepherd_house_1",
+        "desert/houses/desert_small_house_1",
+        "desert/houses/desert_small_house_2",
+        "desert/houses/desert_small_house_3",
+        "desert/houses/desert_small_house_4",
+        "desert/houses/desert_small_house_5",
+        "desert/houses/desert_small_house_6",
+        "desert/houses/desert_small_house_7",
+        "desert/houses/desert_small_house_8",
         "desert/houses/desert_tannery_1",
         "desert/houses/desert_tool_smith_1",
         "desert/houses/desert_weaponsmith_1",
         "plains/houses/plains_armorer_house_1",
+        "plains/houses/plains_big_house_1",
         "plains/houses/plains_butcher_shop_1",
         "plains/houses/plains_butcher_shop_2",
         "plains/houses/plains_cartographer_1",
@@ -203,8 +220,22 @@ object VillageHouseFit : TemplateFit(
         "plains/houses/plains_library_1",
         "plains/houses/plains_library_2",
         "plains/houses/plains_masons_house_1",
+        "plains/houses/plains_medium_house_1",
+        "plains/houses/plains_medium_house_2",
         "plains/houses/plains_shepherds_house_1",
+        "plains/houses/plains_small_house_1",
+        "plains/houses/plains_small_house_2",
+        "plains/houses/plains_small_house_3",
+        "plains/houses/plains_small_house_4",
+        "plains/houses/plains_small_house_5",
+        "plains/houses/plains_small_house_6",
+        "plains/houses/plains_small_house_7",
+        "plains/houses/plains_small_house_8",
+        "plains/houses/plains_stable_1",
+        "plains/houses/plains_stable_2",
         "plains/houses/plains_tannery_1",
+        "plains/houses/plains_temple_3",
+        "plains/houses/plains_temple_4",
         "plains/houses/plains_tool_smith_1",
         "plains/houses/plains_weaponsmith_1",
         "savanna/houses/savanna_armorer_1",
@@ -215,8 +246,20 @@ object VillageHouseFit : TemplateFit(
         "savanna/houses/savanna_fletcher_house_1",
         "savanna/houses/savanna_library_1",
         "savanna/houses/savanna_mason_1",
+        "savanna/houses/savanna_medium_house_1",
+        "savanna/houses/savanna_medium_house_2",
         "savanna/houses/savanna_shepherd_1",
+        "savanna/houses/savanna_small_house_1",
+        "savanna/houses/savanna_small_house_2",
+        "savanna/houses/savanna_small_house_3",
+        "savanna/houses/savanna_small_house_4",
+        "savanna/houses/savanna_small_house_5",
+        "savanna/houses/savanna_small_house_6",
+        "savanna/houses/savanna_small_house_7",
+        "savanna/houses/savanna_small_house_8",
         "savanna/houses/savanna_tannery_1",
+        "savanna/houses/savanna_temple_1",
+        "savanna/houses/savanna_temple_2",
         "savanna/houses/savanna_tool_smith_1",
         "savanna/houses/savanna_weaponsmith_1",
         "savanna/houses/savanna_weaponsmith_2",
@@ -230,9 +273,22 @@ object VillageHouseFit : TemplateFit(
         "snowy/houses/snowy_library_1",
         "snowy/houses/snowy_masons_house_1",
         "snowy/houses/snowy_masons_house_2",
+        "snowy/houses/snowy_medium_house_1",
+        "snowy/houses/snowy_medium_house_2",
+        "snowy/houses/snowy_medium_house_3",
         "snowy/houses/snowy_shepherds_house_1",
+        "snowy/houses/snowy_small_house_1",
+        "snowy/houses/snowy_small_house_2",
+        "snowy/houses/snowy_small_house_3",
+        "snowy/houses/snowy_small_house_4",
+        "snowy/houses/snowy_small_house_5",
+        "snowy/houses/snowy_small_house_6",
+        "snowy/houses/snowy_small_house_7",
+        "snowy/houses/snowy_small_house_8",
         "snowy/houses/snowy_tannery_1",
+        "snowy/houses/snowy_temple_1",
         "snowy/houses/snowy_tool_smith_1",
+        "snowy/houses/snowy_weapon_smith_1",
         "taiga/houses/taiga_armorer_2",
         "taiga/houses/taiga_armorer_house_1",
         "taiga/houses/taiga_butcher_shop_1",
@@ -241,8 +297,18 @@ object VillageHouseFit : TemplateFit(
         "taiga/houses/taiga_fletcher_house_1",
         "taiga/houses/taiga_library_1",
         "taiga/houses/taiga_masons_house_1",
+        "taiga/houses/taiga_medium_house_1",
+        "taiga/houses/taiga_medium_house_2",
+        "taiga/houses/taiga_medium_house_3",
+        "taiga/houses/taiga_medium_house_4",
         "taiga/houses/taiga_shepherds_house_1",
+        "taiga/houses/taiga_small_house_1",
+        "taiga/houses/taiga_small_house_2",
+        "taiga/houses/taiga_small_house_3",
+        "taiga/houses/taiga_small_house_4",
+        "taiga/houses/taiga_small_house_5",
         "taiga/houses/taiga_tannery_1",
+        "taiga/houses/taiga_temple_1",
         "taiga/houses/taiga_tool_smith_1",
         "taiga/houses/taiga_weaponsmith_1",
         "taiga/houses/taiga_weaponsmith_2",
@@ -268,7 +334,8 @@ object VillageHouseFit : TemplateFit(
  * water the game builds it of planks. Tested on 19 farms in villages of all five kinds, each with
  * 6 to 9 of the 9, and on the player's farm that was taken for a village, with none.
  *
- * Even on a street a farm is never all a village is known by: see `Tracker.farmConfirmable`.
+ * Even on a street a farm is never all a village is known by: it only confirms a house that fitted
+ * too little to count by itself (see `Tracker`).
  */
 object VillageFarmFit : TemplateFit(
     "village",
@@ -288,10 +355,17 @@ object VillageFarmFit : TemplateFit(
         "taiga/houses/taiga_small_farm_1",
     ),
     anyWood = false,
-) {
+)
 
-    /** Why [match] is not a village's farm (no street at its entrance), or null when it is. */
-    fun refuse(match: Match, level: BlockSource): String? {
+/**
+ * The street a village house opens onto, which the game always lays at its `building_entrance`
+ * jigsaw ([VillageFarmFit] explains the check and what it was tested on). Asked of every farm, and
+ * of a house that fits too little to count by itself.
+ */
+object VillageStreets {
+
+    /** Why [match] is not standing on a street as the game lays one (see [VillageFarmFit]), or null when it is. */
+    fun refuse(match: TemplateFit.Match, level: BlockSource): String? {
         val cursor = BlockPos.MutableBlockPos()
         for ((entrance, facing) in match.entrances()) {
             val side = facing.clockWise

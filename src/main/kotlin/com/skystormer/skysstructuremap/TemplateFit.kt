@@ -10,6 +10,7 @@ import net.minecraft.nbt.NbtIo
 import net.minecraft.resources.Identifier
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
+import net.minecraft.world.level.block.DoorBlock
 import net.minecraft.world.level.block.Rotation
 
 /**
@@ -100,7 +101,7 @@ open class TemplateFit(
          * the placement is one nearly every block seen agrees on, which chance never manages.
          * Blocks added to it do not count against it.
          */
-        private const val MIN_MATCH = 0.5
+        const val MIN_MATCH = 0.5
         private const val MIN_MATCHED_BLOCKS = 60
 
         /** How many seen blocks of a kind are tried as the anchor, spread through those seen. */
@@ -141,6 +142,9 @@ open class TemplateFit(
 
     class Match(val template: Template, val box: Box, val matched: Int, val known: Int, val rotation: Rotation, val origin: Long) {
 
+        /** How much of what could be checked matched. */
+        val share: Double get() = if (known == 0) 0.0 else matched.toDouble() / known
+
         /** The design's [Template.entrances] where it was placed: each in the world, and the way it faces. */
         fun entrances(): List<Pair<BlockPos, Direction>> = template.entrances.map { (pos, facing) ->
             val turned = pos.rotate(rotation)
@@ -166,33 +170,46 @@ open class TemplateFit(
      * rarer a block is in a design, the fewer placements it means, so those are tried first and the
      * work is capped ([CHECK_BUDGET]).
      */
-    fun fitAnchored(detection: Detection, level: BlockSource, kinds: List<Block>, accept: (Match) -> String? = { null }): Match? {
+    fun fitAnchored(
+        detection: Detection, level: BlockSource, kinds: List<Block>,
+        minMatch: Double = MIN_MATCH, accept: (Match) -> String? = { null },
+    ): Match? {
         var budget = CHECK_BUDGET
         val report = ArrayList<Triple<String, Int, Int>>()
         for (kind in kinds) {
-            val seen = detection.blocks.long2ObjectEntrySet().filter { it.value == kind }.map { it.longKey }
+            // A door is two blocks, one on the other: only its bottom half is tried, in the world
+            // and in the designs, or every placement would be tried twice over from each side.
+            val tall = kind is DoorBlock
+            val seen = detection.blocks.long2ObjectEntrySet()
+                .filter { it.value == kind && !(tall && detection.blocks.get(BlockPos.offset(it.longKey, Direction.DOWN)) == kind) }
+                .map { it.longKey }
             if (seen.isEmpty()) continue
             val step = maxOf(1, seen.size / SEEDS)
             val anchors = seen.indices.step(step).map { seen[it] }
             val work = templates.mapNotNull { template ->
-                val spots = template.byFamily[family(kind)].orEmpty()
+                val all = template.byFamily[family(kind)].orEmpty()
+                val spots = if (tall) all.filter { it.below() !in all } else all
                 if (spots.isEmpty() || spots.size > MAX_SPOTS) null else template to spots
             }.sortedBy { it.second.size }
             var best: Match? = null
-            for ((template, spots) in work) {
-                for (anchor in anchors) {
-                    val x = BlockPos.getX(anchor)
-                    val y = BlockPos.getY(anchor)
-                    val z = BlockPos.getZ(anchor)
+            // Each anchor through every design before the next, so a real one is tried in full
+            // even when the budget runs out.
+            for (anchor in anchors) {
+                val x = BlockPos.getX(anchor)
+                val y = BlockPos.getY(anchor)
+                val z = BlockPos.getZ(anchor)
+                for ((template, spots) in work) {
                     for (spot in spots) {
                         for (rotation in Rotation.entries) {
                             if (budget-- <= 0) break
                             val turned = spot.rotate(rotation)
-                            val match = check(template, rotation, BlockPos.asLong(x - turned.x, y - turned.y, z - turned.z), level)
+                            val match = check(template, rotation, BlockPos.asLong(x - turned.x, y - turned.y, z - turned.z), level, minMatch)
                                 ?: continue
                             val refused = accept(match)
                             report.add(Triple("${template.name} $rotation" + (refused?.let { " ($it)" } ?: ""), match.matched, match.known))
-                            if (refused == null && (best == null || match.matched > best.matched)) best = match
+                            // The closest fit, not the most blocks: a big design half fitting over
+                            // a small house beside it is not the house.
+                            if (refused == null && (best == null || match.share > best.share)) best = match
                         }
                     }
                 }
@@ -284,7 +301,7 @@ open class TemplateFit(
 
     private var lastCheck = ""
 
-    private fun check(template: Template, rotation: Rotation, origin: Long, level: BlockSource): Match? {
+    private fun check(template: Template, rotation: Rotation, origin: Long, level: BlockSource, minMatch: Double = MIN_MATCH): Match? {
         val ox = BlockPos.getX(origin)
         val oy = BlockPos.getY(origin)
         val oz = BlockPos.getZ(origin)
@@ -309,7 +326,7 @@ open class TemplateFit(
         // Enough blocks to mean something, but never more than most of the design: a taiga village's
         // meeting point is only 72 blocks, and asking for 60 matched threw away a real one at 49.
         val enough = minOf(MIN_MATCHED_BLOCKS, (template.blocks.size * MIN_MATCHED_SHARE).toInt())
-        if (known < template.blocks.size * 0.6 || matched < known * MIN_MATCH || matched < enough) return null
+        if (known < template.blocks.size * 0.6 || matched < known * minMatch || matched < enough) return null
         if (loose.isNotEmpty() && matchedFirm < knownFirm * MIN_MATCH) return null
         val a = BlockPos.ZERO.rotate(rotation)
         val b = BlockPos(template.sizeX - 1, template.sizeY - 1, template.sizeZ - 1).rotate(rotation)

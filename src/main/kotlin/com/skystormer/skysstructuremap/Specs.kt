@@ -109,6 +109,9 @@ object Specs {
             Blocks.COMPOSTER, Blocks.LECTERN, Blocks.SMOKER, Blocks.BLAST_FURNACE, Blocks.CARTOGRAPHY_TABLE,
             Blocks.FLETCHING_TABLE, Blocks.GRINDSTONE, Blocks.LOOM, Blocks.SMITHING_TABLE, Blocks.STONECUTTER,
             Blocks.BARREL, Blocks.HAY_BLOCK,
+            // The doors of the houses, which say where a house is when its job block has been taken
+            // (see [VillageHouseFit]): one wood to each kind of village.
+            Blocks.OAK_DOOR, Blocks.SPRUCE_DOOR, Blocks.ACACIA_DOOR, Blocks.JUNGLE_DOOR,
             // The blocks a snowy or taiga town centre is built of, so it can still be found when the
             // bell has been taken: none of them grow in a village's own biomes by themselves.
             // Not mossy cobblestone: a taiga's own boulders are made of it, and they dragged a

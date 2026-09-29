@@ -22,7 +22,9 @@ copy of Minecraft:
 - **Ocean monuments** are always the same building on the same grid, so their exact box is known.
 - **Villages, pillager outposts, shipwrecks, trail ruins, end cities, bastion remnants, ancient cities and woodland
   mansions** are matched against the game's own designs, block by block. A village is found by its town centre or by
-  one of its working houses, so it still counts when the bell has been taken or the square pulled down.
+  one of its houses, each found by its door or job block, so it still counts when the bell and the workstations have
+  been taken. A farm never counts by itself: it only backs up a worn house, and only where both stand on a street
+  as the game lays them.
 - **Nether fortresses** need a real bridge crossroads, railings and open walkway included; **desert temples** the
   terracotta cross over their hidden chamber; **jungle temples** their lever wall and trap; **witch huts** their exact
   size and fittings.

@@ -3,7 +3,6 @@ package com.skystormer.skysstructuremap
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.network.chat.Component
-import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
 import java.util.UUID
 
@@ -116,14 +115,12 @@ object Tracker {
                 fitter.fit(detection, level) { key -> BlockPos.getY(key) >= base + OUTPOST_TOWER_FROM }
             }
             // The bell says where a town centre is on its own, and the few other blocks the game
-            // puts there do the same once the bell has been taken, as players do. Failing all of
-            // them, one of the village's working houses, each known by its own job block. Last a
-            // farm, which is never enough by itself: it must stand where the game puts one, on a
-            // street, and the group must hold something else of a village as well.
+            // puts there do the same once the bell has been taken, as players do. Failing those,
+            // one of the village's houses, by its job block or its door.
             StructureType.VILLAGE -> fitter.fitAnchored(detection, level, TOWN_CENTRE_ANCHORS)
                 ?: VillageHouseFit.also { used = it }.fitAnchored(detection, level, JOB_BLOCKS)
-                ?: VillageFarmFit.takeIf { farmConfirmable(detection) }?.also { used = it }
-                    ?.fitAnchored(detection, level, listOf(Blocks.COMPOSTER)) { VillageFarmFit.refuse(it, level) }
+                ?: VillageHouseFit.fitAnchored(detection, level, DOORS)
+                ?: worn(detection, level)?.also { used = VillageHouseFit }
             else -> fitter.fit(detection, level)
         }
         if (match != null) {
@@ -336,14 +333,21 @@ object Tracker {
     private const val HEIGHT_REACH = 64
 
     /**
-     * Whether a group holds something else of a village for a farm to go with: a bell, or a job
-     * block whose house was not enough to go on by itself. A farm and a street alone are what a
-     * player's farm with a path to it is as well, so neither the farm nor the other block counts on its own.
+     * A village too worn for any house to fit by itself: a house that fits at least [WORN_MATCH]
+     * and opens onto a street, confirmed by a farm that does too ([VillageStreets]). Neither is
+     * enough alone; a farm on its own is what a player's farm with a path to it is as well. Around
+     * player bases a big house design fitted up to 36%, and 48% once, but never with a street at
+     * both it and a farm.
      */
-    private fun farmConfirmable(detection: Detection): Boolean = detection.blocks.values.any { it in FARM_CONFIRMED_BY }
+    private fun worn(detection: Detection, level: BlockSource): TemplateFit.Match? {
+        VillageFarmFit.fitAnchored(detection, level, listOf(Blocks.COMPOSTER)) { VillageStreets.refuse(it, level) } ?: return null
+        return VillageHouseFit.fitAnchored(detection, level, JOB_BLOCKS + DOORS, WORN_MATCH) { VillageStreets.refuse(it, level) }
+    }
 
-    /** What confirms a farm: not barrels, which players put everywhere, nor the farm's own composter. */
-    private val FARM_CONFIRMED_BY: Set<Block> by lazy { setOf(Blocks.BELL) + JOB_BLOCKS - Blocks.BARREL }
+    /** How much of a house must fit when a farm on a street confirms it. */
+    private const val WORN_MATCH = 0.4
+
+    private val DOORS = listOf(Blocks.OAK_DOOR, Blocks.SPRUCE_DOOR, Blocks.ACACIA_DOOR, Blocks.JUNGLE_DOOR)
 
     /** The job blocks of a village's working houses, one or two to a design. */
     private val JOB_BLOCKS = listOf(
