@@ -78,6 +78,10 @@ copy of Minecraft:
   structures are backed up to `config/skysstructuremap/backups/` first. The scan runs in the background while you
   play, and `/skysstructuremap bobby stop` stops it. Chunks Bobby saved in an older Minecraft version are skipped:
   run Bobby's `/bobby upgrade`, then scan again.
+- **Show Bobby's saved chunks on the map**, in the settings (or `/skysstructuremap bobby overlay`), only there when
+  Bobby is installed: tints every chunk Bobby has saved on the world map and the minimap, so anywhere without the tint
+  is somewhere a scan cannot look. Pointing at a chunk on the world map says when Bobby saved it. Bobby only writes a
+  chunk once you move away from it, so the chunks loaded around you are tinted too.
 - Discoveries are saved per server, in `config/skysstructuremap/`.
 
 ## Structures
@@ -95,6 +99,7 @@ copy of Minecraft:
    - [Xaero's World Map](https://modrinth.com/mod/xaeros-world-map)
    - [Xaero's Minimap](https://modrinth.com/mod/xaeros-minimap), for minimap icons and waypoints
    - [Mod Menu](https://modrinth.com/mod/modmenu), optional
+   - [Bobby](https://modrinth.com/mod/bobby), optional, to scan the chunks it saved and see which those are
 3. Add the `skysstructuremap` jar from the [latest release](https://github.com/SkyStormer1/SkysStructureMap/releases/latest).
 
 ## Known limits
