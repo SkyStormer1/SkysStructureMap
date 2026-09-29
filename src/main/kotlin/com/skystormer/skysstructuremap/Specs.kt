@@ -329,7 +329,7 @@ object Specs {
      * or with middles less than half the least distance two of them can be apart.
      *
      * The width is what joins a big structure seen in pieces. A fortress reaches over 200 blocks and
-     * is only recognised where one of its crossroads is, so two visits can see two ends that never
+     * is only recognised where its pieces can be told, so two visits can see two ends that never
      * touch; going by the spacing alone, they were saved as two fortresses (and a structure marked
      * as completed came back unmarked as the other copy).
      */

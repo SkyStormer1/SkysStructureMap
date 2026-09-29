@@ -73,7 +73,7 @@ object Tracker {
         val box = detection.box ?: return
         if (detection.storedId == null) link(detection, box)
         val stored = detection.storedId?.let(StructureStore::byId) ?: return
-        keepUpToDate(detection, stored, box, level)
+        keepUpToDate(detection, stored, box)
     }
 
     /**
@@ -85,7 +85,7 @@ object Tracker {
         detection.changed = false
         val before = detection.box
         val fitter = fitterFor(detection.type)
-        if (fitter != null) matchDesign(detection, level, fitter, now) else proveInWorld(detection, level, before)
+        if (fitter != null) matchDesign(detection, level, fitter, now) else proveInWorld(detection, level, before, now)
     }
 
     /**
@@ -157,7 +157,7 @@ object Tracker {
      * For the kinds the game builds in code rather than from a design: the blocks it is made of,
      * and then a piece of the game's own layout, which is what tells it from a player's build.
      */
-    private fun proveInWorld(detection: Detection, level: BlockSource, before: Box?) {
+    private fun proveInWorld(detection: Detection, level: BlockSource, before: Box?, now: Boolean) {
         detection.box = Recognise.box(detection)
         if (detection.box != null && !detection.proved) {
             detection.proved = when (detection.type) {
@@ -169,11 +169,12 @@ object Tracker {
         }
         val bricks = detection.bounds
         if (detection.type == StructureType.FORTRESS && detection.box != null && bricks != null) {
-            val crossroads = FortressPieces.crossroads(detection, level)
-            if (crossroads.size != detection.pieces.size) Log.info("Fortress #{}: {} crossroads {}", detection.id, crossroads.size, crossroads)
-            detection.pieces = crossroads.map { Piece(FortressPieces.CROSSROADS, it) }
-            // Every fortress starts from a crossroads; nether bricks without one are a build.
-            detection.box = if (crossroads.isEmpty()) null else FortressPieces.outerBox(bricks, crossroads)
+            // Its pieces: at once in a scan of Bobby's cache (its own thread), in the background
+            // around you, where they arrive a moment later and this runs again.
+            if (now) detection.pieces = FortressPieces.label(level, bricks)
+            else FortressLabelling.request(detection, bricks)
+            // Nether bricks that do not lay out fortress pieces are a build.
+            detection.box = if (!FortressPieces.isFortress(detection.pieces)) null else FortressPieces.outerBox(bricks, detection.pieces)
         }
         if (detection.box != null && before == null) {
             Log.info("Recognised {} #{} from {} blocks ({}), seen {}: box {}", detection.type.id, detection.id,
@@ -197,7 +198,7 @@ object Tracker {
     }
 
     /** Grows a saved structure's box and pieces as more of it is seen. */
-    private fun keepUpToDate(detection: Detection, stored: Structure, box: Box, level: BlockSource? = null) {
+    private fun keepUpToDate(detection: Detection, stored: Structure, box: Box) {
         // More seen of a structure whose shape comes from what is seen makes its box bigger; an
         // exact box (a monument) can only get more certain, and a wreck's matched box stays.
         val better = when {
@@ -208,18 +209,12 @@ object Tracker {
                 stored.box.union(box).let { if (box.minY == FORTRESS_BOTTOM) it.copy(minY = FORTRESS_BOTTOM) else it }
             else -> stored.box.union(box)
         }.let { grown -> detection.piece?.let { around(detection.type, grown, it) } ?: grown }
-        // Pieces are only ever added, so they stay after the structure is torn down. Two kinds of
-        // saved one go: a room crossing taken for a crossroads before that could be told, once its
-        // middle can be seen; and one a block or two off a crossroads found now, which is the same
-        // piece (each look keeps the best of overlapping spots, but an earlier look may have saved
-        // a worse one).
-        val kept = stored.pieces.filterNot { old ->
-            old.kind == FortressPieces.CROSSROADS && (
-                (level != null && FortressPieces.isRoomCrossing(level, old.box)) ||
-                    detection.pieces.any { it.kind == old.kind && it.box != old.box && it.box.overlaps(old.box) })
-        }
+        // Pieces stay once saved, so they are still there after the structure is torn down or out of
+        // sight; but one a piece found now overlaps gives way to it (saved before pieces could be
+        // told apart, or a block off).
+        val kept = stored.pieces.filterNot { old -> detection.pieces.any { it.box != old.box && it.box.overlaps(old.box) } }
         if (kept.size != stored.pieces.size) {
-            Log.info("{}: dropped {} saved crossroads (room crossings, or off a better one)", stored.name, stored.pieces.size - kept.size)
+            Log.info("{}: {} saved pieces replaced by ones found now", stored.name, stored.pieces.size - kept.size)
         }
         val pieces = kept + detection.pieces.filter { new -> kept.none { it.box == new.box } }
         if (better != stored.box || pieces != stored.pieces) StructureStore.put(stored.copy(box = better, pieces = pieces))

@@ -12,7 +12,7 @@ import net.minecraft.world.phys.AABB
  * The game gives four structures their own spawns: fortresses (blazes, wither skeletons, skeletons,
  * magma cubes, zombified piglins) inside each of their pieces, and ocean monuments (guardians),
  * pillager outposts (pillagers) and witch huts (witches, cats) inside their whole box. So a
- * fortress shows its own box and its crossroads, the rest their box.
+ * fortress shows its own box and each of its pieces, the rest their box.
  *
  * Drawn in the world around you with the game's own debug shapes, and on the map by [Outlines].
  */
@@ -21,7 +21,7 @@ object SpawnBoxes {
     /** The kinds of structure with spawns of their own. */
     val TYPES = setOf(StructureType.FORTRESS, StructureType.MONUMENT, StructureType.OUTPOST, StructureType.WITCH_HUT)
 
-    /** The colour a fortress's crossroads are drawn in, apart from its own box. */
+    /** The colour a fortress's pieces are drawn in, apart from its own box. */
     const val PIECE_COLOUR = 0xFFFF9020.toInt()
 
     /** How far away, sideways, boxes are still drawn in the world. */

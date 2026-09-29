@@ -26,7 +26,7 @@ class Marker(val structure: Structure?, val detection: Detection?) {
     val dimension: String = structure?.dimension ?: detection!!.dimension
     val box: Box = structure?.box ?: detection!!.box!!
     val discovered: Boolean get() = structure != null
-    /** Boxes inside it that matter on their own (a fortress's crossroads). */
+    /** Boxes inside it that matter on their own (a fortress's pieces). */
     val pieces: List<Piece> get() = structure?.pieces ?: detection?.pieces ?: emptyList()
     /** This one's box is drawn even while outlines are off for everything. */
     val outlined: Boolean get() = structure?.outlined ?: (detection!!.id in Markers.outlinedNearby)

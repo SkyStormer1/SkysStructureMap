@@ -25,8 +25,8 @@ data class Structure(
     /** Its box outline drawn on the map even while outlines are off for everything. */
     val outlined: Boolean = false,
     /**
-     * Boxes inside it that matter on their own: for a fortress, its crossroads, which mobs spawn
-     * in. Kept once found, so they stay after the structure is torn down.
+     * Boxes inside it that matter on their own: for a fortress, its pieces, which mobs spawn in.
+     * Kept once found, so they stay after the structure is torn down.
      */
     val pieces: List<Piece> = emptyList(),
     /** Marked as done (looted, cleared, whatever you count as done): a tick is drawn beside its icon. */
@@ -39,7 +39,10 @@ data class Structure(
         get() = waypointY(type, box)
 }
 
-/** A named box inside a structure: [FortressPieces.CROSSROADS], so far. */
+/**
+ * A named box inside a structure: a fortress piece, named by the game's id for it (`nebcr` for a
+ * crossroads, see [FortressPieces]). Saved before pieces were told apart: `crossroads`.
+ */
 data class Piece(val kind: String, val box: Box)
 
 /** Where a waypoint to a [type] with this [box] goes. */

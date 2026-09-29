@@ -49,7 +49,7 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
         y += ROW + GAP * 3
 
         onOff(left, y, half, "Spawn boxes: map", Config.spawnBoxesOnMap,
-            "The boxes mobs spawn in, on the world map: fortresses (with their crossroads), ocean monuments, pillager outposts and witch huts."
+            "The boxes mobs spawn in, on the world map: fortresses (with each of their pieces), ocean monuments, pillager outposts and witch huts."
         ) { Config.spawnBoxesOnMap = it }
         onOff(left + half + GAP, y, WIDTH - half - GAP, "World", Config.spawnBoxesInWorld,
             "The same boxes drawn in the world around you, like MiniHUD's. A key for this can be set in Controls."

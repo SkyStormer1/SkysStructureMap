@@ -25,7 +25,7 @@ object Outlines {
         try {
             val dimension = mapProcessor.mapWorld?.currentDimension?.dimId?.identifier()?.toString() ?: return
             // Every structure's box when outlines are on (or just this one's); spawn boxes, a
-            // fortress's crossroads included, whenever those are on.
+            // fortress's pieces included, whenever those are on.
             val markers = Markers.visibleIn(dimension).filter {
                 Config.outlines || it.outlined || (Config.spawnBoxesOnMap && SpawnBoxes.hasSpawns(it.type))
             }
