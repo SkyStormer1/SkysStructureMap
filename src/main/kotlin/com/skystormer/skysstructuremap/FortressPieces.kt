@@ -33,7 +33,7 @@ import java.util.IdentityHashMap
  */
 object FortressPieces {
 
-    const val CROSSROADS = "nebcr"
+    private const val CROSSROADS = "nebcr"
 
     /** How much of a piece's layout must match, weighted (air counts half: it is everywhere in the nether). */
     private const val MIN_FIT = 0.85
@@ -253,6 +253,6 @@ object FortressPieces {
      * there: the game places a fortress anywhere with its box inside y 48..70 if it fits with room
      * to spare, and at 48 otherwise, so a top at 70 or above can only mean a bottom at 48.
      */
-    private const val LOWEST = 48
+    const val LOWEST = 48
     private const val ALWAYS_LOWEST_FROM = 70
 }

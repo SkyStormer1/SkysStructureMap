@@ -206,7 +206,7 @@ object Tracker {
             Specs.of(detection.type).reach == null -> box
             // A fortress's bottom is worked out, not seen: the new one replaces any older guess.
             detection.type == StructureType.FORTRESS ->
-                stored.box.union(box).let { if (box.minY == FORTRESS_BOTTOM) it.copy(minY = FORTRESS_BOTTOM) else it }
+                stored.box.union(box).let { if (box.minY == FortressPieces.LOWEST) it.copy(minY = FortressPieces.LOWEST) else it }
             else -> stored.box.union(box)
         }.let { grown -> detection.piece?.let { around(detection.type, grown, it) } ?: grown }
         // Pieces stay once saved, so they are still there after the structure is torn down or out of
@@ -373,9 +373,6 @@ object Tracker {
 
     /** A group of this many blocks is worth a line in the log when nothing fits it. */
     private const val LOG_FROM = 100
-
-    /** The y a fortress's box starts at once its top says so (see [FortressPieces]). */
-    private const val FORTRESS_BOTTOM = 48
 
     /** Blocks this far above an outpost's base can only be its tower. */
     private const val OUTPOST_TOWER_FROM = 6

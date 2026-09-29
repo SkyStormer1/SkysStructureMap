@@ -25,7 +25,8 @@ copy of Minecraft:
   one of its houses, each found by its door or job block, so it still counts when the bell and the workstations have
   been taken. A farm never counts by itself: it only backs up a worn house, and only where both stand on a street
   as the game lays them.
-- **Nether fortresses** need a real bridge crossroads, railings and open walkway included; **desert temples** the
+- **Nether fortresses** need their pieces laid out as the game builds them: a bridge crossroads, or several rooms,
+  bridges and corridors; **desert temples** the
   terracotta cross over their hidden chamber; **jungle temples** their lever wall and trap; **witch huts** their exact
   size and fittings.
 - **Strongholds, trial chambers and end gateways** go by blocks no player can place in survival: end portal frames,
@@ -40,8 +41,8 @@ copy of Minecraft:
 
 - **Spawn boxes**, like MiniHUD's but without the seed: the boxes that structures with mobs of their own spawn
   them in, drawn in the world around you and on the world map.
-  - **Nether fortresses:** the whole fortress box, and each bridge crossroads (the pieces wither skeletons and
-    blazes spawn in), both exact.
+  - **Nether fortresses:** the whole fortress box, and the box of every piece you have seen (each room, crossroads,
+    bridge and corridor: where wither skeletons and blazes spawn), both exact.
   - **Ocean monuments, pillager outposts, witch huts:** their exact boxes.
   - Kept once found, so they stay after you tear the structure down.
   - Turn them off on the map or in the world under Set, or bind a key in Controls to show and hide them in the world.
