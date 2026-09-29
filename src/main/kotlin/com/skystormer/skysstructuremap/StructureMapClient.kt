@@ -36,7 +36,10 @@ object StructureMapClient : ClientModInitializer {
         KeyMappingHelper.registerKeyMapping(spawnBoxesKey)
         watchWorlds()
         watchChat()
-        ClientChunkEvents.CHUNK_LOAD.register { level, chunk -> ChunkScanner.scan(level, chunk) }
+        ClientChunkEvents.CHUNK_LOAD.register { level, chunk ->
+            ChunkScanner.scan(level, chunk)
+            BobbyCoverage.chunkLoaded(level.dimension().identifier().toString(), chunk.pos.x, chunk.pos.z)
+        }
         addLegendToTheMap()
         ClientTickEvents.END_CLIENT_TICK.register { client -> tick(client) }
     }

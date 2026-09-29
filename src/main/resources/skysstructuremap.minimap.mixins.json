@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "package": "com.skystormer.skysstructuremap.mixin.minimap",
+  "compatibilityLevel": "JAVA_${java_version}",
+  "client": [
+    "MinimapFBORendererMixin",
+    "SupportXaeroWorldmapMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

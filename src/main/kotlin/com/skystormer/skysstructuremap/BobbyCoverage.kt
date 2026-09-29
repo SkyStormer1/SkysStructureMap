@@ -19,14 +19,17 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * A debug layer on Xaero's world map showing which chunks the Bobby mod has saved of this server:
- * those it has are tinted, so a part of your map without the tint is somewhere a Bobby scan
- * ([BobbyScan]) cannot look. Pointing at a chunk says when Bobby saved it.
+ * A debug layer on Xaero's world map and minimap showing which chunks the Bobby mod has saved of
+ * this server: those it has are tinted, so a part of your map without the tint is somewhere a
+ * Bobby scan ([BobbyScan]) cannot look. Pointing at a chunk on the world map says when Bobby saved it.
  *
  * Only offered when Bobby is installed, and even then nothing of Bobby's is called: only the
  * first 8 KB of each of its region files is read, the table saying which chunks are in it and
- * when each was saved. It is read again every few seconds while the map is open, only for files
- * that changed, so chunks Bobby saves as you play appear on it.
+ * when each was saved. It is read again every couple of seconds, only for files that changed.
+ *
+ * Bobby writes a chunk only once it unloads, when you have moved away, so the chunks loaded this
+ * session are tinted too: Bobby will have them. Without that the tint trailed a render distance
+ * behind you.
  */
 object BobbyCoverage {
 
@@ -69,16 +72,24 @@ object BobbyCoverage {
 
     private val tables = HashMap<Path, Table>()
 
+    /** The chunks loaded this session, by dimension: Bobby saves each when it unloads. Main thread only. */
+    private val loaded = HashMap<String, HashSet<Long>>()
+
     fun clear() {
         snapshot = Snapshot(emptyMap(), emptyMap())
         synchronized(tables) { tables.clear() }
+        loaded.clear()
         lastRead = 0
     }
 
-    /** Each tick: reads Bobby's tables again every few seconds while the world map is open. Main thread. */
+    /** A chunk the server sent. Main thread. */
+    fun chunkLoaded(dimension: String, chunkX: Int, chunkZ: Int) {
+        if (available) loaded.getOrPut(dimension) { HashSet() }.add(key(chunkX, chunkZ))
+    }
+
+    /** Each tick: reads Bobby's tables again every couple of seconds. Main thread. */
     fun tick(minecraft: Minecraft) {
         if (!shown || reading) return
-        if (minecraft.gui.screen()?.javaClass?.name != "xaero.map.gui.GuiMap") return
         val now = System.currentTimeMillis()
         if (now - lastRead < REFRESH_MILLIS) return
         lastRead = now
@@ -87,10 +98,11 @@ object BobbyCoverage {
             snapshot = Snapshot(emptyMap(), emptyMap())
             return
         }
+        val session = loaded.mapValues { it.value.toLongArray() }
         reading = true
         Thread({
             try {
-                snapshot = read(found)
+                snapshot = read(found, session)
             } catch (e: Exception) {
                 Log.warn("Could not read Bobby's saved chunks for the map: {}", e.toString())
             } finally {
@@ -103,12 +115,13 @@ object BobbyCoverage {
         }
     }
 
-    private fun read(found: BobbyCache.Found): Snapshot {
+    private fun read(found: BobbyCache.Found, session: Map<String, LongArray>): Snapshot {
         val times = HashMap<String, Map<Long, IntArray>>()
         val rectangles = HashMap<String, IntArray>()
         synchronized(tables) {
             val seen = HashSet<Path>()
-            for ((dimension, files) in found.regions) {
+            for (dimension in found.regions.keys + session.keys) {
+                val files = found.regions[dimension].orEmpty()
                 val regions = HashMap<Long, IntArray>()
                 for (file in files) {
                     seen.add(file)
@@ -117,6 +130,13 @@ object BobbyCoverage {
                     // More than one file for a region when Bobby told several worlds apart: the newest save wins.
                     val merged = regions.getOrPut(key(regionX, regionZ)) { IntArray(CHUNKS) }
                     for (i in 0 until CHUNKS) if (table.times[i] > merged[i]) merged[i] = table.times[i]
+                }
+                for (chunk in session[dimension] ?: LongArray(0)) {
+                    val chunkX = (chunk shr 32).toInt()
+                    val chunkZ = chunk.toInt()
+                    val merged = regions.getOrPut(key(chunkX shr 5, chunkZ shr 5)) { IntArray(CHUNKS) }
+                    val i = (chunkX and 31) + (chunkZ and 31) * 32
+                    if (merged[i] == 0) merged[i] = LOADED
                 }
                 times[dimension] = regions
                 rectangles[dimension] = rectanglesOf(regions)
@@ -182,10 +202,56 @@ object BobbyCoverage {
 
     /** Draws the tint on Xaero's world map, under the structures; called from its drawing hook. */
     fun drawWorldMap(dimension: String, buffer: VertexConsumer, matrix: Matrix4f, originX: Int, originZ: Int) {
-        if (!shown) return
+        if (shown) draw(dimension, buffer, matrix, originX, originZ, Int.MAX_VALUE)
+    }
+
+    private var minimapFailed = false
+
+    /** Set when the minimap's world-map path drew this frame, so its other path does not draw again. */
+    private var drawnFromWorldMap = false
+
+    /**
+     * Draws the tint on Xaero's minimap, from either of its two ways of drawing (see the minimap
+     * mixins); [fromWorldMap] says which. Only what is within [MINIMAP_REACH] of the middle.
+     */
+    @JvmStatic
+    fun drawMinimap(dimension: String?, matrix: Matrix4f, originX: Int, originZ: Int, buffer: VertexConsumer, fromWorldMap: Boolean) {
+        if (fromWorldMap) drawnFromWorldMap = true
+        if (!shown || dimension == null) return
+        try {
+            draw(dimension, buffer, matrix, originX, originZ, MINIMAP_REACH)
+        } catch (e: Throwable) {
+            if (!minimapFailed) {
+                minimapFailed = true
+                Log.error("Could not draw Bobby's saved chunks on the minimap (logged once)", e)
+            }
+        }
+    }
+
+    /**
+     * Whether the minimap's own way of drawing (cave mode) should draw the tint this frame: not when
+     * the world-map way already did. Asked first so the buffer is only taken when it is needed.
+     */
+    @JvmStatic
+    fun minimapStillToDraw(): Boolean {
+        val drawn = drawnFromWorldMap
+        drawnFromWorldMap = false
+        return shown && !drawn
+    }
+
+    /** The rectangles within [reach] blocks of the origin (on each axis), tinted. */
+    private fun draw(dimension: String, buffer: VertexConsumer, matrix: Matrix4f, originX: Int, originZ: Int, reach: Int) {
         val rectangles = snapshot.rectangles[dimension] ?: return
         var i = 0
         while (i < rectangles.size) {
+            if (reach != Int.MAX_VALUE) {
+                val left = rectangles[i] * 16 - originX
+                val top = rectangles[i + 1] * 16 - originZ
+                if (left > reach || top > reach || left + rectangles[i + 2] * 16 < -reach || top + rectangles[i + 3] * 16 < -reach) {
+                    i += 4
+                    continue
+                }
+            }
             val x1 = (rectangles[i] * 16 - originX).toFloat()
             val z1 = (rectangles[i + 1] * 16 - originZ).toFloat()
             val x2 = x1 + rectangles[i + 2] * 16
@@ -206,6 +272,7 @@ object BobbyCoverage {
         val time = regions[key(chunkX shr 5, chunkZ shr 5)]?.get((chunkX and 31) + (chunkZ and 31) * 32) ?: 0
         return when {
             time == 0 -> "Bobby: chunk $chunkX, $chunkZ not saved"
+            time == LOADED -> "Bobby: chunk $chunkX, $chunkZ loaded now; Bobby saves it when you move away"
             time == 1 -> "Bobby: chunk $chunkX, $chunkZ saved (no date)"
             else -> "Bobby: chunk $chunkX, $chunkZ saved ${DATE.format(Instant.ofEpochSecond(time.toLong()))}"
         }
@@ -266,7 +333,13 @@ object BobbyCoverage {
     private const val BLUE = (COLOUR and 0xFF) / 255f
     private const val ALPHA = 0.28f
 
-    private const val REFRESH_MILLIS = 5000L
+    /** In the tables, a chunk loaded this session that is not in Bobby's files yet. */
+    private const val LOADED = -1
+
+    /** How far out from the middle of the minimap the tint is drawn, in blocks: past any minimap's edge. */
+    private const val MINIMAP_REACH = 4096
+
+    private const val REFRESH_MILLIS = 2000L
     private const val SECTOR = 4096
     private const val HEADER = 2 * SECTOR
     private const val CHUNKS = 1024

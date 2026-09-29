@@ -30,7 +30,8 @@
     ]
   },
   "mixins": [
-    "skysstructuremap.mixins.json"
+    "skysstructuremap.mixins.json",
+    "skysstructuremap.minimap.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=${loader_version}",
