@@ -82,6 +82,11 @@ object StructureMapClient : ClientModInitializer {
                                 1
                             })
                         })
+                    // TEMPORARY: the offline fortress piece labels, drawn for checking (see DebugPieces).
+                    .then(ClientCommands.literal("debug").then(ClientCommands.literal("pieces").executes {
+                        DebugPieces.toggle()
+                        1
+                    }))
                     .then(ClientCommands.argument("code", StringArgumentType.word()).executes { context ->
                         StructureShare.accept(StringArgumentType.getString(context, "code"))
                         1
@@ -108,6 +113,7 @@ object StructureMapClient : ClientModInitializer {
         StructureShare.tick()
         SpawnBoxes.tick(client)
         BobbyCoverage.tick(client)
+        DebugPieces.tick(client)
         while (spawnBoxesKey.consumeClick()) {
             Config.spawnBoxesInWorld = !Config.spawnBoxesInWorld
             Config.save()
