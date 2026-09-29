@@ -55,6 +55,20 @@ object FortressPieces {
     /** A piece's layout in its own frame: size, and a category per cell (0 = no opinion). */
     private class Layout(val id: String, val sx: Int, val sy: Int, val sz: Int, val cells: ByteArray) {
         fun at(x: Int, y: Int, z: Int): Int = cells[(x * sy + y) * sz + z].toInt()
+
+        /**
+         * The lowest y above the piece's floor (a bridge's deck, a room's floor): the first run of
+         * rows that are nearly all brick over the piece's footprint, and past it. 0 when there is none.
+         */
+        val wallsFrom: Int by lazy {
+            var footprint = 0
+            for (x in 0 until sx) for (z in 0 until sz) if ((0 until sy).any { at(x, it, z) != 0 }) footprint++
+            fun solid(y: Int) = (0 until sx).sumOf { x -> (0 until sz).count { z -> at(x, y, z) in 1..3 } } >= 0.8 * footprint
+            var y = 0
+            while (y < sy && !solid(y)) y++
+            while (y < sy && solid(y)) y++
+            if (y < sy) y else 0
+        }
     }
 
     /** A layout placed facing one way: its box's size in the world, and its cells as world offsets. */
@@ -62,6 +76,20 @@ object FortressPieces {
         val total: Float = categories.fold(0f) { sum, c -> sum + weight(c) }
         /** The first nether brick cell, which every placement is tried from. */
         val anchor: Int = categories.indexOfFirst { it == 1 }
+
+        /** Its walls and railings above the floor (cells, as indices), and the air they enclose ([worn]). */
+        val walls: IntArray
+        val walkway: IntArray
+
+        init {
+            val from = layout.wallsFrom
+            walls = offsets.indices.filter { uy(offsets[it]) >= from && categories[it] in 1..3 }.toIntArray()
+            walkway = offsets.indices.filter { uy(offsets[it]) >= from && categories[it] == AIR }.toIntArray()
+        }
+
+        /** A few of its wall cells spread along it, to try a worn placement from (any may be dug out). */
+        val wallAnchors: IntArray = if (walls.isEmpty()) IntArray(0)
+        else IntArray(minOf(WORN_ANCHORS, walls.size)) { walls[it * walls.size / minOf(WORN_ANCHORS, walls.size)] }
     }
 
     private val layouts: List<Layout> by lazy {
@@ -72,6 +100,19 @@ object FortressPieces {
             Layout(p[0], p[1].toInt(), p[2].toInt(), p[3].toInt(), ByteArray(p[4].length) { (p[4][it] - '0').toByte() })
         }
     }
+
+    /**
+     * How pieces join, learned from the game's own fortresses (`fortress_joins.txt`): piece a, piece
+     * b, and b's box corner less a's. Facings are left out: a crossroads looks the same every way.
+     */
+    private val joins: Set<String> by lazy {
+        val stream = FortressPieces::class.java.getResourceAsStream("/assets/skysstructuremap/fortress_joins.txt")
+            ?: return@lazy emptySet<String>().also { Log.warn("The fortress piece joins are missing from the jar") }
+        stream.bufferedReader().readLines().filter { it.isNotBlank() && !it.startsWith("#") }.toHashSet()
+    }
+
+    /** The two corridor turns are mirror images of each other: one in the joins. */
+    private fun joinId(id: String) = if (id == "nescrt") "nesclt" else id
 
     /**
      * Each layout the four ways the game faces a piece: south as it is, north mirrored along z,
@@ -187,6 +228,9 @@ object FortressPieces {
         }
         val taken = BitSet(area.cells.size)
         val found = ArrayList<Piece>()
+        val placed = ArrayList<Candidate>()
+        // The highest taken cell of each column: bricks below one are its supports, not loose.
+        val top = IntArray(area.sx * area.sz) { -1 }
         fun free(c: Candidate): Boolean {
             for (x in c.x until c.x + c.placed.wx) for (y in c.y until c.y + c.placed.wy) {
                 val from = area.index(x, y, c.z)
@@ -200,26 +244,111 @@ object FortressPieces {
                 val from = area.index(x, y, c.z)
                 taken.set(from, from + c.placed.wz)
             }
+            for (x in c.x until c.x + c.placed.wx) for (z in c.z until c.z + c.placed.wz) {
+                val column = x * area.sz + z
+                top[column] = maxOf(top[column], c.y + c.placed.wy - 1)
+            }
+            placed.add(c)
             found.add(Piece(c.placed.layout.id, Box(
                 area.x0 + c.x, area.y0 + c.y, area.z0 + c.z,
                 area.x0 + c.x + c.placed.wx - 1, area.y0 + c.y + c.placed.wy - 1, area.z0 + c.z + c.placed.wz - 1,
             )))
         }
+        fun endFillers() {
+            for (c in endFillers) {
+                if (!free(c)) continue
+                val (bx, by, bz) = behind(c)
+                if (bx !in 0 until area.sx || bz !in 0 until area.sz || by + 2 >= area.sy) continue
+                // A piece right behind its face, open into it: the passage over that deck or floor runs on.
+                if (!taken.get(area.index(bx, by, bz)) || area[bx, by + 2, bz] != AIR) continue
+                take(c)
+            }
+        }
         for (c in candidates.sortedWith(compareBy<Candidate> { Math.round(it.misses) }.thenByDescending { it.evidence })) {
             if (free(c)) take(c)
         }
-        for (c in endFillers) {
-            if (!free(c)) continue
-            val (bx, by, bz) = behind(c)
-            if (bx !in 0 until area.sx || bz !in 0 until area.sz || by + 2 >= area.sy) continue
-            // A piece right behind its face, open into it: the passage over that deck or floor runs on.
-            if (!taken.get(area.index(bx, by, bz)) || area[bx, by + 2, bz] != AIR) continue
-            take(c)
-        }
+        endFillers()
+        if (placed.isNotEmpty()) worn(area, placed, taken, top, ::free, ::take, ::endFillers)
         return found
     }
 
+    /**
+     * Pieces players have dug into: a bridge whose supports or deck were mined away, a room with
+     * holes in it. Once intact pieces show a fortress is there, a piece that fits less well is
+     * taken where only a piece can explain what is left: most of its walls and railings above the
+     * floor still stand ([WORN_WALLS]) around its walkway's air ([WORN_WALKWAY]), at least half of
+     * those walls are bricks no piece found so far accounts for, and it joins a found piece just
+     * as the game joins them ([joins]). Tried the most standing wall first, so a crossroads with a
+     * mined arm is not taken for a bridge along its other arm; after each, end fillers are looked
+     * for again. On a fortress with nothing dug out, it finds nothing more.
+     */
+    private fun worn(
+        area: Area, placed: List<Candidate>, taken: BitSet, top: IntArray,
+        free: (Candidate) -> Boolean, take: (Candidate) -> Unit, endFillers: () -> Unit,
+    ) {
+        fun loose(x: Int, y: Int, z: Int) = area[x, y, z] in 1..3 && y > top[x * area.sz + z]
+        // The loose bricks, fences and stairs, by category: where a worn piece's walls can be.
+        val looseAt = Array(4) { ArrayList<Int>() }
+        for (x in 0 until area.sx) for (y in 0 until area.sy) for (z in 0 until area.sz) {
+            if (loose(x, y, z)) looseAt[area[x, y, z]].add(pack(x, y, z))
+        }
+        val tried = HashSet<Long>()
+        val worn = ArrayList<Pair<Candidate, Int>>()
+        for ((index, p) in placements.withIndex()) {
+            if (p.walls.isEmpty() || p.walkway.isEmpty() || p.layout.id == END_FILLER) continue
+            val allowedWalls = ((1 - WORN_WALLS) * p.walls.size + 1e-9).toInt()
+            val allowedAir = ((1 - WORN_WALKWAY) * p.walkway.size + 1e-9).toInt()
+            for (a in p.wallAnchors) {
+                val ax = ux(p.offsets[a]); val ay = uy(p.offsets[a]); val az = uz(p.offsets[a])
+                for (b in looseAt[p.categories[a]]) {
+                    val ox = ux(b) - ax; val oy = uy(b) - ay; val oz = uz(b) - az
+                    if (ox < 0 || oy < 0 || oz < 0 || ox + p.wx > area.sx || oy + p.wy > area.sy || oz + p.wz > area.sz) continue
+                    if (!tried.add((index.toLong() shl 48) or (ox.toLong() shl 32) or (oy.toLong() shl 16) or oz.toLong())) continue
+                    var wallMisses = 0
+                    for (i in p.walls) {
+                        val o = p.offsets[i]
+                        if (area[ox + ux(o), oy + uy(o), oz + uz(o)] != p.categories[i] && ++wallMisses > allowedWalls) break
+                    }
+                    if (wallMisses > allowedWalls) continue
+                    var airMisses = 0
+                    for (i in p.walkway) {
+                        val o = p.offsets[i]
+                        if (area[ox + ux(o), oy + uy(o), oz + uz(o)] != AIR && ++airMisses > allowedAir) break
+                    }
+                    if (airMisses > allowedAir) continue
+                    val c = Candidate(p, ox, oy, oz, 0f)
+                    if (free(c)) worn.add(c to p.walls.size - wallMisses)
+                }
+            }
+        }
+        worn.sortByDescending { it.second }
+        do {
+            var added = false
+            for ((c, _) in worn) {
+                if (!free(c)) continue
+                val standing = c.placed.walls.count { i ->
+                    val o = c.placed.offsets[i]
+                    loose(c.x + ux(o), c.y + uy(o), c.z + uz(o))
+                }
+                if (standing < 0.5 * c.placed.walls.size) continue
+                val id = joinId(c.placed.layout.id)
+                if (placed.none { joinId(it.placed.layout.id) + " " + id + " " + (c.x - it.x) + " " + (c.y - it.y) + " " + (c.z - it.z) in joins }) continue
+                take(c)
+                endFillers()
+                added = true
+                break
+            }
+        } while (added)
+    }
+
     private const val END_FILLER = "nebef"
+
+    /** How much of a worn piece's walls above its floor must stand, and of its walkway be open ([worn]). */
+    private const val WORN_WALLS = 0.6
+    private const val WORN_WALKWAY = 0.8
+
+    /** How many of a piece's wall cells a worn placement is tried from. */
+    private const val WORN_ANCHORS = 12
 
     /** The block just behind the middle of an end filler's first row (its local 2, 3, -1). */
     private fun behind(c: Candidate): Triple<Int, Int, Int> {

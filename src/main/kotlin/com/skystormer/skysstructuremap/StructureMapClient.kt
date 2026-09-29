@@ -51,7 +51,6 @@ object StructureMapClient : ClientModInitializer {
             client.execute {
                 BobbyScan.stop(quietly = true)
                 BobbyCoverage.clear()
-                FortressLabelling.clear()
                 StructureStore.close()
                 StructureShare.clear()
                 Tracker.clear()

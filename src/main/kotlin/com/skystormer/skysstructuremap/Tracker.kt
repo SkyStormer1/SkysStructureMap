@@ -25,6 +25,7 @@ object Tracker {
 
     fun clear() {
         groups.clear()
+        FortressLabelling.clear()
         dimension = null
     }
 
