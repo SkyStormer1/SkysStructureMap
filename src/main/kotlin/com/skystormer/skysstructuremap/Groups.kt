@@ -7,6 +7,17 @@ import java.util.EnumMap
  * close to a group of the same kind join it, and two groups a block joins become one. [Tracker]
  * keeps one of these for the chunks around you, and a scan of Bobby's cache ([BobbyScan]) one of
  * its own for each dimension it reads.
+ *
+ * To monitor: nothing stops a group growing far past any one structure. Where players have built
+ * all over (paths, doors, barrels, workstations), village blocks chain from one build to the next,
+ * and a group becomes one [Detection] however many villages it holds, tried from only a few
+ * anchors (`TemplateFit.fitAnchored`). A scan of Bobby's cache for a survival server (2026-09-29)
+ * joined the whole area around spawn, 1440 × 1360 blocks from -1106, -140 to 338, 1223, into one
+ * village group and found no village in it, missing a real one at -975, 303 that live detection,
+ * which only sees the chunks around you, had found. If it keeps happening, the fix in mind is to
+ * look at a group much bigger than its kind can be ([Specs.spanOf]) in pieces of that size, one
+ * structure to a piece. Not done yet, by choice: watch for groups like it first ("village #… at
+ * Box(…)" lines far wider than a village in the log).
  */
 class Groups(private var nextId: Int = 1) {
 
