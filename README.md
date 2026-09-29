@@ -42,7 +42,9 @@ copy of Minecraft:
 - **Spawn boxes**, like MiniHUD's but without the seed: the boxes that structures with mobs of their own spawn
   them in, drawn in the world around you and on the world map.
   - **Nether fortresses:** the whole fortress box, and the box of every piece you have seen (each room, crossroads,
-    bridge and corridor: where wither skeletons and blazes spawn), both exact.
+    bridge and corridor: where wither skeletons and blazes spawn), both exact. Pieces players have dug into still
+    get their box, as long as most of their walls stand and they join the rest of the fortress as the game joins
+    pieces.
   - **Ocean monuments, pillager outposts, witch huts:** their exact boxes.
   - Kept once found, so they stay after you tear the structure down.
   - Turn them off on the map or in the world under Set, or bind a key in Controls to show and hide them in the world.
