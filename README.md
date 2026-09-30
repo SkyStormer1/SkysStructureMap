@@ -19,7 +19,8 @@ come within 32 blocks of a structure, it's saved as discovered and shows up on y
 Each kind of structure is checked against the way the game builds it, using the designs and code in your own
 copy of Minecraft:
 
-- **Ocean monuments** are always the same building on the same grid, so their exact box is known.
+- **Ocean monuments** are always the same building on the same grid, so their exact box is known, and their
+  prismarine has to lay out that building: sea lanterns and prismarine in a player's build by the sea do not.
 - **Villages, pillager outposts, shipwrecks, trail ruins, end cities, bastion remnants, ancient cities and woodland
   mansions** are matched against the game's own designs, block by block. A village is found by its town centre or by
   one of its houses, each found by its door or job block, so it still counts when the bell and the workstations have

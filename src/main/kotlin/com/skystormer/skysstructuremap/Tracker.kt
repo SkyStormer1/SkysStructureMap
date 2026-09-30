@@ -164,6 +164,7 @@ object Tracker {
             detection.proved = when (detection.type) {
                 StructureType.DESERT_TEMPLE -> TemplePieces.desertCross(detection, level)
                 StructureType.JUNGLE_TEMPLE -> TemplePieces.jungleTrap(detection, level)
+                StructureType.MONUMENT -> MonumentLayout.matches(detection.box!!, level)
                 else -> true
             }
             if (!detection.proved) detection.box = null
