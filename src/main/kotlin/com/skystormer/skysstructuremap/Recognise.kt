@@ -23,8 +23,8 @@ object Recognise {
      * from part of one picked the wrong chunk line in testing. By the time you are inside the box
      * the whole building has loaded, so this never holds up a discovery. Prismarine spread wider
      * than any monument (a player's build beside one) is given the monument's place that holds the
-     * most of it ([blocksIn] counts the blocks seen in a box), and a monument must hold
-     * [MONUMENT_BLOCKS] of them: where no monument's place lines up with the blocks, it is a build.
+     * most of it ([blocksIn] counts the blocks seen in a box). Whether a monument really stands
+     * there is then [MonumentLayout]'s to say.
      */
     fun monumentBox(seen: Box, blocksIn: (Box) -> Int): Box? {
         var xs = monumentEdges(seen.minX, seen.maxX)
@@ -32,8 +32,8 @@ object Recognise {
         if (xs.size > 1 || zs.size > 1) return null
         if (xs.isEmpty()) xs = edgesAcross(seen.minX, seen.maxX)
         if (zs.isEmpty()) zs = edgesAcross(seen.minZ, seen.maxZ)
-        val best = xs.flatMap { x -> zs.map { z -> monumentAt(x, z) } }.maxByOrNull(blocksIn) ?: return null
-        return best.takeIf { blocksIn(it) >= MONUMENT_BLOCKS }
+        val places = xs.flatMap { x -> zs.map { z -> monumentAt(x, z) } }
+        return places.singleOrNull() ?: places.maxByOrNull(blocksIn)
     }
 
     private fun monumentAt(minX: Int, minZ: Int) =

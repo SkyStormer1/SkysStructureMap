@@ -43,12 +43,6 @@ class RecogniseTest {
     }
 
     @Test
-    fun blocksNoMonumentLinesUpWithAreABuild() {
-        // 52 × 48 blocks of prismarine by the sea: no monument's place holds them, and they are few.
-        assertNull(Recognise.monumentBox(Box(0, 40, 0, 51, 60, 47)) { 300 })
-    }
-
-    @Test
     fun aBuildBesideAMonumentLeavesTheMonumentsBox() {
         val monument = Box(1155, 39, 835, 1212, 61, 892)
         val box = Recognise.monumentBox(Box(1155, 40, 835, 1300, 60, 892)) { if (it == monument) 12000 else 300 }
