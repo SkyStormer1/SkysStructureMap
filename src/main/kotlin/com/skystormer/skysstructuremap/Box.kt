@@ -33,6 +33,8 @@ data class Box(val minX: Int, val minY: Int, val minZ: Int, val maxX: Int, val m
             minY <= other.maxY && maxY >= other.minY &&
             minZ <= other.maxZ && maxZ >= other.minZ
 
+    fun contains(x: Int, y: Int, z: Int): Boolean = x in minX..maxX && y in minY..maxY && z in minZ..maxZ
+
     /** Whether an entity's hitbox reaches into any of these blocks. */
     fun touches(hitbox: AABB): Boolean =
         hitbox.minX < maxX + 1 && hitbox.maxX > minX &&

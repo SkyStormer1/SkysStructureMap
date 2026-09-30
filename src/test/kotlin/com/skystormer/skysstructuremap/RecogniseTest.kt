@@ -10,6 +10,9 @@ class RecogniseTest {
     /** A monument started in the chunk beginning at block [chunkStart] spans chunkStart - 29 .. chunkStart + 28. */
     private fun realEdge(chunkStart: Int) = chunkStart - 29
 
+    /** A monument's worth of blocks in any box. */
+    private val full = { _: Box -> 6000 }
+
     @Test
     fun wholeMonumentSeenGivesItsExactEdge() {
         for (start in listOf(-320, -16, 0, 16, 1024)) {
@@ -23,7 +26,7 @@ class RecogniseTest {
         // be one chunk further south, which is what the old best-guess picked.
         val edges = Recognise.monumentEdges(163, 204)
         assertTrue(edges.size > 1 && realEdge(176) in edges)
-        assertNull(Recognise.monumentBox(Box(771, 40, 163, 828, 60, 204)))
+        assertNull(Recognise.monumentBox(Box(771, 40, 163, 828, 60, 204), full))
     }
 
     @Test
@@ -33,10 +36,23 @@ class RecogniseTest {
 
     @Test
     fun monumentBoxIsTheFixedSize() {
-        val box = Recognise.monumentBox(Box(1155, 40, 835, 1212, 60, 892))
+        val box = Recognise.monumentBox(Box(1155, 40, 835, 1212, 60, 892), full)
         assertEquals(Box(1155, 39, 835, 1212, 61, 892), box)
         assertEquals(58, box!!.sizeX)
         assertEquals(23, box.sizeY)
+    }
+
+    @Test
+    fun blocksNoMonumentLinesUpWithAreABuild() {
+        // 52 × 48 blocks of prismarine by the sea: no monument's place holds them, and they are few.
+        assertNull(Recognise.monumentBox(Box(0, 40, 0, 51, 60, 47)) { 300 })
+    }
+
+    @Test
+    fun aBuildBesideAMonumentLeavesTheMonumentsBox() {
+        val monument = Box(1155, 39, 835, 1212, 61, 892)
+        val box = Recognise.monumentBox(Box(1155, 40, 835, 1300, 60, 892)) { if (it == monument) 12000 else 300 }
+        assertEquals(monument, box)
     }
 
     @Test

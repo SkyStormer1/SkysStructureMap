@@ -6,8 +6,11 @@ package com.skystormer.skysstructuremap
  */
 object Recognise {
 
-    /** Signature blocks needed before a cluster counts, so a few placed by a player do not. */
-    const val MONUMENT_BLOCKS = 60
+    /**
+     * Signature blocks needed before a cluster counts, so a few placed by a player do not. A
+     * monument is built of well over 5000 prismarine blocks; a player's build near the sea has a few dozen.
+     */
+    const val MONUMENT_BLOCKS = 500
     const val FORTRESS_BLOCKS = 40
 
     /** The box for [detection] if it is recognised now, else null. */
@@ -19,16 +22,28 @@ object Recognise {
      * once only one chunk line fits what has been seen. Until then it is not recognised: guessing
      * from part of one picked the wrong chunk line in testing. By the time you are inside the box
      * the whole building has loaded, so this never holds up a discovery. Prismarine spread wider
-     * than any monument (a player's build beside one) leaves just the blocks' own extent.
+     * than any monument (a player's build beside one) is given the monument's place that holds the
+     * most of it ([blocksIn] counts the blocks seen in a box), and a monument must hold
+     * [MONUMENT_BLOCKS] of them: where no monument's place lines up with the blocks, it is a build.
      */
-    fun monumentBox(seen: Box): Box? {
-        val xs = monumentEdges(seen.minX, seen.maxX)
-        val zs = monumentEdges(seen.minZ, seen.maxZ)
-        if (xs.isEmpty() || zs.isEmpty()) return seen
+    fun monumentBox(seen: Box, blocksIn: (Box) -> Int): Box? {
+        var xs = monumentEdges(seen.minX, seen.maxX)
+        var zs = monumentEdges(seen.minZ, seen.maxZ)
         if (xs.size > 1 || zs.size > 1) return null
-        val minX = xs[0]
-        val minZ = zs[0]
-        return Box(minX, MONUMENT_MIN_Y, minZ, minX + MONUMENT_SIZE - 1, MONUMENT_MAX_Y, minZ + MONUMENT_SIZE - 1)
+        if (xs.isEmpty()) xs = edgesAcross(seen.minX, seen.maxX)
+        if (zs.isEmpty()) zs = edgesAcross(seen.minZ, seen.maxZ)
+        val best = xs.flatMap { x -> zs.map { z -> monumentAt(x, z) } }.maxByOrNull(blocksIn) ?: return null
+        return best.takeIf { blocksIn(it) >= MONUMENT_BLOCKS }
+    }
+
+    private fun monumentAt(minX: Int, minZ: Int) =
+        Box(minX, MONUMENT_MIN_Y, minZ, minX + MONUMENT_SIZE - 1, MONUMENT_MAX_Y, minZ + MONUMENT_SIZE - 1)
+
+    /** Every west (or north) edge a monument can have that takes in some of [min] to [max]. */
+    private fun edgesAcross(min: Int, max: Int): List<Int> {
+        val lowest = Math.floorDiv(min - 28 + 15, 16) * 16
+        val highest = Math.floorDiv(max + 29, 16) * 16
+        return (lowest..highest step 16).map { it - MONUMENT_OFFSET }
     }
 
     /**

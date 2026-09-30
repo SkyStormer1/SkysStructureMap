@@ -72,9 +72,13 @@ object Specs {
     private fun boundsIf(detection: Detection, enough: Boolean): Box? = if (enough) detection.bounds else null
 
     private val MONUMENT = Spec(
-        setOf(Blocks.PRISMARINE, Blocks.PRISMARINE_BRICKS, Blocks.DARK_PRISMARINE, Blocks.SEA_LANTERN),
+        // Not sea lanterns: builds by the sea are lit with them, and a monument's prismarine is plenty.
+        setOf(Blocks.PRISMARINE, Blocks.PRISMARINE_BRICKS, Blocks.DARK_PRISMARINE),
         minY = Recognise.MONUMENT_MIN_Y, maxY = Recognise.MONUMENT_MAX_Y, merge = 24,
-        recognise = { d -> if (d.count >= Recognise.MONUMENT_BLOCKS) d.bounds?.let(Recognise::monumentBox) else null },
+        recognise = { d ->
+            if (d.count < Recognise.MONUMENT_BLOCKS) null
+            else d.bounds?.let { seen -> Recognise.monumentBox(seen) { box -> d.countIn(box) } }
+        },
         reach = null, waypointAtTop = true,
     )
 

@@ -57,6 +57,17 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
 
     val count: Int get() = positions.size
 
+    /** How many of its blocks are in [box]. */
+    fun countIn(box: Box): Int {
+        var n = 0
+        val iterator = positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            if (box.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key))) n++
+        }
+        return n
+    }
+
     /** How many of its blocks stand in a biome it can be in (see [Spec.biomeAsWhole]). */
     var inBiome = 0
     var biomeLogged = false
