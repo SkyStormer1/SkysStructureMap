@@ -55,7 +55,13 @@ copy of Minecraft:
   how many you've found.
   - Click a line to show or hide that kind.
   - Drag the header to move the legend, click the header to fold it away, and drag the bottom edge to show more
-    or fewer lines. It scrolls with the mouse wheel.
+    or fewer lines. It scrolls with the mouse wheel, or drag its scroll bar.
+  - Drag the right edge to widen it, and the bottom-right corner to make everything bigger (only when you drag
+    right and down together). `panelMaxScale` in `config/skysstructuremap.json` sets how big it may get (2 by
+    default). Nothing is ever pushed off screen.
+  - With [Sky's Map Exposer](https://github.com/SkyStormer1/SkysMapExposer) installed, drag one panel's header
+    up under the other's bottom edge and it docks there: the two move as one, share a width and a size, and the
+    lower one comes off again when dragged away. Neither mod needs the other.
   - **Box** draws every structure's outline, **Near** shows ones you've seen but not discovered yet, and **Set**
     opens the settings.
 - **Right-click an icon** to make a Xaero's Minimap waypoint, copy its coordinates, show or hide its outline, share

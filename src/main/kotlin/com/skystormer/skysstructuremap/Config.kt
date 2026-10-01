@@ -25,6 +25,14 @@ object Config {
 
     /** How many lines the legend shows before scrolling. Changed by dragging its bottom edge. */
     var legendRows = 6
+
+    /** The legend's size (1 = the game's own), the width added by dragging its right edge, and the panel it is docked under ("" for none). */
+    var legendScale = 1f
+    var legendExtra = 0
+    var legendUnder = ""
+
+    /** The biggest the map panels may be made, before the letters look too blocky. */
+    var panelMaxScale = 2f
     /** Off unless turned on in the legend: the icons are usually enough. */
     /** Everything this mod draws, off in one switch: icons, outlines and spawn boxes. */
     var show = true
@@ -85,6 +93,10 @@ object Config {
             legendRight = json.get("legendRight")?.asInt ?: legendRight
             legendTop = json.get("legendTop")?.asInt ?: legendTop
             legendRows = (json.get("legendRows")?.asInt ?: legendRows).coerceIn(1, 32)
+            legendScale = (json.get("legendScale")?.asFloat ?: legendScale).coerceIn(1f, 4f)
+            legendExtra = (json.get("legendExtra")?.asInt ?: legendExtra).coerceIn(0, 1000)
+            legendUnder = json.get("legendUnder")?.asString ?: legendUnder
+            panelMaxScale = (json.get("panelMaxScale")?.asFloat ?: panelMaxScale).coerceIn(1f, 4f)
             show = json.get("show")?.asBoolean ?: show
             hideCompleted = json.get("hideCompleted")?.asBoolean ?: hideCompleted
             outlines = json.get("outlines")?.asBoolean ?: outlines
@@ -110,6 +122,10 @@ object Config {
             json.addProperty("legendRight", legendRight)
             json.addProperty("legendTop", legendTop)
             json.addProperty("legendRows", legendRows)
+            json.addProperty("legendScale", legendScale)
+            json.addProperty("legendExtra", legendExtra)
+            json.addProperty("legendUnder", legendUnder)
+            json.addProperty("panelMaxScale", panelMaxScale)
             json.addProperty("show", show)
             json.addProperty("hideCompleted", hideCompleted)
             json.addProperty("outlines", outlines)
