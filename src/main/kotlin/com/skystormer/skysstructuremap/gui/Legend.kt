@@ -18,8 +18,8 @@ import java.lang.ref.WeakReference
  * that can exist in the dimension the map is showing, with its icon and how many you have
  * discovered. Clicking a line shows or hides that kind.
  *
- * The header's switches turn box outlines and not-yet-visited structures on and off and open the
- * settings; with more kinds than lines, the list scrolls with the wheel. It is as wide as its text
+ * The header's switches hide every kind at once (and bring back just those), turn box outlines and
+ * not-yet-visited structures on and off, and open the settings; with more kinds than lines, the list scrolls with the wheel. It is as wide as its text
  * needs, so nothing overlaps at any GUI scale. Moving, folding, docking under another panel, the
  * grips and the size are [DockPanel]'s.
  */
@@ -32,6 +32,7 @@ object Legend {
     private const val OFF = 0xFF9A9A9A.toInt()
 
     private const val TITLE = "Structures"
+    private const val HIDE = "Hide"
     private const val BOX = "Box"
     private const val NEAR = "Near"
     private const val SET = "Set"
@@ -67,6 +68,9 @@ object Legend {
 
         override fun savedLeft(width: Int) = screen.width - Config.legendRight - width
         override fun saveLeft(left: Int, width: Int) { Config.legendRight = screen.width - left - width }
+        override var savedWidth: Int
+            get() = Config.legendWidth
+            set(value) { Config.legendWidth = value }
         override var savedTop: Int
             get() = Config.legendTop
             set(value) { Config.legendTop = value }
@@ -106,7 +110,7 @@ object Legend {
 
         private fun switchWidth(label: String) = font().width(label) + 4
 
-        private fun switchesWidth() = switchWidth(BOX) + switchWidth(NEAR) + switchWidth(SET) + 6
+        private fun switchesWidth() = switchWidth(HIDE) + switchWidth(BOX) + switchWidth(NEAR) + switchWidth(SET) + 8
 
         /** Wide enough for the header and for every line, with its count. */
         override fun naturalWidth(): Int {
@@ -129,6 +133,7 @@ object Legend {
         private val setLeft get() = baseWidth - 2 - switchWidth(SET)
         private val nearLeft get() = setLeft - 2 - switchWidth(NEAR)
         private val boxLeft get() = nearLeft - 2 - switchWidth(BOX)
+        private val hideLeft get() = boxLeft - 2 - switchWidth(HIDE)
 
         private fun over(lx: Double, left: Int, label: String) = lx >= left && lx < left + switchWidth(label)
 
@@ -140,16 +145,20 @@ object Legend {
             val inside = lx in 0 until baseWidth
             val overHeader = inside && ly in 0 until ROW
             val mx = lx.toDouble()
+            val overHide = overHeader && over(mx, hideLeft, HIDE)
             val overBox = overHeader && over(mx, boxLeft, BOX)
             val overNear = overHeader && over(mx, nearLeft, NEAR)
             val overSet = overHeader && over(mx, setLeft, SET)
-            if (overHeader && lx < boxLeft - 1) graphics.fill(0, 0, boxLeft - 1, ROW, HOVER)
+            if (overHeader && lx < hideLeft - 1) graphics.fill(0, 0, hideLeft - 1, ROW, HOVER)
             graphics.text(font, if (open) "- $TITLE" else "+ $TITLE", 3, 2, 0xFFFFFFFF.toInt(), false)
+            // Lit while every kind here is hidden.
+            switch(graphics, HIDE, hideLeft, types.none { Config.isShown(it) }, overHide)
             switch(graphics, BOX, boxLeft, Config.outlines, overBox)
             switch(graphics, NEAR, nearLeft, Config.showUndiscovered, overNear)
             switch(graphics, SET, setLeft, false, overSet)
             if (idle) {
                 when {
+                    overHide -> tooltip(graphics, hideTip(types), mouseX, mouseY)
                     overBox -> tooltip(graphics, "Box outlines for every structure: ${onOff(Config.outlines)}", mouseX, mouseY)
                     overNear -> tooltip(graphics, "Structures seen nearby that you have not discovered yet, faded: ${onOff(Config.showUndiscovered)}", mouseX, mouseY)
                     overSet -> tooltip(graphics, "Settings: icon sizes, how close counts as discovering, sharing", mouseX, mouseY)
@@ -177,6 +186,15 @@ object Legend {
 
         }
 
+        private fun hideTip(types: List<StructureType>): String {
+            val remembered = types.count { it in Config.hiddenByHide }
+            return when {
+                types.any { Config.isShown(it) } -> "Hide every kind of structure showing here, and remember which, so clicking again brings back only those. Kinds you hid yourself stay hidden."
+                remembered > 0 -> "Bring back the $remembered kind${if (remembered == 1) "" else "s"} Hide hid here, and no others."
+                else -> "Show every kind of structure here."
+            }
+        }
+
         /**
          * A tooltip wrapped onto several lines, and never above the top of the screen: the game
          * puts tooltips a little above the mouse, which near the top edge ran them off screen.
@@ -199,6 +217,7 @@ object Legend {
                     over(lx, setLeft, SET) -> Minecraft.getInstance().gui.setScreen(SettingsScreen(screen))
                     over(lx, nearLeft, NEAR) -> { Config.showUndiscovered = !Config.showUndiscovered; Config.save() }
                     over(lx, boxLeft, BOX) -> { Config.outlines = !Config.outlines; Config.save() }
+                    over(lx, hideLeft, HIDE) -> Config.toggleHide(types)
                     // The title: a drag moves the legend, a click without one folds it (on release).
                     else -> return Click.MOVE
                 }

@@ -24,14 +24,20 @@ object Tracker {
     private var ticks = 0L
 
     fun clear() {
+        startOver()
+        dimension = null
+    }
+
+    /** Forgets every group, and everything kept about them by id elsewhere, which would otherwise pile up. */
+    private fun startOver() {
         groups.clear()
         FortressLabelling.clear()
-        dimension = null
+        Markers.outlinedNearby.clear()
     }
 
     fun addBlocks(type: StructureType, dimension: String, found: List<ChunkScanner.Found>) {
         if (dimension != this.dimension) {
-            groups.clear()
+            startOver()
             this.dimension = dimension
         }
         groups.add(type, dimension, found, keepsBlocks(type))
@@ -46,7 +52,7 @@ object Tracker {
         val here = level.dimension().identifier().toString()
         if (here != dimension) {
             if (detections.isNotEmpty()) Log.info("Changed dimension to {}; starting over on {} group(s)", here, detections.size)
-            groups.clear()
+            startOver()
             dimension = here
         }
         ticks++

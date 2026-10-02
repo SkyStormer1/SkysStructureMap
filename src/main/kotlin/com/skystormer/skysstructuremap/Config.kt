@@ -15,6 +15,9 @@ object Config {
 
     /** The kinds shown on the map; the legend's filter. */
     var shown: Set<StructureType> = StructureType.entries.toSet()
+
+    /** The kinds the legend's Hide switch hid, so pressing it again brings back only those. */
+    var hiddenByHide: Set<StructureType> = emptySet()
         private set
 
     var legendOpen = true
@@ -28,6 +31,8 @@ object Config {
 
     /** The legend's size (1 = the game's own), the width added by dragging its right edge, and the panel it is docked under ("" for none). */
     var legendScale = 1f
+    /** The legend's width when its place was saved, so it reads back to the same spot. */
+    var legendWidth = 0
     var legendExtra = 0
     var legendUnder = ""
 
@@ -61,10 +66,17 @@ object Config {
 
     /**
      * How close you must come to a structure, in blocks, for it to count as discovered: 0 means
-     * being inside its box. Only sideways distance counts, so flying over one or passing above a
-     * buried one is enough.
+     * being inside its box, [DISCOVER_ALL] anywhere in the chunks the server sends you. Only
+     * sideways distance counts, so flying over one or passing above a buried one is enough.
      */
     var discoverDistance = DEFAULT_DISCOVER_DISTANCE
+
+    /**
+     * The furthest a structure can be found from, in blocks: the chunks the server sends you
+     * (its view distance, or yours if that is smaller). Structures are only recognised from
+     * blocks the server has sent, so nothing further out could be discovered anyway.
+     */
+    fun discoverRange(): Int = net.minecraft.client.Minecraft.getInstance().options.effectiveRenderDistance * 16
 
     /** The command a private share is sent with, without its slash: `tell`, or `msg` or `w` on servers that change it. */
     var privateShareCommand = "tell"
@@ -75,12 +87,31 @@ object Config {
     const val MIN_SCALE = 0.5f
     const val MAX_SCALE = 3f
     const val DEFAULT_DISCOVER_DISTANCE = 32
-    const val MAX_DISCOVER_DISTANCE = 128
+    const val DISCOVER_ALL = -1
 
     fun isShown(type: StructureType) = type in shown
 
     fun setShown(type: StructureType, value: Boolean) {
         shown = if (value) shown + type else shown - type
+        // Shown or hidden by hand: no longer Hide's to bring back.
+        hiddenByHide = hiddenByHide - type
+        save()
+    }
+
+    /**
+     * The legend's Hide switch for [types] (one dimension's): hides those showing and remembers
+     * them; with none showing, brings back the ones it hid, or all of them if it remembers none.
+     */
+    fun toggleHide(types: List<StructureType>) {
+        val showing = types.filter { it in shown }
+        if (showing.isNotEmpty()) {
+            shown = shown - showing.toSet()
+            hiddenByHide = hiddenByHide + showing
+        } else {
+            val back = types.filter { it in hiddenByHide }.ifEmpty { types }
+            shown = shown + back
+            hiddenByHide = hiddenByHide - back.toSet()
+        }
         save()
     }
 
@@ -89,11 +120,13 @@ object Config {
             if (!Files.exists(path)) return save()
             val json = Files.newBufferedReader(path).use { JsonParser.parseReader(it) }.asJsonObject
             json.getAsJsonArray("shown")?.let { array -> shown = array.mapNotNull { StructureType.byId(it.asString) }.toSet() }
+            json.getAsJsonArray("hiddenByHide")?.let { array -> hiddenByHide = array.mapNotNull { StructureType.byId(it.asString) }.toSet() }
             legendOpen = json.get("legendOpen")?.asBoolean ?: legendOpen
             legendRight = json.get("legendRight")?.asInt ?: legendRight
             legendTop = json.get("legendTop")?.asInt ?: legendTop
             legendRows = (json.get("legendRows")?.asInt ?: legendRows).coerceIn(1, 32)
-            legendScale = (json.get("legendScale")?.asFloat ?: legendScale).coerceIn(1f, 4f)
+            legendWidth = json.get("legendWidth")?.asInt ?: legendWidth
+            legendScale = (json.get("legendScale")?.asFloat ?: legendScale).coerceIn(0.5f, 4f)
             legendExtra = (json.get("legendExtra")?.asInt ?: legendExtra).coerceIn(0, 1000)
             legendUnder = json.get("legendUnder")?.asString ?: legendUnder
             panelMaxScale = (json.get("panelMaxScale")?.asFloat ?: panelMaxScale).coerceIn(1f, 4f)
@@ -108,7 +141,7 @@ object Config {
             minimapIconScale = (json.get("minimapIconScale")?.asFloat ?: minimapIconScale).coerceIn(MIN_SCALE, MAX_SCALE)
             privateShareCommand = json.get("privateShareCommand")?.asString?.trim()?.removePrefix("/")?.takeIf { it.isNotEmpty() } ?: privateShareCommand
             bobbyCoverage = json.get("bobbyCoverage")?.asBoolean ?: bobbyCoverage
-            discoverDistance = (json.get("discoverDistance")?.asInt ?: discoverDistance).coerceIn(0, MAX_DISCOVER_DISTANCE)
+            discoverDistance = (json.get("discoverDistance")?.asInt ?: discoverDistance).coerceAtLeast(DISCOVER_ALL)
         } catch (e: Exception) {
             Log.error("Could not read $path; using the defaults", e)
         }
@@ -118,10 +151,12 @@ object Config {
         try {
             val json = JsonObject()
             json.add("shown", JsonArray().also { array -> StructureType.entries.filter { it in shown }.forEach { array.add(it.id) } })
+            json.add("hiddenByHide", JsonArray().also { array -> StructureType.entries.filter { it in hiddenByHide }.forEach { array.add(it.id) } })
             json.addProperty("legendOpen", legendOpen)
             json.addProperty("legendRight", legendRight)
             json.addProperty("legendTop", legendTop)
             json.addProperty("legendRows", legendRows)
+            json.addProperty("legendWidth", legendWidth)
             json.addProperty("legendScale", legendScale)
             json.addProperty("legendExtra", legendExtra)
             json.addProperty("legendUnder", legendUnder)
@@ -138,7 +173,7 @@ object Config {
             json.addProperty("discoverDistance", discoverDistance)
             json.addProperty("privateShareCommand", privateShareCommand)
             json.addProperty("bobbyCoverage", bobbyCoverage)
-            Files.writeString(path, GSON.toJson(json))
+            SafeFiles.writeString(path, GSON.toJson(json))
         } catch (e: Exception) {
             Log.error("Could not save $path", e)
         }

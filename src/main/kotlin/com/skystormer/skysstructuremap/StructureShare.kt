@@ -61,24 +61,42 @@ object StructureShare {
 
     /** A shared structure in a readable line of chat, and the part to show, or null when there is none. */
     fun readLine(text: String): Pair<String, Shared>? {
+        // Every line of chat comes through here: a long one is never one of ours, and is not
+        // worth the pattern's time.
+        if (text.length > MAX_LINE || BOX !in text) return null
         val m = LINE.find(text) ?: return null
         val g = m.groupValues
         val named = g[2]
         val type = names.firstOrNull { named.endsWith(it.displayName) } ?: return null
-        val n = (7..12).map { g[it].toInt() }
+        val n = (7..12).map { g[it].toIntOrNull() ?: return null }
         val box = Box(n[0], n[1], n[2], n[3], n[4], n[5])
-        if (box.minX > box.maxX || box.minY > box.maxY || box.minZ > box.maxZ) return null
         val dimension = when (g[6]) {
             "Overworld" -> OVERWORLD
             "Nether" -> NETHER
             "End" -> END
             else -> g[6].let { if (':' in it) it else "minecraft:$it" }
         }
-        return text.substringBefore(BOX).trim() to Shared(type, dimension, box, null)
+        val shared = Shared(type, dimension, box, null)
+        if (!isValid(shared)) return null
+        return text.substringBefore(BOX).trim() to shared
+    }
+
+    /**
+     * Whether a structure from chat could really be one: a box the right way round, no bigger than
+     * any structure and inside the world, in a dimension that is an id. Anything else is ignored.
+     */
+    private fun isValid(shared: Shared): Boolean {
+        val b = shared.box
+        return b.minX <= b.maxX && b.minY <= b.maxY && b.minZ <= b.maxZ &&
+            b.sizeX <= MAX_SIZE && b.sizeY <= MAX_SIZE && b.sizeZ <= MAX_SIZE &&
+            Math.abs(b.minX) <= MAX_COORDINATE && Math.abs(b.minZ) <= MAX_COORDINATE &&
+            b.minY >= -MAX_HEIGHT && b.maxY <= MAX_HEIGHT &&
+            DIMENSION.matches(shared.dimension) && (shared.variant?.length ?: 0) <= MAX_VARIANT
     }
 
     /** A shared structure from a code, or null if it is not one of ours or is damaged. */
     fun decode(code: String): Shared? = try {
+        require(code.length <= MAX_LINE)
         val json = JsonParser.parseString(String(decoder.decode(code.trim()), Charsets.UTF_8)).asJsonObject
         val b = json.getAsJsonArray("b").map { it.asInt }
         require(b.size == 6)
@@ -87,7 +105,7 @@ object StructureShare {
             dimension = json.get("d").asString,
             box = Box(b[0], b[1], b[2], b[3], b[4], b[5]),
             variant = json.get("v")?.asString,
-        )
+        ).takeIf(::isValid)
     } catch (e: Exception) {
         null
     }
@@ -195,6 +213,14 @@ object StructureShare {
 
     /** What a server will take in one line of chat, and in one command. */
     const val MAX_CHAT = 256
+    private const val MAX_LINE = 512
+
+    // Far beyond any structure or world, so only nonsense is turned away.
+    private const val MAX_SIZE = 4096
+    private const val MAX_COORDINATE = 30_000_000
+    private const val MAX_HEIGHT = 4096
+    private const val MAX_VARIANT = 64
+    private val DIMENSION = Regex("[a-z0-9_.-]{1,64}:[a-z0-9_./-]{1,128}")
 
     /** Ticks between private messages: half a second, which no server counts as spam. */
     private const val SEND_EVERY = 10

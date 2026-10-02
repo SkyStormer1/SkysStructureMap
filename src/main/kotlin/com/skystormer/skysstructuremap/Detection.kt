@@ -111,7 +111,8 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
 
     /**
      * Whether the player is close enough to count as having found it: within
-     * [Config.discoverDistance] blocks of its box sideways, at any height. At 0 they have to be
+     * [Config.discoverDistance] blocks of its box sideways, at any height; at [Config.DISCOVER_ALL],
+     * anywhere in the square of chunks the server sends them. At 0 they have to be
      * inside: inside the box for monuments and shipwrecks, whose boxes are exact; inside (or
      * standing on) one of the cells for the rest, whose real pieces include the air in their
      * corridors, where one big box around a fortress would take in all the lava between bridges.
@@ -119,7 +120,16 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
     fun touches(hitbox: net.minecraft.world.phys.AABB): Boolean {
         val box = box ?: return false
         val near = Config.discoverDistance
-        if (near > 0) return box.horizontalDistance((hitbox.minX + hitbox.maxX) / 2, (hitbox.minZ + hitbox.maxZ) / 2) <= near
+        val x = (hitbox.minX + hitbox.maxX) / 2
+        val z = (hitbox.minZ + hitbox.maxZ) / 2
+        if (near == Config.DISCOVER_ALL) {
+            val range = Config.discoverRange() / 16
+            val chunkX = Math.floorDiv(Math.floor(x).toInt(), 16)
+            val chunkZ = Math.floorDiv(Math.floor(z).toInt(), 16)
+            fun gap(at: Int, min: Int, max: Int) = maxOf(0, Math.floorDiv(min, 16) - at, at - Math.floorDiv(max, 16))
+            return maxOf(gap(chunkX, box.minX, box.maxX), gap(chunkZ, box.minZ, box.maxZ)) <= range
+        }
+        if (near > 0) return box.horizontalDistance(x, z) <= near
         if (!box.grow(8).touches(hitbox)) return false
         val reach = Specs.of(type).reach ?: return box.touches(hitbox)
         return cells.values.any { it.grow(reach.sideways, down = reach.down, up = reach.up).touches(hitbox) }

@@ -173,26 +173,46 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
         }
     }
 
-    /** How near counts as discovering, 0 (inside only) to [Config.MAX_DISCOVER_DISTANCE] blocks in steps of 4. */
+    /**
+     * How near counts as discovering, in blocks: from inside its box only, in steps of 4, up to the
+     * server's whole range ([Config.discoverRange]); the far end follows the server if it changes.
+     */
     private class DistanceSlider(x: Int, y: Int) :
-        AbstractSliderButton(x, y, WIDTH, ROW, Component.empty(), Config.discoverDistance.toDouble() / Config.MAX_DISCOVER_DISTANCE) {
+        AbstractSliderButton(x, y, WIDTH, ROW, Component.empty(), 0.0) {
+
+        // Fixed while the screen is open, so the slider does not move under the mouse.
+        private val range = Config.discoverRange().coerceAtLeast(STEP)
 
         init {
+            value = when (val d = Config.discoverDistance) {
+                Config.DISCOVER_ALL -> 1.0
+                else -> (d.toDouble() / range).coerceIn(0.0, 1.0)
+            }
             updateMessage()
             setTooltip(Tooltip.create(Component.literal(
                 "How close you must come to a structure for it to count as discovered, sideways, at any height. " +
-                    "At 0 you have to be inside it."
+                    "From inside it, all the way to the server's range ($range blocks): " +
+                    "structures are only recognised in the chunks the server sends you."
             )))
         }
 
-        private val blocks: Int get() = ((value * Config.MAX_DISCOVER_DISTANCE / 4).roundToInt() * 4)
+        private val blocks: Int get() =
+            if (value >= 1.0) Config.DISCOVER_ALL else ((value * range / STEP).roundToInt() * STEP).coerceAtMost(range)
 
         override fun updateMessage() {
-            message = Component.literal(if (blocks == 0) "Discover: only when inside" else "Discover within: $blocks blocks")
+            message = Component.literal(when (val b = blocks) {
+                0 -> "Discover: only when inside"
+                Config.DISCOVER_ALL, range -> "Discover within: server range ($range blocks)"
+                else -> "Discover within: $b blocks"
+            })
         }
 
         override fun applyValue() {
             Config.discoverDistance = blocks
+        }
+
+        private companion object {
+            const val STEP = 4
         }
     }
 

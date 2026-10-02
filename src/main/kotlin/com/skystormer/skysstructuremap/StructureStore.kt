@@ -155,11 +155,7 @@ object StructureStore {
             json.addProperty("version", 1)
             json.add("structures", array)
             if (deleted.isNotEmpty()) json.add("deleted", JsonArray().also { a -> deleted.forEach { a.add(toJson(it)) } })
-            Files.createDirectories(path.parent)
-            // Written beside it and moved into place, so a crash mid-write cannot lose the list.
-            val temporary = path.resolveSibling(path.fileName.toString() + ".tmp")
-            Files.writeString(temporary, GSON.toJson(json))
-            Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            SafeFiles.writeString(path, GSON.toJson(json))
         } catch (e: Exception) {
             Log.error("Could not save $path", e)
         }

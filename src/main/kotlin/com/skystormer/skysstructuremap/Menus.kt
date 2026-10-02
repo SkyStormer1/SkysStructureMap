@@ -1,5 +1,6 @@
 package com.skystormer.skysstructuremap
 
+import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.ConfirmScreen
 import net.minecraft.network.chat.ClickEvent
@@ -16,6 +17,9 @@ object Menus {
         try {
             options.add(option("Make waypoint", options.size, target) { Waypoints.save(marker) }.setActive(Waypoints.available()))
             options.add(option("Copy coordinates", options.size, target) { copy(marker) })
+            if (FabricLoader.getInstance().isModLoaded("skysmapshapes")) {
+                options.add(option("Add shape here", options.size, target) { addShape(marker) })
+            }
             options.add(option("Share…", options.size, target) { parent -> open(com.skystormer.skysstructuremap.gui.ShareScreen(parent, marker)) })
             // While outlines are on for everything, this one's is already showing.
             if (!Config.outlines) {
@@ -30,6 +34,22 @@ object Menus {
             }
         } catch (e: Throwable) {
             Log.error("Could not add structure options to Xaero's right-click menu", e)
+        }
+    }
+
+    /**
+     * Sky's Map Shapes' add window, for a shape centred on the structure and named after it. Found
+     * by name, so that mod is never needed to build or run this one.
+     */
+    private fun addShape(marker: Marker) {
+        try {
+            val opened = Class.forName("com.skystormer.skysmapshapes.ShapesApi")
+                .getMethod("openNewShape", String::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, String::class.java)
+                .invoke(null, marker.dimension, marker.box.centreX, marker.y, marker.box.centreZ, marker.name) as Boolean
+            if (!opened) say("Sky's Map Shapes could not add a shape here")
+        } catch (e: Throwable) {
+            Log.error("Could not open Sky's Map Shapes for ${marker.name}", e)
+            say("This needs a newer Sky's Map Shapes")
         }
     }
 

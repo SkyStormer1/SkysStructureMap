@@ -14,7 +14,8 @@ again. It puts every structure you find on **Xaero's World Map and Minimap**, wi
 
 As you explore, the mod recognises structures from the blocks your game has already loaded. It doesn't need the
 seed, a server plugin or any help from the server, and nothing in it works out or uses the world seed. When you
-come within 32 blocks of a structure, it's saved as discovered and shows up on your map.
+come near a structure (32 blocks by default, set anywhere from inside it to the server's whole view distance), it's
+saved as discovered and shows up on your map.
 
 Each kind of structure is checked against the way the game builds it, using the designs and code in your own
 copy of Minecraft:
@@ -62,10 +63,12 @@ copy of Minecraft:
   - With [Sky's Map Exposer](https://github.com/SkyStormer1/SkysMapExposer) installed, drag one panel's header
     up under the other's bottom edge and it docks there: the two move as one, share a width and a size, and the
     lower one comes off again when dragged away. Neither mod needs the other.
-  - **Box** draws every structure's outline, **Near** shows ones you've seen but not discovered yet, and **Set**
-    opens the settings.
+  - **Hide** takes every kind off the map at once and remembers which, so clicking it again brings back only
+    those. **Box** draws every structure's outline, **Near** shows ones you've seen but not discovered yet, and
+    **Set** opens the settings.
 - **Right-click an icon** to make a Xaero's Minimap waypoint, copy its coordinates, show or hide its outline, share
-  it, mark it as completed, or delete it.
+  it, mark it as completed, or delete it. With [Sky's Map Shapes](https://github.com/SkyStormer1/SkysMapShapes)
+  installed, **Add shape here** draws a shape centred on it.
 - **Completed** structures get a green tick beside their icon, on the world map and minimap, so you can see at a
   glance which ones you've already looted or cleared. Right-click again to mark one as not completed.
 - **Share** a structure with everyone in chat, or privately with the players you pick. Anyone with this mod gets
@@ -75,7 +78,8 @@ copy of Minecraft:
   - **Show structures**, one switch for everything the mod draws, and **Hide completed**, which leaves the ones
     you've finished with off the maps,
   - icon size on the world map and minimap,
-  - how close counts as discovering a structure (or only when you're inside it),
+  - how close counts as discovering a structure, in blocks: from only when you're inside it up to the server's
+    whole view distance,
   - a chat line when you discover one,
   - the command used for private shares (`tell` by default).
 - **Deleting** a structure is for good: it does not come back when you return. The chat line after a delete has an
