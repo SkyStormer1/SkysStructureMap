@@ -13,7 +13,6 @@ import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.components.StringWidget
 import net.minecraft.client.gui.components.Tooltip
 import net.minecraft.client.gui.screens.Screen
-import net.minecraft.network.chat.CommonComponents
 import net.minecraft.network.chat.Component
 import kotlin.math.roundToInt
 
@@ -22,16 +21,29 @@ import kotlin.math.roundToInt
  * counts as discovering a structure, and the chat line when you do. Changes show at once; Done
  * saves. Opened from the legend's "Set" switch, or Mod Menu's cog.
  */
-class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sky's Structure Map")) {
+class SettingsScreen(private val parent: Screen?) : FramedScreen(Component.literal("Sky's Structure Map")) {
 
     private lateinit var command: EditBox
 
-    override fun init() {
+    override val resetTip = "Puts the sizes, switches, discovery distance, chat line and share command back to how the mod comes. " +
+        "Your structures and which kinds the legend shows are kept."
+
+    override fun resetToDefaults() {
+        Config.iconScale = 1f
+        Config.minimapIconScale = 1f
+        Config.show = true
+        Config.hideCompleted = false
+        Config.spawnBoxesOnMap = true
+        Config.spawnBoxesInWorld = true
+        Config.discoverDistance = Config.DEFAULT_DISCOVER_DISTANCE
+        Config.announce = true
+        Config.privateShareCommand = "tell"
+    }
+
+    override fun content(top: Int) {
         val left = width / 2 - WIDTH / 2
         val half = (WIDTH - GAP) / 2
-        var y = maxOf(4, (height - 257 - if (BobbyCoverage.available) ROW + GAP else 0) / 2)
-        addRenderableWidget(StringWidget(left, y, WIDTH, font.lineHeight, title, font))
-        y += font.lineHeight + GAP * 3
+        var y = top
 
         addRenderableWidget(ScaleSlider(left, y, "World map icons", Config.iconScale,
             "How big the structure icons are on Xaero's World Map.") { Config.iconScale = it })
@@ -89,7 +101,6 @@ class SettingsScreen(private val parent: Screen?) : Screen(Component.literal("Sk
             ) { if (it != Config.bobbyCoverage) BobbyCoverage.toggle() }
             y += ROW + GAP
         }
-        addRenderableWidget(Button.builder(CommonComponents.GUI_DONE) { onClose() }.bounds(left, y, WIDTH, ROW).build())
     }
 
     /** An on/off switch with its explanation. */

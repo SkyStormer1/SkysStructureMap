@@ -200,9 +200,7 @@ object Legend {
          * puts tooltips a little above the mouse, which near the top edge ran them off screen.
          */
         private fun tooltip(graphics: GuiGraphicsExtractor, text: String, mouseX: Int, mouseY: Int) {
-            val font = font()
-            val lines = font.split(Component.literal(text), TOOLTIP_WIDTH)
-            graphics.setTooltipForNextFrame(font, lines, mouseX, maxOf(mouseY, 16))
+            DockPanel.tooltip(graphics, text, mouseX, mouseY, TOOLTIP_WIDTH)
         }
 
         private fun switch(graphics: GuiGraphicsExtractor, label: String, left: Int, on: Boolean, hovered: Boolean) {
