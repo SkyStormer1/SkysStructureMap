@@ -312,7 +312,9 @@ object StructureStore {
             variant = json.get("variant")?.asString,
             outlined = json.get("outlined")?.asBoolean ?: false,
             completed = json.get("completed")?.asBoolean ?: false,
-            centre = json.getAsJsonArray("centre")?.map { it.asInt }?.takeIf { it.size == 6 }?.let { Box(it[0], it[1], it[2], it[3], it[4], it[5]) },
+            // Only a help in telling cities apart: one that cannot be read is left out, not the city.
+            centre = runCatching { json.getAsJsonArray("centre")?.map { it.asInt }?.takeIf { it.size == 6 } }.getOrNull()
+                ?.let { Box(it[0], it[1], it[2], it[3], it[4], it[5]) },
             pieces = json.getAsJsonArray("pieces")?.mapNotNull { element ->
                 val p = element.asJsonObject
                 val pb = p.getAsJsonArray("box")?.map { it.asInt }?.takeIf { it.size == 6 } ?: return@mapNotNull null
