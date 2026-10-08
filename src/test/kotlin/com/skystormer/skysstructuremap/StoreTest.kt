@@ -27,6 +27,30 @@ class StoreTest {
     }
 
     @Test
+    fun anEntryThatCannotBeReadIsKeptAsItWas() {
+        val text = """{"version": 1, "structures": [
+            {"id": "hut-id", "type": "witch_hut", "dimension": "minecraft:overworld", "box": [96, 67, -160, 103, 73, -152], "discovered": 1},
+            {"id": "new-kind", "type": "a_kind_from_a_newer_version", "dimension": "minecraft:overworld", "box": [0, 0, 0, 1, 1, 1], "discovered": 2}
+        ], "deleted": [{"id": "odd", "box": "not a box"}]}"""
+        val contents = StructureStore.parse(text)!!
+        assertEquals(listOf("hut-id"), contents.structures.map { it.id })
+        assertEquals(1, contents.unreadStructures.size)
+        assertEquals(1, contents.unreadDeleted.size)
+        // Saved again: both are still in the file, exactly as they were.
+        val again = StructureStore.parse(StructureStore.write(contents))!!
+        assertEquals(contents.unreadStructures, again.unreadStructures)
+        assertEquals(contents.unreadDeleted, again.unreadDeleted)
+        assertEquals(contents.structures, again.structures)
+    }
+
+    @Test
+    fun aFileThatCannotBeReadIsNotTakenForAnEmptyOne() {
+        assertNull(StructureStore.parse("{\"structures\": [ {\"id\": "), "half a file")
+        assertNull(StructureStore.parse("{\"structures\": 5}"), "a list that is not one")
+        assertEquals(0, StructureStore.parse("{\"structures\": [], \"deleted\": null}")!!.structures.size)
+    }
+
+    @Test
     fun thereIsNothingToUndoTwice() {
         StructureStore.put(hut)
         StructureStore.remove(hut.id)

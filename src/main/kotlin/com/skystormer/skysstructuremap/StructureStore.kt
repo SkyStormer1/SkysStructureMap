@@ -2,6 +2,7 @@ package com.skystormer.skysstructuremap
 
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import net.fabricmc.loader.api.FabricLoader
@@ -82,6 +83,19 @@ object StructureStore {
 
     private var dirty = false
 
+    /**
+     * Entries in the file this version could not read (a kind from a newer version, a hand edit
+     * gone wrong): written back exactly as they were on every save, so nothing is ever dropped
+     * from the file unless you delete it.
+     */
+    private var unread = Contents()
+
+    /**
+     * Set when the file was there but could not be read at all: it is copied to `backups/` and
+     * never written over this session, so a damaged file loses nothing more.
+     */
+    private var locked = false
+
     val isOpen: Boolean get() = file != null
 
     fun open(minecraft: Minecraft) {
@@ -93,8 +107,21 @@ object StructureStore {
         val (name, key) = world
         worldName = name
         file = FabricLoader.getInstance().configDir.resolve("skysstructuremap").resolve("$key.json")
-        all = read(file!!)
-        deleted = read(file!!, "deleted")
+        val loaded = read(file!!)
+        if (loaded == null) {
+            all = emptyList()
+            deleted = emptyList()
+            unread = Contents()
+            val copy = try { backup("unreadable") } catch (e: Exception) { null }
+            locked = true
+            Menus.tell("Sky's Structure Map could not read your saved structures for $name" +
+                (copy?.let { " (copied to backups/${it.fileName})" } ?: "") +
+                ". Nothing will be saved for this world until the file is fixed; see the log.")
+            return
+        }
+        all = loaded.structures
+        deleted = loaded.deleted
+        unread = Contents(unreadStructures = loaded.unreadStructures, unreadDeleted = loaded.unreadDeleted)
         mergeDuplicates()
         Log.info("Loaded {} structure(s) for {} from {}", all.size, name, file)
     }
@@ -105,6 +132,8 @@ object StructureStore {
         worldName = null
         all = emptyList()
         deleted = emptyList()
+        unread = Contents()
+        locked = false
     }
 
     fun byId(id: String): Structure? = all.firstOrNull { it.id == id }
@@ -153,17 +182,66 @@ object StructureStore {
     private fun saveNow() {
         dirty = false
         val path = file ?: return
+        if (locked) return
         try {
-            val array = JsonArray()
-            all.forEach { array.add(toJson(it)) }
-            val json = JsonObject()
-            json.addProperty("version", 1)
-            json.add("structures", array)
-            if (deleted.isNotEmpty()) json.add("deleted", JsonArray().also { a -> deleted.forEach { a.add(toJson(it)) } })
-            SafeFiles.writeString(path, GSON.toJson(json))
+            SafeFiles.writeString(path, write(Contents(all, deleted, unread.unreadStructures, unread.unreadDeleted)))
         } catch (e: Exception) {
             Log.error("Could not save $path", e)
         }
+    }
+
+    /** What a structures file holds: what was read, and the entries that could not be, as they were. */
+    class Contents(
+        val structures: List<Structure> = emptyList(),
+        val deleted: List<Structure> = emptyList(),
+        val unreadStructures: List<JsonElement> = emptyList(),
+        val unreadDeleted: List<JsonElement> = emptyList(),
+    )
+
+    /** A structures file's text, with the entries that could not be read put back unchanged. */
+    fun write(contents: Contents): String {
+        val json = JsonObject()
+        json.addProperty("version", 1)
+        json.add("structures", JsonArray().also { a ->
+            contents.structures.forEach { a.add(toJson(it)) }
+            contents.unreadStructures.forEach(a::add)
+        })
+        if (contents.deleted.isNotEmpty() || contents.unreadDeleted.isNotEmpty()) json.add("deleted", JsonArray().also { a ->
+            contents.deleted.forEach { a.add(toJson(it)) }
+            contents.unreadDeleted.forEach(a::add)
+        })
+        return GSON.toJson(json)
+    }
+
+    /**
+     * A structures file's contents; null when it cannot be read at all. An entry that cannot be
+     * read is kept as it was ([Contents.unreadStructures]), never dropped.
+     */
+    fun parse(text: String): Contents? {
+        val json = try {
+            JsonParser.parseString(text).asJsonObject
+        } catch (e: Exception) {
+            Log.error("Could not read the structures file", e)
+            return null
+        }
+        fun list(name: String): Pair<List<Structure>, List<JsonElement>>? {
+            val element = json.get(name)?.takeUnless { it.isJsonNull } ?: return emptyList<Structure>() to emptyList()
+            if (!element.isJsonArray) return null
+            val read = ArrayList<Structure>()
+            val kept = ArrayList<JsonElement>()
+            for (entry in element.asJsonArray) {
+                try {
+                    read.add(fromJson(entry.asJsonObject))
+                } catch (e: Exception) {
+                    Log.warn("Keeping an entry in \"{}\" that could not be read, as it was: {}", name, e.toString())
+                    kept.add(entry)
+                }
+            }
+            return read to kept
+        }
+        val structures = list("structures") ?: return null
+        val deleted = list("deleted") ?: return null
+        return Contents(structures.first, deleted.first, structures.second, deleted.second)
     }
 
     /**
@@ -260,21 +338,14 @@ object StructureStore {
         deleted = deleted.filterNot { it.type == type && it.dimension == dimension && Specs.sameStructure(type, it.box, box) }
     }
 
-    private fun read(path: Path, list: String = "structures"): List<Structure> {
-        if (!Files.exists(path)) return emptyList()
+    /** The file at [path] ([parse]); empty when there is none yet, null when it cannot be read. */
+    private fun read(path: Path): Contents? {
+        if (!Files.exists(path)) return Contents()
         return try {
-            val json = Files.newBufferedReader(path).use { JsonParser.parseReader(it) }.asJsonObject
-            json.getAsJsonArray(list)?.mapNotNull { element ->
-                try {
-                    fromJson(element.asJsonObject)
-                } catch (e: Exception) {
-                    Log.warn("Skipping a structure in {} that could not be read: {}", path, e.toString())
-                    null
-                }
-            } ?: emptyList()
+            parse(Files.readString(path))
         } catch (e: Exception) {
             Log.error("Could not read $path", e)
-            emptyList()
+            null
         }
     }
 
