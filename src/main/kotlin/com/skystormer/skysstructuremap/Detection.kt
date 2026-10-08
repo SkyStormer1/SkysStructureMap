@@ -1,6 +1,7 @@
 package com.skystormer.skysstructuremap
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
+import it.unimi.dsi.fastutil.longs.LongArrayList
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet
 import net.minecraft.core.BlockPos
 import net.minecraft.world.level.block.Block
@@ -44,6 +45,26 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
 
     /** Fortresses: the pieces found so far ([FortressPieces]). */
     var pieces: List<Piece> = emptyList()
+
+    /**
+     * Fortresses: one group for each fortress, when its pieces prove it holds more than one
+     * ([FortressPieces.split]); empty when it is one. Each is recognised, discovered and saved on
+     * its own, with the cells nearest its pieces.
+     */
+    var parts: List<Detection> = emptyList()
+
+    /** The group a part is one fortress of. */
+    var partOf: Detection? = null
+
+    /**
+     * Ancient cities: the box of its centre piece, once that has matched. A group whose box is
+     * worked out from its centre takes in the whole city, so blocks beyond it are another city
+     * ([Groups.splitOff]).
+     */
+    var centre: Box? = null
+
+    /** Groups split from this one, or it from them: never joined again, and never saved as the same structure. */
+    val apart: MutableSet<Detection> = HashSet()
 
     /** The saved structure this is, once discovered (or recognised as one discovered before). */
     var storedId: String? = null
@@ -96,6 +117,56 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         return true
     }
 
+    /** A part's own share of its group's cells ([parts]): its outline and [bounds]. */
+    fun takeCells(own: Collection<Box>) {
+        cells.clear()
+        for (box in own) cells.put(cellKey(box.minX, box.minY, box.minZ), box)
+        bounds = own.reduceOrNull(Box::union)
+    }
+
+    /** How many of its blocks are outside [box]. */
+    fun countOutside(box: Box): Int = count - countIn(box)
+
+    /**
+     * Moves every block outside [keep] into [into], and works out its own outline again from the
+     * blocks left. How many of them stood in their biome is shared out in proportion.
+     */
+    fun moveOutside(keep: Box, into: Detection) {
+        val out = LongArrayList()
+        val iterator = positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            if (!keep.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key))) out.add(key)
+        }
+        if (out.isEmpty()) return
+        val moved = (inBiome.toLong() * out.size / maxOf(1, count)).toInt()
+        val keepsBlocks = !blocks.isEmpty()
+        for (i in 0 until out.size) {
+            val key = out.getLong(i)
+            into.add(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key), blocks.get(key), keepsBlocks, inBiome = false)
+            positions.remove(key)
+            blocks.remove(key)
+        }
+        into.inBiome += moved
+        inBiome -= moved
+        cells.clear()
+        bounds = null
+        if (keepsBlocks) kinds.clear()
+        val left = positions.iterator()
+        while (left.hasNext()) {
+            val key = left.nextLong()
+            val x = BlockPos.getX(key)
+            val y = BlockPos.getY(key)
+            val z = BlockPos.getZ(key)
+            val cell = cellKey(x, y, z)
+            cells.put(cell, cells.get(cell)?.including(x, y, z) ?: Box.of(x, y, z))
+            bounds = bounds?.including(x, y, z) ?: Box.of(x, y, z)
+            if (keepsBlocks) blocks.get(key)?.let { kinds.merge(it, 1, Int::plus) }
+        }
+        changed = true
+        fitDirty = true
+    }
+
     /** Takes in everything [other] has seen. */
     fun absorb(other: Detection) {
         val iterator = other.positions.iterator()
@@ -107,6 +178,14 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         // Only shipwrecks keep each block; for the rest the counts are carried over as they are.
         if (other.blocks.isEmpty()) for ((block, n) in other.kinds) kinds.merge(block, n, Int::plus)
         if (storedId == null) storedId = other.storedId
+        if (centre == null) centre = other.centre
+        for (far in other.apart) {
+            far.apart.remove(other)
+            if (far !== this) {
+                far.apart.add(this)
+                apart.add(far)
+            }
+        }
     }
 
     /**
@@ -137,6 +216,11 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
 
     companion object {
         const val CELL = 8
+
+        /** Ids for [parts], apart from the groups' own (which each [Groups] counts from 1). */
+        private val nextPartId = java.util.concurrent.atomic.AtomicInteger(1_000_000)
+
+        fun newPartId(): Int = nextPartId.getAndIncrement()
 
         fun cellKey(x: Int, y: Int, z: Int): Long =
             BlockPos.asLong(Math.floorDiv(x, CELL), Math.floorDiv(y, CELL), Math.floorDiv(z, CELL))

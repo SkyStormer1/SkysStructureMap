@@ -186,6 +186,10 @@ object FortressPieces {
 
     private class Candidate(val placed: Placed, val x: Int, val y: Int, val z: Int, val misses: Float) {
         val evidence get() = placed.total - misses
+        val fit get() = 1 - misses / placed.total
+
+        fun contains(o: Candidate) = o.x >= x && o.y >= y && o.z >= z &&
+            o.x + o.placed.wx <= x + placed.wx && o.y + o.placed.wy <= y + placed.wy && o.z + o.placed.wz <= z + placed.wz
     }
 
     /**
@@ -261,11 +265,18 @@ object FortressPieces {
                 if (bx !in 0 until area.sx || bz !in 0 until area.sz || by + 2 >= area.sy) continue
                 // A piece right behind its face, open into it: the passage over that deck or floor runs on.
                 if (!taken.get(area.index(bx, by, bz)) || area[bx, by + 2, bz] != AIR) continue
+                if (brickShare(area, c) > END_FILLER_BRICKS) continue
                 take(c)
             }
         }
+        val containers = candidates.filter { it.placed.layout.id in CONTAINERS.values && it.fit >= CONTAINER_FIT }
         for (c in candidates.sortedWith(compareBy<Candidate> { Math.round(it.misses) }.thenByDescending { it.evidence })) {
-            if (free(c)) take(c)
+            if (!free(c)) continue
+            // A smaller piece inside a bigger one that fits nearly as well is that bigger piece, worn.
+            val big = CONTAINERS[c.placed.layout.id]
+            val bigger = if (big == null) null
+            else containers.filter { it.placed.layout.id == big && it.contains(c) && free(it) }.maxByOrNull { it.fit }
+            take(bigger ?: c)
         }
         endFillers()
         if (placed.isNotEmpty()) worn(area, placed, taken, top, ::free, ::take, ::endFillers)
@@ -343,6 +354,35 @@ object FortressPieces {
 
     private const val END_FILLER = "nebef"
 
+    /**
+     * The most of an end filler's box that can be brick. A real one is rubble, about a fifth to a
+     * third brick (more only where two fortresses overlap). One "found" in the solid brick the
+     * game fills down under rooms and corridors was 41% or more in nine of ten.
+     */
+    private const val END_FILLER_BRICKS = 0.36
+
+    private fun brickShare(area: Area, c: Candidate): Double {
+        var bricks = 0
+        var known = 0
+        for (x in c.x until c.x + c.placed.wx) for (y in c.y until c.y + c.placed.wy) for (z in c.z until c.z + c.placed.wz) {
+            val v = area[x, y, z]
+            if (v == UNKNOWN.toInt()) continue
+            known++
+            if (v in 1..3) bricks++
+        }
+        return if (known == 0) 1.0 else bricks.toDouble() / known
+    }
+
+    /**
+     * Smaller pieces that also fit inside a bigger one: a T balcony's middle is a corridor
+     * crossing, a crossroads' arm is a bridge. When the bigger piece is there but a little worn,
+     * the smaller fits exactly and was taken first, losing the bigger. Real T balconies nearly all
+     * fit 94% or more, real crossroads 88% or more, while either laid around a real corridor or
+     * bridge fitted 86% at best. So the bigger one is taken instead only from [CONTAINER_FIT].
+     */
+    private val CONTAINERS = mapOf("nescsc" to "nectb", "nesc" to "nectb", "nebs" to CROSSROADS)
+    private const val CONTAINER_FIT = 0.92
+
     /** How much of a worn piece's walls above its floor must stand, and of its walkway be open ([worn]). */
     private const val WORN_WALLS = 0.6
     private const val WORN_WALKWAY = 0.8
@@ -368,6 +408,55 @@ object FortressPieces {
      * brick build does not lay out fortress pieces.
      */
     fun isFortress(pieces: List<Piece>): Boolean = pieces.any { it.kind == CROSSROADS } || pieces.size >= 4
+
+    /**
+     * The most crossroads one fortress has: its start is one, and the game places at most four
+     * more.
+     */
+    const val MOST_CROSSROADS = 5
+
+    /** How many crossroads, under the name pieces were saved with before they were told apart too. */
+    fun crossroads(pieces: Collection<Piece>): Int = pieces.count { it.kind == CROSSROADS || it.kind == "crossroads" }
+
+    /** Whether [a]'s pieces and [b]'s together hold more crossroads than one fortress has; a piece in both counts once. */
+    fun tooManyCrossroads(a: List<Piece>, b: List<Piece>): Boolean =
+        crossroads(a) + crossroads(b.filterNot { p -> a.any { it.box.overlaps(p.box) } }) > MOST_CROSSROADS
+
+    /**
+     * The fortresses among one group's pieces. Fortresses close together or on top of each other
+     * are seen as one group of bricks, and nothing in their bricks tells them apart; only more
+     * crossroads than one fortress has ([MOST_CROSSROADS]) proves there are two or more, so
+     * without that the pieces stay one fortress: wrongly joined is better than wrongly split.
+     *
+     * When proved: pieces that touch are joined first (a fortress's pieces join face to face, so
+     * every one touches another of its own), then each part, smallest first, joins the nearest it
+     * can, never making one with more crossroads than a fortress has. What is left apart holds a
+     * crossroads each. Where two touch, a few pieces can end up on the wrong one.
+     */
+    fun split(pieces: List<Piece>): List<List<Piece>> {
+        if (crossroads(pieces) <= MOST_CROSSROADS) return listOf(pieces)
+        val parts = pieces.map { mutableListOf(it) }.toMutableList()
+        fun fits(a: List<Piece>, b: List<Piece>) = crossroads(a) + crossroads(b) <= MOST_CROSSROADS
+        fun join(a: MutableList<Piece>, b: MutableList<Piece>) {
+            a.addAll(b)
+            parts.remove(b)
+        }
+        for (i in pieces.indices) for (j in i + 1 until pieces.size) {
+            if (pieces[i].box.gap(pieces[j].box) > 1) continue
+            val a = parts.first { pieces[i] in it }
+            val b = parts.first { pieces[j] in it }
+            if (a !== b && fits(a, b)) join(a, b)
+        }
+        while (true) {
+            val (small, near) = parts.sortedBy { it.size }.firstNotNullOfOrNull { part ->
+                parts.filter { it !== part && fits(it, part) }
+                    .minByOrNull { other -> part.minOf { p -> other.minOf { p.box.gap(it.box) } } }
+                    ?.let { part to it }
+            } ?: break
+            join(near, small)
+        }
+        return parts
+    }
 
     /** The fortress's whole box from its seen blocks and pieces (see the class notes). */
     fun outerBox(bricks: Box, pieces: List<Piece>): Box {

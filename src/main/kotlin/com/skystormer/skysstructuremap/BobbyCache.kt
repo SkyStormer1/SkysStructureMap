@@ -39,7 +39,7 @@ import kotlin.io.path.name
  * Bobby's files, and nothing here needs Bobby to be installed.
  *
  * Bobby keeps them in `.bobby/` in the game folder: a folder per server (its address with `:` as
- * `_`; the world's name in single player), in it one per world seed, then one per dimension
+ * `_`; the world's name in single player), in it one per world, then one per dimension
  * (`minecraft/overworld`), holding region files in the game's own format (`r.X.Z.mca`, 32 × 32
  * chunks each). With Bobby's "dynamic multi-world" option on, a dimension's folder holds numbered
  * folders of region files instead, one per world Bobby told apart.
@@ -63,20 +63,20 @@ object BobbyCache {
         val server = listOf(name, ESCAPER.escape(name)).distinct().map { root.resolve(it) }.firstOrNull { Files.isDirectory(it) }
             ?: return Result.failure(Missing("Bobby has nothing saved for \"$name\". Folders in .bobby: " + listFolders(root)))
         val notes = ArrayList<String>()
-        val seeds = Files.list(server).use { s -> s.filter { it.isDirectory() }.toList() }
-        if (seeds.isEmpty()) return Result.failure(Missing("Bobby's folder for \"$name\" is empty"))
-        // Bobby files a world under its seed's hash, so a server that was reset keeps the old world
-        // in a folder of its own; only the world you are in now is wanted.
-        val current = seedFolder(level)
-        val seed = seeds.firstOrNull { it.name == current } ?: run {
-            val newest = seeds.maxBy { Files.getLastModifiedTime(it).toMillis() }
-            if (seeds.size > 1) notes.add("Bobby has ${seeds.size} worlds saved for this server; reading the newest (${newest.name})")
+        val saved = Files.list(server).use { s -> s.filter { it.isDirectory() }.toList() }
+        if (saved.isEmpty()) return Result.failure(Missing("Bobby's folder for \"$name\" is empty"))
+        // Bobby files each world in a folder of its own, so a server that was reset keeps the old
+        // world apart; only the world you are in now is wanted.
+        val current = worldFolder(level)
+        val chosen = saved.firstOrNull { it.name == current } ?: run {
+            val newest = saved.maxBy { Files.getLastModifiedTime(it).toMillis() }
+            if (saved.size > 1) notes.add("Bobby has ${saved.size} worlds saved for this server; reading the newest (${newest.name})")
             newest
         }
         val regions = LinkedHashMap<String, List<Path>>()
         for (dimension in DIMENSIONS) {
             val (namespace, path) = dimension.split(':', limit = 2)
-            val folder = seed.resolve(namespace).resolve(path)
+            val folder = chosen.resolve(namespace).resolve(path)
             if (!Files.isDirectory(folder)) continue
             val files = regionFiles(folder).toMutableList()
             val worlds = Files.list(folder).use { s -> s.filter { it.isDirectory() }.toList() }
@@ -87,7 +87,7 @@ object BobbyCache {
             if (files.isNotEmpty()) regions[dimension] = files
         }
         if (regions.isEmpty()) return Result.failure(Missing("Bobby's folder for \"$name\" has no chunks saved in it"))
-        return Result.success(Found(seed, regions, notes))
+        return Result.success(Found(chosen, regions, notes))
     }
 
     /** Why there is nothing to read, said to the player as it is. */
@@ -104,12 +104,13 @@ object BobbyCache {
     private val ESCAPER = PercentEscaper(".-_ ", false)
 
     /**
-     * The folder Bobby files the world you are in under: the hash of its seed the game gives
-     * clients for mixing biomes, which is all a client knows of the seed. Null when it cannot be
-     * read, and then the newest folder is taken.
+     * The folder Bobby files the world you are in under: named after the number the game gives
+     * clients for mixing biomes, as Bobby names it. Null when it cannot be read, and then the
+     * newest folder is taken.
      */
-    private fun seedFolder(level: ClientLevel): String? = try {
-        val field = BiomeManager::class.java.getDeclaredField("biomeZoomSeed")
+    private fun worldFolder(level: ClientLevel): String? = try {
+        // Its one number field.
+        val field = BiomeManager::class.java.declaredFields.single { it.type == java.lang.Long.TYPE && !java.lang.reflect.Modifier.isStatic(it.modifiers) }
         field.isAccessible = true
         field.getLong(level.biomeManager).toString()
     } catch (e: Exception) {

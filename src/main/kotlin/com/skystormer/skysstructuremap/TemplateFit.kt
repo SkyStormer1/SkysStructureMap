@@ -105,7 +105,7 @@ open class TemplateFit(
         private const val MIN_MATCHED_BLOCKS = 60
 
         /** How many seen blocks of a kind are tried as the anchor, spread through those seen. */
-        private const val SEEDS = 6
+        private const val ANCHORS_TRIED = 6
 
         /** A kind in more spots than this of a design says too little about where it sits. */
         private const val MAX_SPOTS = 20
@@ -184,7 +184,7 @@ open class TemplateFit(
                 .filter { it.value == kind && !(tall && detection.blocks.get(BlockPos.offset(it.longKey, Direction.DOWN)) == kind) }
                 .map { it.longKey }
             if (seen.isEmpty()) continue
-            val step = maxOf(1, seen.size / SEEDS)
+            val step = maxOf(1, seen.size / ANCHORS_TRIED)
             val anchors = seen.indices.step(step).map { seen[it] }
             val work = templates.mapNotNull { template ->
                 val all = template.byFamily[family(kind)].orEmpty()

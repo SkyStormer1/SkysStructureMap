@@ -17,8 +17,11 @@ object Tracker {
 
     private val groups = Groups()
 
-    /** The groups in the dimension you are in. Chunks are sent again on changing dimension, so this starts over. */
-    val detections: List<Detection> get() = groups.detections
+    /**
+     * The groups in the dimension you are in, a fortress group holding more than one fortress as
+     * one for each ([Detection.parts]). Chunks are sent again on changing dimension, so this starts over.
+     */
+    val detections: List<Detection> get() = groups.detections.flatMap { it.parts.ifEmpty { listOf(it) } }
 
     private var dimension: String? = null
     private var ticks = 0L
@@ -58,7 +61,7 @@ object Tracker {
         ticks++
         if (ticks % 10 == 0L) {
             val blocks = BlockSource.of(level)
-            for (detection in detections) {
+            for (detection in groups.detections) {
                 if (detection.changed || (fitterFor(detection.type) != null && detection.fitDirty)) update(detection, blocks)
             }
         }
@@ -77,10 +80,13 @@ object Tracker {
      */
     private fun update(detection: Detection, level: BlockSource) {
         recognise(detection, level)
-        val box = detection.box ?: return
-        if (detection.storedId == null) link(detection, box)
-        val stored = detection.storedId?.let(StructureStore::byId) ?: return
-        keepUpToDate(detection, stored, box)
+        splitOffNextCity(groups, detection)
+        for (one in detection.parts.ifEmpty { listOf(detection) }) {
+            val box = one.box ?: continue
+            if (one.storedId == null) link(one, box)
+            val stored = one.storedId?.let(StructureStore::byId) ?: continue
+            keepUpToDate(one, stored, box)
+        }
     }
 
     /**
@@ -133,6 +139,7 @@ object Tracker {
         if (match != null) {
             detection.variant = match.template.name
             detection.piece = match.box
+            if (detection.type == StructureType.ANCIENT_CITY && match.template.name.startsWith(CITY_CENTRE)) detection.centre = match.box
         }
         detection.box = boxFrom(detection, match)
         if (match?.box != before || (match == null && detection.blocks.size >= LOG_FROM)) {
@@ -183,6 +190,7 @@ object Tracker {
             else FortressLabelling.request(detection, bricks)
             // Nether bricks that do not lay out fortress pieces are a build.
             detection.box = if (!FortressPieces.isFortress(detection.pieces)) null else FortressPieces.outerBox(bricks, detection.pieces)
+            detection.parts = if (detection.box == null) emptyList() else partsOf(detection)
         }
         if (detection.box != null && before == null) {
             Log.info("Recognised {} #{} from {} blocks ({}), seen {}: box {}", detection.type.id, detection.id,
@@ -190,11 +198,57 @@ object Tracker {
         }
     }
 
+    /**
+     * For an ancient city whose box was worked out from its centre: the blocks beyond it, which
+     * chained in from the city next to it, split off into a group of their own to be matched by
+     * themselves ([Groups.splitOff]). Two cities stand close enough that their blocks join, and the
+     * group would otherwise be saved as one city, the other never. Only from a centre: a box
+     * worked out from another of its buildings may not reach across the whole city.
+     */
+    fun splitOffNextCity(groups: Groups, detection: Detection): Detection? {
+        if (detection.type != StructureType.ANCIENT_CITY || detection.centre == null) return null
+        val box = detection.box ?: return null
+        return groups.splitOff(detection, box.grow(CITY_MARGIN), CITY_SPLIT_BLOCKS)
+    }
+
+    private const val CITY_CENTRE = "city_center/"
+
+    /** How far past a city's box its own blocks may still be, and how many blocks beyond that are another city. */
+    private const val CITY_MARGIN = 16
+    private const val CITY_SPLIT_BLOCKS = 500
+
+    /**
+     * One group for each fortress among [detection]'s pieces ([FortressPieces.split]), or none when
+     * they are one. A part that shares pieces with one from before is kept, with what it was saved
+     * as. Each takes the group's cells nearest its pieces, which make its outline and box.
+     */
+    private fun partsOf(detection: Detection): List<Detection> {
+        val split = FortressPieces.split(detection.pieces)
+        if (split.size < 2) return emptyList()
+        val cells = detection.cells.values.groupBy { cell -> split.indices.minBy { i -> split[i].minOf { cell.gap(it.box) } } }
+        val before = detection.parts.toMutableList()
+        if (before.isEmpty()) Log.info("Fortress #{}: its pieces are {} fortresses", detection.id, split.size)
+        return split.mapIndexed { i, pieces ->
+            val part = before.filter { old -> old.pieces.any { it in pieces } }.maxByOrNull { old -> old.pieces.count { it in pieces } }
+                ?.also { before.remove(it) }
+                ?: Detection(Detection.newPartId(), detection.type, detection.dimension)
+            part.partOf = detection
+            part.pieces = pieces
+            part.takeCells(cells[i].orEmpty())
+            part.box = FortressPieces.outerBox(part.bounds ?: pieces.map { it.box }.reduce(Box::union), pieces)
+            part
+        }
+    }
+
     /** Ties a group to the structure already saved where it stands, or to one deleted on purpose. */
     private fun link(detection: Detection, box: Box) {
         // Found again after rejoining, or seen from another side: it is the one already saved.
-        val saved = StructureStore.inDimension(detection.dimension)
-            .firstOrNull { it.type == detection.type && Specs.sameStructure(it.type, it.box, box) }
+        val near = StructureStore.inDimension(detection.dimension)
+            .filter { it.type == detection.type && Specs.sameStructure(it.type, it.box, box) }
+            // Never the one a group split from it is, nor a city with another centre.
+            .filter { saved -> detection.apart.none { it.storedId == saved.id } && !StructureStore.twoCities(saved.centre, detection.centre) }
+            .sortedByDescending { saved -> saved.centre != null && saved.centre == detection.centre }
+        val saved = if (detection.type == StructureType.FORTRESS && detection.pieces.isNotEmpty()) fortressFor(detection, near) else near.firstOrNull()
         if (saved != null) {
             detection.storedId = saved.id
             Log.info("{} #{} is the one discovered before ({})", detection.type.id, detection.id, saved.id)
@@ -203,6 +257,25 @@ object Tracker {
             detection.storedId = Menus.DELETED
             Log.info("{} #{} is one you deleted; ignoring it", detection.type.id, detection.id)
         }
+    }
+
+    /**
+     * Of the fortresses saved near [fortress], the one it is: never one that would then hold more
+     * crossroads than a fortress has, once it gives up the pieces of the group's other fortresses
+     * (it may have been saved before they were told apart), nor one another of them is already;
+     * of the rest, the one sharing most pieces with it, then the nearest.
+     */
+    private fun fortressFor(fortress: Detection, near: List<Structure>): Structure? {
+        val theirs = othersPieces(fortress)
+        val taken = fortress.partOf?.parts.orEmpty().filter { it !== fortress }.mapNotNull { it.storedId }.toSet()
+        val box = fortress.box ?: return null
+        fun distance(saved: Structure) = Math.abs(saved.box.centreX - box.centreX).toLong() + Math.abs(saved.box.centreZ - box.centreZ)
+        return near.filter { it.id !in taken }
+            .map { saved -> saved to saved.pieces.filterNot { old -> theirs.any { it.box.overlaps(old.box) } } }
+            .filterNot { (_, kept) -> FortressPieces.tooManyCrossroads(fortress.pieces, kept) }
+            .maxWithOrNull(compareBy<Pair<Structure, List<Piece>>> { (_, kept) -> kept.count { old -> fortress.pieces.any { it.box == old.box } } }
+                .thenBy { (saved, _) -> -distance(saved) })
+            ?.first
     }
 
     /** Grows a saved structure's box and pieces as more of it is seen. */
@@ -214,18 +287,35 @@ object Tracker {
             Specs.of(detection.type).reach == null -> box
             // A fortress's bottom is worked out, not seen: the new one replaces any older guess.
             detection.type == StructureType.FORTRESS ->
-                stored.box.union(box).let { if (box.minY == FortressPieces.LOWEST) it.copy(minY = FortressPieces.LOWEST) else it }
+                fortressBase(detection, stored).union(box).let { if (box.minY == FortressPieces.LOWEST) it.copy(minY = FortressPieces.LOWEST) else it }
             else -> stored.box.union(box)
         }.let { grown -> detection.piece?.let { around(detection.type, grown, it) } ?: grown }
         // Pieces stay once saved, so they are still there after the structure is torn down or out of
         // sight; but one a piece found now overlaps gives way to it (saved before pieces could be
         // told apart, or a block off).
         val kept = stored.pieces.filterNot { old -> detection.pieces.any { it.box != old.box && it.box.overlaps(old.box) } }
+            .filterNot { old -> othersPieces(detection).any { it.box.overlaps(old.box) } }
         if (kept.size != stored.pieces.size) {
             Log.info("{}: {} saved pieces replaced by ones found now", stored.name, stored.pieces.size - kept.size)
         }
         val pieces = kept + detection.pieces.filter { new -> kept.none { it.box == new.box } }
-        if (better != stored.box || pieces != stored.pieces) StructureStore.put(stored.copy(box = better, pieces = pieces))
+        val centre = stored.centre ?: detection.centre
+        if (better != stored.box || pieces != stored.pieces || centre != stored.centre) StructureStore.put(stored.copy(box = better, pieces = pieces, centre = centre))
+    }
+
+    /** The pieces of the other fortresses in [part]'s group. */
+    private fun othersPieces(part: Detection): List<Piece> = part.partOf?.parts.orEmpty().filter { it !== part }.flatMap { it.pieces }
+
+    /**
+     * What a saved fortress's box grows from: the box saved, or, when it was saved holding the
+     * group's other fortresses too (before they were told apart), only around the pieces it keeps.
+     */
+    private fun fortressBase(part: Detection, stored: Structure): Box {
+        val theirs = othersPieces(part)
+        if (stored.pieces.none { old -> theirs.any { it.box.overlaps(old.box) } }) return stored.box
+        val own = stored.pieces.filterNot { old -> theirs.any { it.box.overlaps(old.box) } }
+        Log.info("{}: saved with {} piece(s) of another fortress, now told apart", stored.name, stored.pieces.size - own.size)
+        return own.map { it.box }.fold(part.box ?: stored.box, Box::union)
     }
 
     /** What became of a group found in Bobby's cache ([takeIn]). */
@@ -284,6 +374,7 @@ object Tracker {
             discovered = System.currentTimeMillis(),
             variant = detection.variant,
             pieces = detection.pieces,
+            centre = detection.centre,
         )
         StructureStore.put(structure)
         detection.storedId = structure.id

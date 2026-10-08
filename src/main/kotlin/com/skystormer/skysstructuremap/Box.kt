@@ -41,6 +41,13 @@ data class Box(val minX: Int, val minY: Int, val minZ: Int, val maxX: Int, val m
             hitbox.minY < maxY + 1 && hitbox.maxY > minY &&
             hitbox.minZ < maxZ + 1 && hitbox.maxZ > minZ
 
+    /** How many blocks apart this and [other] are at their nearest: 0 when they overlap, 1 when they touch. */
+    fun gap(other: Box): Int = maxOf(
+        maxOf(minX - other.maxX, other.minX - maxX, 0),
+        maxOf(minY - other.maxY, other.minY - maxY, 0),
+        maxOf(minZ - other.maxZ, other.minZ - maxZ, 0),
+    )
+
     /** How far ([x], [z]) is from this box sideways, ignoring height: 0 inside it. */
     fun horizontalDistance(x: Double, z: Double): Double {
         val dx = maxOf(minX - x, 0.0, x - (maxX + 1))

@@ -135,16 +135,20 @@ object BobbyScan {
             }
             val blocks = BobbyCache.CachedBlocks(files, reader)
             val recognised = ArrayList<Detection>()
-            val all = groups.detections
-            for ((index, detection) in all.withIndex()) {
+            // Grows as a city's group gives up the next city's blocks (Tracker.splitOffNextCity).
+            val all = ArrayList(groups.detections)
+            var index = 0
+            while (index < all.size) {
                 if (stopped) return
+                val detection = all[index++]
                 try {
                     Tracker.recognise(detection, blocks, now = true)
+                    Tracker.splitOffNextCity(groups, detection)?.let(all::add)
                 } catch (e: Exception) {
                     Log.error("Could not match ${detection.type.id} #${detection.id} from Bobby's cache", e)
                 }
                 if (detection.box != null) recognised.add(detection)
-                progress("Matching what Bobby saw in the ${dimensionName(dimension)}: ${index + 1} of ${all.size}")
+                progress("Matching what Bobby saw in the ${dimensionName(dimension)}: $index of ${all.size}")
             }
             Log.info("Bobby scan of {}: {} groups, {} recognised", dimension, all.size, recognised.size)
             onMain { takeIn(recognised) }
@@ -158,7 +162,8 @@ object BobbyScan {
                 stopped = true
                 return
             }
-            for (detection in recognised) {
+            // A fortress group holding more than one fortress is saved as one for each.
+            for (detection in recognised.flatMap { it.parts.ifEmpty { listOf(it) } }) {
                 when (Tracker.takeIn(detection)) {
                     Tracker.Taken.NEW -> new.merge(detection.type, 1, Int::plus)
                     Tracker.Taken.KNOWN -> known++

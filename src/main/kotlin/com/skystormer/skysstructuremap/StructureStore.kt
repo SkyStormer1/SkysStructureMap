@@ -31,6 +31,11 @@ data class Structure(
     val pieces: List<Piece> = emptyList(),
     /** Marked as done (looted, cleared, whatever you count as done): a tick is drawn beside its icon. */
     val completed: Boolean = false,
+    /**
+     * Ancient cities: the box of its centre piece, once seen. A city has one, and two cities can
+     * stand close enough that their boxes touch, so this is what tells them apart ([twoCities]).
+     */
+    val centre: Box? = null,
 ) {
     val name: String get() = type.displayName
 
@@ -201,7 +206,8 @@ object StructureStore {
         val kept = ArrayList<Structure>()
         var joined = 0
         for (s in all.sortedBy { it.discovered }) {
-            val index = kept.indexOfFirst { it.type == s.type && it.dimension == s.dimension && Specs.sameStructure(s.type, it.box, s.box) }
+            val index = kept.indexOfFirst { it.type == s.type && it.dimension == s.dimension && Specs.sameStructure(s.type, it.box, s.box) &&
+                !twoFortresses(it, s) && !twoCities(it.centre, s.centre) }
             if (index < 0) {
                 kept.add(s)
                 continue
@@ -209,7 +215,7 @@ object StructureStore {
             val k = kept[index]
             // An exact box (a monument, a wreck) stays as it was; the rest grow to cover both.
             val box = if (Specs.of(s.type).reach == null) k.box else k.box.union(s.box)
-            kept[index] = k.copy(box = box, outlined = k.outlined || s.outlined, completed = k.completed || s.completed,
+            kept[index] = k.copy(box = box, outlined = k.outlined || s.outlined, completed = k.completed || s.completed, centre = k.centre ?: s.centre,
                 pieces = k.pieces + s.pieces.filter { p -> k.pieces.none { it.box == p.box } })
             joined++
         }
@@ -219,6 +225,19 @@ object StructureStore {
             dirty = true
         }
     }
+
+    /**
+     * Whether two saved fortresses are certainly two: together they would hold more crossroads
+     * than one fortress has ([FortressPieces.MOST_CROSSROADS]). Fortresses close together or on
+     * top of each other are within each other's span, so nearness alone would join them.
+     */
+    fun twoFortresses(a: Structure, b: Structure): Boolean {
+        if (a.type != StructureType.FORTRESS) return false
+        return FortressPieces.tooManyCrossroads(a.pieces, b.pieces)
+    }
+
+    /** Whether two ancient cities are certainly two: each has a centre seen, and they are not the same one. */
+    fun twoCities(a: Box?, b: Box?): Boolean = a != null && b != null && !a.overlaps(b)
 
     /** Whether [type] at [box] in [dimension] is one you deleted. */
     fun isDeleted(type: StructureType, dimension: String, box: Box): Boolean =
@@ -269,6 +288,7 @@ object StructureStore {
         structure.variant?.let { addProperty("variant", it) }
         if (structure.outlined) addProperty("outlined", true)
         if (structure.completed) addProperty("completed", true)
+        structure.centre?.let { c -> add("centre", JsonArray().also { a -> listOf(c.minX, c.minY, c.minZ, c.maxX, c.maxY, c.maxZ).forEach(a::add) }) }
         if (structure.pieces.isNotEmpty()) add("pieces", JsonArray().also { a ->
             structure.pieces.forEach { p ->
                 a.add(JsonObject().apply {
@@ -292,6 +312,7 @@ object StructureStore {
             variant = json.get("variant")?.asString,
             outlined = json.get("outlined")?.asBoolean ?: false,
             completed = json.get("completed")?.asBoolean ?: false,
+            centre = json.getAsJsonArray("centre")?.map { it.asInt }?.takeIf { it.size == 6 }?.let { Box(it[0], it[1], it[2], it[3], it[4], it[5]) },
             pieces = json.getAsJsonArray("pieces")?.mapNotNull { element ->
                 val p = element.asJsonObject
                 val pb = p.getAsJsonArray("box")?.map { it.asInt }?.takeIf { it.size == 6 } ?: return@mapNotNull null
