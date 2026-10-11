@@ -437,7 +437,7 @@ object RuinedPortalFit : TemplateFit(
      * Why a fit is not a ruined portal after all, or null when it is. Netherrack is what a player's
      * nether build is made of, and those matched on it alone, so some of the design's obsidian must
      * be there too, or else the magma the game turns netherrack into: players mine the obsidian out
-     * of the ones they find, and real ones on SiteB had none left. The game never lights one.
+     * of the ones they find, and real ones were found with none left. The game never lights one.
      */
     fun refusal(level: BlockSource): (Match) -> String? = { match ->
         var obsidian = 0
