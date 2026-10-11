@@ -1,7 +1,9 @@
 package com.skystormer.skysstructuremap
 
 import net.minecraft.core.BlockPos
+import net.minecraft.nbt.CompoundTag
 import net.minecraft.world.level.Level
+import net.minecraft.world.level.block.entity.SpawnerBlockEntity
 import net.minecraft.world.level.block.state.BlockState
 
 /**
@@ -15,10 +17,19 @@ interface BlockSource {
 
     fun getBlockState(pos: BlockPos): BlockState
 
+    /** The mob a spawner at [pos] spawns (`minecraft:zombie`), when that is known. */
+    fun spawnerMob(pos: BlockPos): String? = null
+
     companion object {
         fun of(level: Level): BlockSource = object : BlockSource {
             override fun hasChunk(chunkX: Int, chunkZ: Int) = level.hasChunk(chunkX, chunkZ)
             override fun getBlockState(pos: BlockPos): BlockState = level.getBlockState(pos)
+            override fun spawnerMob(pos: BlockPos): String? =
+                (level.getBlockEntity(pos) as? SpawnerBlockEntity)?.getUpdateTag(level.registryAccess())?.let(::spawnedBy)
         }
+
+        /** The mob in a spawner's saved data (its `SpawnData`), as the server sends it and Bobby saves it. */
+        fun spawnedBy(tag: CompoundTag): String? =
+            tag.getCompound("SpawnData").flatMap { it.getCompound("entity") }.flatMap { it.getString("id") }.orElse(null)
     }
 }

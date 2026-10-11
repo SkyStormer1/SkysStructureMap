@@ -132,8 +132,11 @@ object BobbyCache {
         return match.groupValues[1].toInt() to match.groupValues[2].toInt()
     }
 
-    /** One chunk as read: its sections from [minSectionY] up, air-only ones left out. */
-    class Chunk(val minSectionY: Int, val sections: Array<LevelChunkSection?>) {
+    /**
+     * One chunk as read: its sections from [minSectionY] up, air-only ones left out, and the mob
+     * each spawner in it spawns, by `BlockPos.asLong`.
+     */
+    class Chunk(val minSectionY: Int, val sections: Array<LevelChunkSection?>, val spawners: Map<Long, String> = emptyMap()) {
 
         fun getBlockState(x: Int, y: Int, z: Int): BlockState {
             val index = (y shr 4) - minSectionY
@@ -187,11 +190,19 @@ object BobbyCache {
                 section.recalcBlockCounts()
                 if (!section.hasOnlyAir()) read.add(y to section)
             }
-            if (read.isEmpty()) return Chunk(0, emptyArray())
+            val spawners = HashMap<Long, String>()
+            val entities = tag.getListOrEmpty("block_entities")
+            for (i in 0 until entities.size) {
+                val entity = entities.getCompound(i).orElse(null) ?: continue
+                if (entity.getStringOr("id", "") != "minecraft:mob_spawner") continue
+                val mob = BlockSource.spawnedBy(entity) ?: continue
+                spawners[BlockPos.asLong(entity.getIntOr("x", 0), entity.getIntOr("y", 0), entity.getIntOr("z", 0))] = mob
+            }
+            if (read.isEmpty()) return Chunk(0, emptyArray(), spawners)
             val min = read.minOf { it.first }
             val sections = arrayOfNulls<LevelChunkSection>(read.maxOf { it.first } - min + 1)
             for ((y, section) in read) sections[y - min] = section
-            return Chunk(min, sections)
+            return Chunk(min, sections, spawners)
         }
     }
 
@@ -298,6 +309,8 @@ object BobbyCache {
 
         override fun getBlockState(pos: BlockPos): BlockState =
             chunk(pos.x shr 4, pos.z shr 4)?.getBlockState(pos.x, pos.y, pos.z) ?: AIR
+
+        override fun spawnerMob(pos: BlockPos): String? = chunk(pos.x shr 4, pos.z shr 4)?.spawners?.get(pos.asLong())
 
         private companion object {
             const val REGIONS_KEPT = 4

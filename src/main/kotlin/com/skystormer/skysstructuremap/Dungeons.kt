@@ -9,13 +9,19 @@ import net.minecraft.world.level.block.Blocks
  * four mossy cobblestone. The floor and walls reach one block past the room, so 7 or 9 blocks across
  * each way, from the floor to the ceiling 4 blocks over the spawner.
  *
- * A mineshaft's spawner stands among cobwebs and a stronghold's on stone bricks: neither has the
- * mossy floor.
+ * Only a zombie, skeleton or spider spawner is one's (the game's `MonsterRoomFeature` picks one of
+ * those): a mineshaft's cave spider, a stronghold's silverfish, a bastion's magma cubes never.
+ * Trial spawners are another block. Where the mob is not known, a spawner among cobwebs is a
+ * mineshaft's: five beside mossy cobblestone were taken for dungeons on a server, and not one of
+ * 400 real dungeons had a cobweb within 2 blocks of its spawner.
  */
 object Dungeons {
 
     /** Mossy cobblestone needed in the floor round the spawner. */
     private const val MOSSY = 4
+
+    /** The mobs a dungeon's spawner spawns. */
+    private val MOBS = setOf("minecraft:zombie", "minecraft:skeleton", "minecraft:spider")
 
     /** The room around [detection]'s spawner, or null when it has no dungeon floor. */
     fun room(detection: Detection, level: BlockSource): Box? {
@@ -29,6 +35,11 @@ object Dungeons {
 
     private fun room(level: BlockSource, x: Int, y: Int, z: Int): Box? {
         val cursor = BlockPos.MutableBlockPos()
+        val mob = level.spawnerMob(cursor.set(x, y, z))
+        if (mob != null && mob !in MOBS) return null
+        for (dx in -2..2) for (dy in -1..2) for (dz in -2..2) {
+            if (block(level, cursor.set(x + dx, y + dy, z + dz)) == Blocks.COBWEB) return null
+        }
         var mossy = 0
         for (dx in -4..4) for (dz in -4..4) {
             if (block(level, cursor.set(x + dx, y - 1, z + dz)) == Blocks.MOSSY_COBBLESTONE) mossy++
