@@ -355,7 +355,9 @@ object Specs {
         StructureType.MONUMENT -> 58           // always exactly this
         StructureType.OUTPOST -> 48            // always exactly this
         StructureType.SHIPWRECK -> 32          // 28
-        StructureType.MINESHAFT -> 176         // the game keeps its pieces within 80 of the start room
+        // Never by width: one can start in any chunk, so two side by side fit in one's width, and
+        // saved ones were joined into one that way. Only touching ones are the same mineshaft.
+        StructureType.MINESHAFT -> 0
         StructureType.RUINED_PORTAL -> 24      // the giant ones are 16 across
         StructureType.DUNGEON -> 10            // 9 at most
         StructureType.DESERT_TEMPLE -> 24      // 21
