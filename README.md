@@ -22,15 +22,18 @@ copy of Minecraft:
 
 - **Ocean monuments** are always the same building on the same grid, so their exact box is known, and their
   prismarine has to lay out that building: sea lanterns and prismarine in a player's build by the sea do not.
-- **Villages, pillager outposts, shipwrecks, trail ruins, end cities, bastion remnants, ancient cities and woodland
-  mansions** are matched against the game's own designs, block by block. A village is found by its town centre or by
+- **Villages, pillager outposts, shipwrecks, trail ruins, end cities, bastion remnants, ancient cities, woodland
+  mansions and ruined portals** are matched against the game's own designs, block by block. A village is found by its town centre or by
   one of its houses, each found by its door or job block, so it still counts when the bell and the workstations have
   been taken. A farm never counts by itself: it only backs up a worn house, and only where both stand on a street
   as the game lays them.
 - **Nether fortresses** need their pieces laid out as the game builds them: a bridge crossroads, or several rooms,
   bridges and corridors; **desert temples** the
   terracotta cross over their hidden chamber; **jungle temples** their lever wall and trap; **witch huts** their exact
-  size and fittings.
+  size and fittings; **mineshafts** the fence and plank supports along their corridors; **dungeons** the mossy
+  cobblestone floor around their spawner.
+- A **ruined portal** must still have some of its obsidian, or the magma the game mixes into its netherrack, so a
+  player's netherrack build never counts.
 - **Strongholds, trial chambers and end gateways** go by blocks no player can place in survival: end portal frames,
   trial spawners and vaults, the gateway itself.
 - Each kind is only looked for in the biomes the game builds it in, so a player's base elsewhere is never taken for
@@ -104,7 +107,7 @@ copy of Minecraft:
 
 | Overworld | Nether | End |
 |---|---|---|
-| Villages, pillager outposts, woodland mansions, strongholds, witch huts, jungle temples, desert temples, trail ruins, ancient cities, trial chambers, ocean monuments, shipwrecks | Nether fortresses, bastion remnants | End cities, end gateways |
+| Villages, pillager outposts, woodland mansions, strongholds, witch huts, jungle temples, desert temples, trail ruins, ancient cities, trial chambers, ocean monuments, shipwrecks, ruined portals, mineshafts, dungeons | Nether fortresses, bastion remnants | End cities, end gateways |
 
 ## Installing
 

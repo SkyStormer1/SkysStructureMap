@@ -233,6 +233,37 @@ object Specs {
         reach = Spec.Reach(1, 1, 3),
     )
 
+    /**
+     * The obsidian of its broken frame, with the netherrack and gold the game lays round it. Set once
+     * one of the game's designs matches ([RuinedPortalFit]): obsidian is everywhere lava meets water.
+     */
+    private val RUINED_PORTAL = Spec(
+        setOf(Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN, Blocks.NETHERRACK, Blocks.GOLD_BLOCK), merge = 8,
+        recognise = { d -> d.box },
+        reach = null, waypointAtTop = true,
+    )
+
+    /**
+     * The fences its corridors are held up with (oak, or dark oak in the badlands). Proved by their
+     * supports, laid the way only the game lays them ([MineshaftPieces]); its box is everything seen.
+     */
+    private val MINESHAFT = Spec(
+        // Not in the deep dark: an ancient city's dark oak frames stand like supports.
+        setOf(Blocks.OAK_FENCE, Blocks.DARK_OAK_FENCE), notBiomes = listOf("deep_dark"), merge = 24,
+        recognise = { d -> d.bounds },
+        reach = Spec.Reach(3, 1, 4),
+    )
+
+    /**
+     * The spawner: players cannot get one. Proved by the mossy cobblestone floor round it, which a
+     * mineshaft's or stronghold's spawner never has; its box is then the room's ([Dungeons]).
+     */
+    private val DUNGEON = Spec(
+        setOf(Blocks.SPAWNER), merge = 2,
+        recognise = { d -> d.bounds },
+        reach = null,
+    )
+
     private val ANCIENT_CITY = Spec(
         setOf(
             Blocks.DEEPSLATE_BRICKS, Blocks.CRACKED_DEEPSLATE_BRICKS, Blocks.DEEPSLATE_BRICK_STAIRS, Blocks.DEEPSLATE_BRICK_SLAB,
@@ -297,6 +328,9 @@ object Specs {
         StructureType.TRIAL_CHAMBERS -> 13
         StructureType.MONUMENT -> 6
         StructureType.SHIPWRECK, StructureType.FORTRESS, StructureType.BASTION -> 5
+        StructureType.RUINED_PORTAL -> 16
+        // One can start in any chunk.
+        StructureType.MINESHAFT, StructureType.DUNGEON -> 1
         StructureType.END_CITY -> 12
         StructureType.END_GATEWAY -> 4
     }
@@ -321,6 +355,9 @@ object Specs {
         StructureType.MONUMENT -> 58           // always exactly this
         StructureType.OUTPOST -> 48            // always exactly this
         StructureType.SHIPWRECK -> 32          // 28
+        StructureType.MINESHAFT -> 176         // the game keeps its pieces within 80 of the start room
+        StructureType.RUINED_PORTAL -> 24      // the giant ones are 16 across
+        StructureType.DUNGEON -> 10            // 9 at most
         StructureType.DESERT_TEMPLE -> 24      // 21
         StructureType.JUNGLE_TEMPLE -> 20      // 15
         StructureType.WITCH_HUT -> 12          // 9
@@ -359,6 +396,9 @@ object Specs {
         StructureType.TRIAL_CHAMBERS -> TRIAL_CHAMBERS
         StructureType.MONUMENT -> MONUMENT
         StructureType.SHIPWRECK -> SHIPWRECK
+        StructureType.RUINED_PORTAL -> RUINED_PORTAL
+        StructureType.MINESHAFT -> MINESHAFT
+        StructureType.DUNGEON -> DUNGEON
         StructureType.FORTRESS -> FORTRESS
         StructureType.BASTION -> BASTION
         StructureType.END_CITY -> END_CITY

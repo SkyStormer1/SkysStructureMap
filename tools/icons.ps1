@@ -342,6 +342,69 @@ $icons = [ordered]@{
     )
   }
   # Not a structure: the tick drawn beside the icon of one marked as completed.
+  ruined_portal = @{
+    colours = @{ O = '231638'; C = '7A30D8'; N = '9A3A34'; G = 'F2C230'; M = 'E06A20' }
+    rows = @(
+      '................',
+      '...OOCO...OCO...',
+      '...O........O...',
+      '...C........O...',
+      '...O........C...',
+      '...O............',
+      '...O............',
+      '...O........O...',
+      '...C........O...',
+      '...O........O...',
+      '...O........C...',
+      '...OOOCOOOOOO...',
+      '.NNNNGNNNNMNNNN.',
+      '..NNNNNNNGNNNN..',
+      '................',
+      '................'
+    )
+  }
+  mineshaft = @{
+    colours = @{ P = 'B8945A'; D = '7A5A30'; F = '8A6A3A'; S = 'B0B0B8'; T = '6A4A2A'; K = '5A5A5A' }
+    rows = @(
+      '................',
+      '................',
+      '.PPPPPPPPPPPPPP.',
+      '.DDDDDDDDDDDDDD.',
+      '..FF........FF..',
+      '..FF........FF..',
+      '..FF........FF..',
+      '..FF........FF..',
+      '..FF........FF..',
+      '..FF........FF..',
+      '..FF.SSSSSS.FF..',
+      '..FF.TTTTTT.FF..',
+      '..FFSSSSSSSSFF..',
+      '.KKKKKKKKKKKKKK.',
+      '................',
+      '................'
+    )
+  }
+  dungeon = @{
+    colours = @{ B = '2A3038'; F = 'E05A20'; Y = 'F8D048'; M = '5E8A4A'; C = '8A8A8A' }
+    rows = @(
+      '................',
+      '................',
+      '..BBBBBBBBBBBB..',
+      '..B.B..BB..B.B..',
+      '..B.B..BB..B.B..',
+      '..BBBBBBBBBBBB..',
+      '..B.BFFBBFFB.B..',
+      '..B.BFYBBYFB.B..',
+      '..BBBBBBBBBBBB..',
+      '..B.B..BB..B.B..',
+      '..BBBBBBBBBBBB..',
+      '.MCMMCMMMCMMCMM.',
+      '.CMMCMMCMMCMMCM.',
+      '................',
+      '................',
+      '................'
+    )
+  }
   completed = @{
     colours = @{ G = '4CD05A'; H = 'A8F0A0' }
     rows = @(

@@ -57,6 +57,9 @@ object Waypoints {
         StructureType.TRIAL_CHAMBERS -> WaypointColor.GOLD
         StructureType.MONUMENT -> WaypointColor.AQUA
         StructureType.SHIPWRECK -> WaypointColor.GOLD
+        StructureType.RUINED_PORTAL -> WaypointColor.DARK_PURPLE
+        StructureType.MINESHAFT -> WaypointColor.BROWN
+        StructureType.DUNGEON -> WaypointColor.GRAY
         StructureType.FORTRESS -> WaypointColor.RED
         StructureType.BASTION -> WaypointColor.YELLOW
         StructureType.END_CITY -> WaypointColor.MAGENTA

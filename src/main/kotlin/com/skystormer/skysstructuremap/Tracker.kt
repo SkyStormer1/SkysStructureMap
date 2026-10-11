@@ -125,7 +125,7 @@ object Tracker {
             // tower stands well above its base, so only those blocks vote.
             StructureType.OUTPOST -> {
                 val base = detection.bounds?.minY ?: 0
-                fitter.fit(detection, level) { key -> BlockPos.getY(key) >= base + OUTPOST_TOWER_FROM }
+                fitter.fit(detection, level, votes = { key -> BlockPos.getY(key) >= base + OUTPOST_TOWER_FROM })
             }
             // The bell says where a town centre is on its own, and the few other blocks the game
             // puts there do the same once the bell has been taken, as players do. Failing those,
@@ -134,6 +134,8 @@ object Tracker {
                 ?: VillageHouseFit.also { used = it }.fitAnchored(detection, level, JOB_BLOCKS)
                 ?: VillageHouseFit.fitAnchored(detection, level, DOORS)
                 ?: worn(detection, level)?.also { used = VillageHouseFit }
+            StructureType.RUINED_PORTAL ->
+                if (RuinedPortalFit.worthTrying(detection)) fitter.fit(detection, level, accept = RuinedPortalFit.refusal(level)) else null
             else -> fitter.fit(detection, level)
         }
         if (match != null) {
@@ -178,10 +180,14 @@ object Tracker {
                 StructureType.DESERT_TEMPLE -> TemplePieces.desertCross(detection, level)
                 StructureType.JUNGLE_TEMPLE -> TemplePieces.jungleTrap(detection, level)
                 StructureType.MONUMENT -> MonumentLayout.matches(detection.box!!, level)
+                StructureType.MINESHAFT -> MineshaftPieces.proved(detection, level)
+                StructureType.DUNGEON -> Dungeons.room(detection, level)?.also { detection.piece = it } != null
                 else -> true
             }
             if (!detection.proved) detection.box = null
         }
+        // A dungeon's box is its room, found round the spawner when it was proved.
+        if (detection.type == StructureType.DUNGEON && detection.box != null) detection.box = detection.piece
         val bricks = detection.bounds
         if (detection.type == StructureType.FORTRESS && detection.box != null && bricks != null) {
             // Its pieces: at once in a scan of Bobby's cache (its own thread), in the background
@@ -402,6 +408,7 @@ object Tracker {
         StructureType.BASTION -> BastionFit
         StructureType.ANCIENT_CITY -> AncientCityFit
         StructureType.MANSION -> MansionFit
+        StructureType.RUINED_PORTAL -> RuinedPortalFit
         else -> null
     }
 

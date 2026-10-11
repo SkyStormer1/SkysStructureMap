@@ -397,3 +397,69 @@ object VillageStreets {
     /** How far above or below the entrance its street may lie. */
     private const val REACH_Y = 8
 }
+
+/**
+ * A ruined portal's 13 designs (ten small, three giant), placed turned and mirrored. The game ages
+ * them as it builds: obsidian turns to crying obsidian, stone bricks go mossy or cracked or become
+ * stairs and slabs, and some netherrack becomes magma (`RuinedPortalPiece.makeSettings`), so those
+ * count as what they replace.
+ * It takes out three gold blocks in ten, and turns lava to magma or netherrack, so those are loose.
+ */
+object RuinedPortalFit : TemplateFit(
+    "ruined_portal",
+    (1..10).map { "portal_$it" } + (1..3).map { "giant_portal_$it" },
+    anyWood = false,
+    agreement = 0.3,
+    samples = 200,
+    aliases = mapOf(
+        "crying_obsidian" to "obsidian",
+        "mossy_stone_bricks" to "stone_bricks", "cracked_stone_bricks" to "stone_bricks",
+        "stone_brick_stairs" to "stone_bricks", "mossy_stone_brick_stairs" to "stone_bricks",
+        "stone_brick_slab" to "stone_bricks", "mossy_stone_brick_slab" to "stone_bricks",
+        "stone_brick_wall" to "stone_bricks", "mossy_stone_brick_wall" to "stone_bricks",
+        "magma_block" to "netherrack",
+    ),
+    loose = setOf("gold_block", "lava"),
+    minVotes = 20,
+    mirrored = true,
+    closest = true,
+) {
+    /**
+     * Whether a group is worth matching at all: obsidian alone is where lava met water, and every
+     * design has netherrack.
+     */
+    fun worthTrying(detection: Detection): Boolean =
+        (detection.kinds[Blocks.NETHERRACK] ?: 0) >= MIN_NETHERRACK
+
+    private const val MIN_NETHERRACK = 10
+
+    /**
+     * Why a fit is not a ruined portal after all, or null when it is. Netherrack is what a player's
+     * nether build is made of, and those matched on it alone, so some of the design's obsidian must
+     * be there too, or else the magma the game turns netherrack into: players mine the obsidian out
+     * of the ones they find, and real ones on SiteB had none left. The game never lights one.
+     */
+    fun refusal(level: BlockSource): (Match) -> String? = { match ->
+        var obsidian = 0
+        var magma = 0
+        var lit = false
+        val box = match.box
+        val cursor = BlockPos.MutableBlockPos()
+        for (x in box.minX..box.maxX) for (y in box.minY..box.maxY) for (z in box.minZ..box.maxZ) {
+            if (!level.hasChunk(x shr 4, z shr 4)) continue
+            when (level.getBlockState(cursor.set(x, y, z)).block) {
+                Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN -> obsidian++
+                Blocks.MAGMA_BLOCK -> magma++
+                Blocks.NETHER_PORTAL -> lit = true
+            }
+        }
+        val frame = match.template.byFamily["obsidian"]?.size ?: 0
+        when {
+            lit -> "lit, so a player's"
+            obsidian * 4 < frame && magma < MIN_MAGMA -> "$obsidian obsidian of $frame and $magma magma"
+            else -> null
+        }
+    }
+
+    private const val MIN_MAGMA = 2
+}

@@ -60,6 +60,17 @@ open class TemplateFit(
      * gilded blocks are few and in known places. Everything is still checked block for block.
      */
     private val votingKinds: Set<Block> = emptySet(),
+    /**
+     * The game may also place it mirrored, front to back, as it does ruined portals: each design is
+     * tried that way too, as a design of its own.
+     */
+    private val mirrored: Boolean = false,
+    /**
+     * Checks the best-voted placements of every design and turn, and keeps the closest fit, rather
+     * than the most-voted placements and the fit with the most blocks: where one design is far
+     * bigger than the rest, as a giant ruined portal is, it outvotes and outmatches the right small one.
+     */
+    private val closest: Boolean = false,
 ) {
 
     /**
@@ -118,6 +129,9 @@ open class TemplateFit(
         const val MIN_AGREEMENT = 0.8
 
         const val SAMPLES = 24
+
+        /** Fits this much apart in share are as close as each other (see [closest]). */
+        private const val CLOSE = 0.05
 
         /** How many of the best-voted starts for each design and turn are checked. */
         private const val TOP_STARTS = 3
@@ -228,7 +242,7 @@ open class TemplateFit(
         return null
     }
 
-    fun fit(detection: Detection, level: BlockSource, votes: (Long) -> Boolean = { true }): Match? {
+    fun fit(detection: Detection, level: BlockSource, votes: (Long) -> Boolean = { true }, accept: (Match) -> String? = { null }): Match? {
         if (templates.isEmpty() || detection.blocks.size < MIN_BLOCKS) {
             lastReport = "${detection.blocks.size} blocks, too few"
             return null
@@ -288,13 +302,22 @@ open class TemplateFit(
         var best: Match? = null
         // The best-voted placements are checked: a design heavy with paths can outvote the right
         // one, but checking hundreds of them block for block would hold up a frame.
-        for (candidate in candidates.sortedByDescending { it.votes }.take(MAX_CHECKS)) {
+        val checked = if (closest) candidates else candidates.sortedByDescending { it.votes }.take(MAX_CHECKS)
+        for (candidate in checked) {
             val match = check(candidate.template, candidate.rotation, candidate.origin, level)
-            lastReport += "; ${candidate.template.name} ${candidate.rotation}: " + (match?.let { "${it.matched}/${it.known}" } ?: lastCheck)
-            if (match == null) continue
+            val refused = match?.let(accept)
+            lastReport += "; ${candidate.template.name} ${candidate.rotation}: " + (match?.let { "${it.matched}/${it.known}" } ?: lastCheck) +
+                (refused?.let { " ($it)" } ?: "")
+            if (match == null || refused != null) continue
             // A degraded wreck is a full one with blocks missing, so on an intact wreck both fit;
             // the one explaining more blocks is the right one.
-            if (best == null || match.matched > best.matched) best = match
+            val better = when {
+                best == null -> true
+                // Within a few points, the one explaining more blocks: a small design fits inside a big one about as well.
+                closest -> match.share > best.share + CLOSE || (match.share >= best.share - CLOSE && match.matched > best.matched)
+                else -> match.matched > best.matched
+            }
+            if (better) best = match
         }
         return best
     }
@@ -350,8 +373,18 @@ open class TemplateFit(
             }
         }
         Log.info("Loaded {} of {} {} templates", loaded.size, names.size, folder)
-        return loaded
+        return if (mirrored) loaded + loaded.map(::mirror) else loaded
     }
+
+    /** [template] mirrored front to back (its x turned round), as the game's `Mirror.FRONT_BACK` places it. */
+    private fun mirror(template: Template): Template = Template(
+        "${template.name} mirrored", template.sizeX, template.sizeY, template.sizeZ,
+        template.blocks.map { (pos, block) -> BlockPos(template.sizeX - 1 - pos.x, pos.y, pos.z) to block },
+        template.woods,
+        template.entrances.map { (pos, facing) ->
+            BlockPos(template.sizeX - 1 - pos.x, pos.y, pos.z) to if (facing.axis == Direction.Axis.X) facing.opposite else facing
+        },
+    )
 
     private fun parse(name: String, tag: CompoundTag): Template {
         val size = tag.getListOrEmpty("size")
