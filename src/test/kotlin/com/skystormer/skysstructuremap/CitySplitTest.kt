@@ -51,8 +51,8 @@ class CitySplitTest {
 
     @Test
     fun savedCitiesWithTheirOwnCentresAreTwo() {
-        assertTrue(StructureStore.twoCities(Box(0, -40, 0, 20, -20, 20), Box(200, -40, 0, 220, -20, 20)))
-        assertFalse(StructureStore.twoCities(Box(0, -40, 0, 20, -20, 20), Box(0, -40, 0, 20, -20, 20)))
-        assertFalse(StructureStore.twoCities(Box(0, -40, 0, 20, -20, 20), null), "a city saved before centres were kept")
+        assertTrue(StructureStore.twoCentres(Box(0, -40, 0, 20, -20, 20), Box(200, -40, 0, 220, -20, 20)))
+        assertFalse(StructureStore.twoCentres(Box(0, -40, 0, 20, -20, 20), Box(0, -40, 0, 20, -20, 20)))
+        assertFalse(StructureStore.twoCentres(Box(0, -40, 0, 20, -20, 20), null), "a city saved before centres were kept")
     }
 }

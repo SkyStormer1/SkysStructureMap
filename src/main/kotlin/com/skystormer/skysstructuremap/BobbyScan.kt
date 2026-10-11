@@ -135,7 +135,7 @@ object BobbyScan {
             }
             val blocks = BobbyCache.CachedBlocks(files, reader)
             val recognised = ArrayList<Detection>()
-            // Grows as a city's group gives up the next city's blocks (Tracker.splitOffNextCity).
+            // Grows as a city's or mineshaft's group gives up the next one's blocks (Tracker.splitOffNext).
             val all = ArrayList(groups.detections)
             var index = 0
             while (index < all.size) {
@@ -143,7 +143,7 @@ object BobbyScan {
                 val detection = all[index++]
                 try {
                     Tracker.recognise(detection, blocks, now = true)
-                    Tracker.splitOffNextCity(groups, detection)?.let(all::add)
+                    Tracker.splitOffNext(groups, detection)?.let(all::add)
                 } catch (e: Exception) {
                     Log.error("Could not match ${detection.type.id} #${detection.id} from Bobby's cache", e)
                 }

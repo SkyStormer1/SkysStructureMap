@@ -33,8 +33,9 @@ data class Structure(
     /** Marked as done (looted, cleared, whatever you count as done): a tick is drawn beside its icon. */
     val completed: Boolean = false,
     /**
-     * Ancient cities: the box of its centre piece, once seen. A city has one, and two cities can
-     * stand close enough that their boxes touch, so this is what tells them apart ([twoCities]).
+     * Ancient cities: the box of its centre piece, once seen; mineshafts: of its start room. Each
+     * has one, and two can stand close enough that their boxes touch (mineshafts cross into each
+     * other), so this is what tells them apart ([twoCentres]).
      */
     val centre: Box? = null,
 ) {
@@ -285,7 +286,7 @@ object StructureStore {
         var joined = 0
         for (s in all.sortedBy { it.discovered }) {
             val index = kept.indexOfFirst { it.type == s.type && it.dimension == s.dimension && Specs.sameStructure(s.type, it.box, s.box) &&
-                !twoFortresses(it, s) && !twoCities(it.centre, s.centre) }
+                !twoFortresses(it, s) && !twoCentres(it.centre, s.centre) }
             if (index < 0) {
                 kept.add(s)
                 continue
@@ -314,8 +315,8 @@ object StructureStore {
         return FortressPieces.tooManyCrossroads(a.pieces, b.pieces)
     }
 
-    /** Whether two ancient cities are certainly two: each has a centre seen, and they are not the same one. */
-    fun twoCities(a: Box?, b: Box?): Boolean = a != null && b != null && !a.overlaps(b)
+    /** Whether two ancient cities or mineshafts are certainly two: each has a centre seen, and they are not the same one. */
+    fun twoCentres(a: Box?, b: Box?): Boolean = a != null && b != null && !a.overlaps(b)
 
     /** Whether [type] at [box] in [dimension] is one you deleted. */
     fun isDeleted(type: StructureType, dimension: String, box: Box): Boolean =

@@ -16,7 +16,7 @@ import java.util.EnumMap
  * joined the whole area around spawn, well over a thousand blocks across, into one village group
  * and found no village in it, missing a real one there that live detection, which only sees the
  * chunks around you, had found. Ancient cities side by side chained the same way, and are now
- * split once one city's centre is known ([splitOff], `Tracker.splitOffNextCity`). Villages are not:
+ * split once one city's centre is known ([splitOff], `Tracker.splitOffNext`). Villages are not:
  * a house fits anywhere in a village, so a box from one may not cover the village, and splitting
  * there could cut a village in two. Watch for groups like it ("village #… at Box(…)" lines far
  * wider than a village in the log).

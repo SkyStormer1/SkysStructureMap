@@ -80,7 +80,7 @@ object Tracker {
      */
     private fun update(detection: Detection, level: BlockSource) {
         recognise(detection, level)
-        splitOffNextCity(groups, detection)
+        splitOffNext(groups, detection)
         for (one in detection.parts.ifEmpty { listOf(detection) }) {
             val box = one.box ?: continue
             if (one.storedId == null) link(one, box)
@@ -188,6 +188,7 @@ object Tracker {
         }
         // A dungeon's box is its room, found round the spawner when it was proved.
         if (detection.type == StructureType.DUNGEON && detection.box != null) detection.box = detection.piece
+        if (detection.type == StructureType.MINESHAFT && detection.box != null) detection.box = mineshaftBox(detection, level)
         val bricks = detection.bounds
         if (detection.type == StructureType.FORTRESS && detection.box != null && bricks != null) {
             // Its pieces: at once in a scan of Bobby's cache (its own thread), in the background
@@ -205,16 +206,43 @@ object Tracker {
     }
 
     /**
-     * For an ancient city whose box was worked out from its centre: the blocks beyond it, which
-     * chained in from the city next to it, split off into a group of their own to be matched by
-     * themselves ([Groups.splitOff]). Two cities stand close enough that their blocks join, and the
-     * group would otherwise be saved as one city, the other never. Only from a centre: a box
-     * worked out from another of its buildings may not reach across the whole city.
+     * A mineshaft's box: what is seen of it, as far as the game reaches from its start room
+     * ([Detection.centre]). Mineshafts cross into each other, so their fences chain into one group
+     * for as far as they go: one was saved over a kilometre across. Without its room in sight, a
+     * group wider than any one mineshaft is cut to a stretch that wide ([MineshaftPieces.stretch]).
      */
-    fun splitOffNextCity(groups: Groups, detection: Detection): Detection? {
-        if (detection.type != StructureType.ANCIENT_CITY || detection.centre == null) return null
+    private fun mineshaftBox(detection: Detection, level: BlockSource): Box? {
+        val seen = detection.bounds ?: return null
+        if (detection.centre == null) {
+            detection.centre = MineshaftPieces.startRoom(detection, level)
+                ?: MineshaftPieces.stretch(seen).takeIf { maxOf(seen.sizeX, seen.sizeZ) > 2 * MineshaftPieces.REACH }
+        }
+        val centre = detection.centre ?: return seen
+        return clamp(seen, MineshaftPieces.reachOf(centre))
+    }
+
+    /** [box] cut down to what lies inside [within]. */
+    private fun clamp(box: Box, within: Box) = Box(
+        maxOf(box.minX, within.minX), maxOf(box.minY, within.minY), maxOf(box.minZ, within.minZ),
+        minOf(box.maxX, within.maxX), minOf(box.maxY, within.maxY), minOf(box.maxZ, within.maxZ),
+    )
+
+    /**
+     * For a structure whose box was worked out from its one centre piece (an ancient city's centre,
+     * a mineshaft's start room): the blocks beyond it, which chained in from the next one, split
+     * off into a group of their own to be matched by themselves ([Groups.splitOff]). Two cities
+     * stand close enough that their blocks join, and mineshafts cross into each other; the group
+     * would otherwise be saved as one, the others never. Only from a centre: a box worked out from
+     * another of a city's buildings may not reach across the whole city.
+     */
+    fun splitOffNext(groups: Groups, detection: Detection): Detection? {
+        val centre = detection.centre ?: return null
         val box = detection.box ?: return null
-        return groups.splitOff(detection, box.grow(CITY_MARGIN), CITY_SPLIT_BLOCKS)
+        return when (detection.type) {
+            StructureType.ANCIENT_CITY -> groups.splitOff(detection, box.grow(CITY_MARGIN), CITY_SPLIT_BLOCKS)
+            StructureType.MINESHAFT -> groups.splitOff(detection, MineshaftPieces.reachOf(centre), MineshaftPieces.SUPPORTS * 4)
+            else -> null
+        }
     }
 
     private const val CITY_CENTRE = "city_center/"
@@ -251,8 +279,8 @@ object Tracker {
         // Found again after rejoining, or seen from another side: it is the one already saved.
         val near = StructureStore.inDimension(detection.dimension)
             .filter { it.type == detection.type && Specs.sameStructure(it.type, it.box, box) }
-            // Never the one a group split from it is, nor a city with another centre.
-            .filter { saved -> detection.apart.none { it.storedId == saved.id } && !StructureStore.twoCities(saved.centre, detection.centre) }
+            // Never the one a group split from it is, nor one with another centre.
+            .filter { saved -> detection.apart.none { it.storedId == saved.id } && !StructureStore.twoCentres(saved.centre, detection.centre) }
             .sortedByDescending { saved -> saved.centre != null && saved.centre == detection.centre }
         val saved = if (detection.type == StructureType.FORTRESS && detection.pieces.isNotEmpty()) fortressFor(detection, near) else near.firstOrNull()
         if (saved != null) {
@@ -294,6 +322,9 @@ object Tracker {
             // A fortress's bottom is worked out, not seen: the new one replaces any older guess.
             detection.type == StructureType.FORTRESS ->
                 fortressBase(detection, stored).union(box).let { if (box.minY == FortressPieces.LOWEST) it.copy(minY = FortressPieces.LOWEST) else it }
+            // As far as the game reaches from its start room, however far its fences chain.
+            detection.type == StructureType.MINESHAFT && detection.centre != null ->
+                clamp(stored.box.union(box), MineshaftPieces.reachOf(detection.centre!!))
             else -> stored.box.union(box)
         }.let { grown -> detection.piece?.let { around(detection.type, grown, it) } ?: grown }
         // Pieces stay once saved, so they are still there after the structure is torn down or out of

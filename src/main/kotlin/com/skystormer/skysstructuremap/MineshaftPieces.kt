@@ -1,6 +1,7 @@
 package com.skystormer.skysstructuremap
 
 import net.minecraft.core.BlockPos
+import net.minecraft.world.level.ChunkPos
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
 
@@ -15,6 +16,15 @@ object MineshaftPieces {
 
     /** Supports needed before a group of fences is a mineshaft. */
     const val SUPPORTS = 3
+
+    /**
+     * How far from its start room the game lays a mineshaft's pieces: a piece starts at most 80
+     * blocks from it (`MineshaftPieces.generateAndAddPiece`), and a corridor runs up to 20 on.
+     */
+    const val REACH = 104
+
+    /** How far up and down from its start room it reaches: stairs lead down and up from corridors. */
+    private const val REACH_HEIGHT = 64
 
     private val FENCES: Set<Block> = setOf(Blocks.OAK_FENCE, Blocks.DARK_OAK_FENCE)
     private val PLANKS: Set<Block> = setOf(Blocks.OAK_PLANKS, Blocks.DARK_OAK_PLANKS)
@@ -50,6 +60,85 @@ object MineshaftPieces {
         // Rails, cobwebs and torches stand in a corridor; nothing that fills it does.
         return !blocks(level, cursor.set(x + dx, y, z + dz)) && !blocks(level, cursor.set(x + dx, y + 1, z + dz))
     }
+
+    /**
+     * Everywhere a mineshaft reckoned from [centre] can reach: as far as the game lays pieces from
+     * its start room, or, for one whose room was never seen, the stretch it was cut to ([stretch]).
+     */
+    fun reachOf(centre: Box): Box =
+        if (centre.sizeX > ROOM) centre else centre.grow(REACH, down = REACH_HEIGHT, up = REACH_HEIGHT)
+
+    /**
+     * Where a mineshaft whose start room is not in sight is reckoned to be, from the fences [seen]:
+     * a stretch as wide as one can be, from their north-west corner. Not every start room can be
+     * found (one opens into a cave with no walls; at another the game's own record had no room at
+     * all), and fences chained across many mineshafts would otherwise make one huge one.
+     */
+    fun stretch(seen: Box): Box = Box(seen.minX, seen.minY, seen.minZ, seen.minX + 2 * REACH, seen.maxY, seen.minZ + 2 * REACH)
+
+    /**
+     * The start room of one of [detection]'s mineshafts, or null when none is in sight. Every
+     * mineshaft has one, and only one (`MineshaftPieces.MineShaftRoom`): it starts 2 blocks into
+     * its chunk on x and z and is at least 7 across, an open room with a wall just outside it, its
+     * floor whatever ground was there. Its corridors leave from its sides, so it is looked for in
+     * the chunks the fences are in and those beside them, at the fences' heights.
+     */
+    fun startRoom(detection: Detection, level: BlockSource): Box? {
+        // Each chunk to try, with the lowest and highest fence near it.
+        val heights = HashMap<Long, IntArray>()
+        val iterator = detection.positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            val y = BlockPos.getY(key)
+            val chunkX = BlockPos.getX(key) shr 4
+            val chunkZ = BlockPos.getZ(key) shr 4
+            for (dx in -1..1) for (dz in -1..1) {
+                val range = heights.getOrPut(ChunkPos.pack(chunkX + dx, chunkZ + dz)) { intArrayOf(y, y) }
+                range[0] = minOf(range[0], y)
+                range[1] = maxOf(range[1], y)
+            }
+        }
+        val cursor = BlockPos.MutableBlockPos()
+        for ((chunk, range) in heights) {
+            val x = ChunkPos.getX(chunk) * 16 + 2
+            val z = ChunkPos.getZ(chunk) * 16 + 2
+            if (!level.hasChunk(x shr 4, z shr 4)) continue
+            for (y in range[0] - ROOM_BELOW..range[1] + ROOM_ABOVE) {
+                if (isRoom(level, cursor, x, y, z)) return Box(x, y, z, x + ROOM - 1, y + ROOM_HIGH, z + ROOM - 1)
+            }
+        }
+        return null
+    }
+
+    /**
+     * A start room's floor at [y], from [x], [z]: mostly solid, with air three blocks high over all
+     * of its 7 x 7 and a wall standing just outside it on the west and north. Checked against every
+     * start room in a test world: none missed, none found where there was none.
+     */
+    private fun isRoom(level: BlockSource, cursor: BlockPos.MutableBlockPos, x: Int, y: Int, z: Int): Boolean {
+        if (isAir(level, cursor.set(x, y, z)) || !isAir(level, cursor.set(x, y + 1, z))) return false
+        var floor = 0
+        for (dx in 0 until ROOM) for (dz in 0 until ROOM) {
+            if (!isAir(level, cursor.set(x + dx, y, z + dz))) floor++
+            for (dy in 1..ROOM_HIGH) if (!isAir(level, cursor.set(x + dx, y + dy, z + dz))) return false
+        }
+        if (floor < ROOM_FLOOR) return false
+        var wall = 0
+        for (dy in 1..ROOM_HIGH) for (along in 0 until ROOM) {
+            if (!isAir(level, cursor.set(x - 1, y + dy, z + along))) wall++
+            if (!isAir(level, cursor.set(x + along, y + dy, z - 1))) wall++
+        }
+        return wall >= ROOM_HIGH * ROOM * 2 * ROOM_WALL
+    }
+
+    private const val ROOM = 7
+    private const val ROOM_HIGH = 3
+    private const val ROOM_FLOOR = 30
+    private const val ROOM_WALL = 0.6
+    private const val ROOM_BELOW = 10
+    private const val ROOM_ABOVE = 2
+
+    private fun isAir(level: BlockSource, pos: BlockPos): Boolean = level.getBlockState(pos).isAir
 
     private fun isFence(level: BlockSource, pos: BlockPos): Boolean =
         level.hasChunk(pos.x shr 4, pos.z shr 4) && level.getBlockState(pos).block in FENCES
