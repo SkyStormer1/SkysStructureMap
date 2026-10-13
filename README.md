@@ -1,7 +1,7 @@
 # Sky's Structure Map
 
 **[⬇ Download the latest version](https://github.com/SkyStormer1/SkysStructureMap/releases/latest)**
-&nbsp;·&nbsp; Minecraft 26.2 · Fabric · client-side
+&nbsp;·&nbsp; Minecraft 26.3 · Fabric · client-side
 
 A client-side Fabric mod that remembers the structures you come across, so you never have to write down coordinates
 again. It puts every structure you find on **Xaero's World Map and Minimap**, with its own icon.
@@ -111,7 +111,7 @@ copy of Minecraft:
 
 ## Installing
 
-1. Install [Fabric Loader](https://fabricmc.net/use/) for Minecraft 26.2.
+1. Install [Fabric Loader](https://fabricmc.net/use/) for Minecraft 26.3.
 2. Put these in your `mods` folder:
    - [Fabric API](https://modrinth.com/mod/fabric-api)
    - [Fabric Language Kotlin](https://modrinth.com/mod/fabric-language-kotlin)
