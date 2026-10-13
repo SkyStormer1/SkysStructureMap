@@ -146,6 +146,9 @@ object MineshaftPieces {
     private fun isPlanks(level: BlockSource, pos: BlockPos): Boolean =
         level.hasChunk(pos.x shr 4, pos.z shr 4) && level.getBlockState(pos).block in PLANKS
 
+    // What 26.2's `blocksMotion` said, which 26.3 removed: solid, but not a cobweb or a bamboo shoot.
     private fun blocks(level: BlockSource, pos: BlockPos): Boolean =
-        !level.hasChunk(pos.x shr 4, pos.z shr 4) || level.getBlockState(pos).blocksMotion()
+        !level.hasChunk(pos.x shr 4, pos.z shr 4) || level.getBlockState(pos).let {
+            it.block != Blocks.COBWEB && it.block != Blocks.BAMBOO_SAPLING && it.isSolid
+        }
 }

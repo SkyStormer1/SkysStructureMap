@@ -1,6 +1,6 @@
 package com.skystormer.skysstructuremap
 
-import com.mojang.blaze3d.textures.GpuTextureView
+import com.mojang.renderpearl.api.textures.GpuTextureView
 import com.mojang.blaze3d.vertex.BufferBuilder
 import net.minecraft.client.Minecraft
 import net.minecraft.resources.Identifier

@@ -26,7 +26,7 @@ object StructureMapClient : ClientModInitializer {
     /** Shows or hides the spawn boxes in the world. Unbound until you pick a key in Controls. */
     private val spawnBoxesKey = KeyMapping(
         "key.skysstructuremap.spawn_boxes",
-        InputConstants.Type.KEYSYM,
+        InputConstants.Type.KEYBOARD,
         InputConstants.UNKNOWN.value,
         KeyMapping.Category.register(Identifier.fromNamespaceAndPath("skysstructuremap", "structures")),
     )

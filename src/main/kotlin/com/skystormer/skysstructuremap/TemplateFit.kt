@@ -395,7 +395,10 @@ open class TemplateFit(
         }
         val blockPalettes = palettes.map { paletteTag ->
             (0 until paletteTag.size).map { i ->
-                BuiltInRegistries.BLOCK.getValue(Identifier.parse(paletteTag.getCompoundOrEmpty(i).getStringOr("Name", "minecraft:air")))
+                val entry = paletteTag.getCompoundOrEmpty(i)
+                // 26.3 renamed a template's `Name` and `Properties` to `id` and `properties`.
+                val id = entry.getString("id").orElseGet { entry.getStringOr("Name", "minecraft:air") }
+                BuiltInRegistries.BLOCK.getValue(Identifier.parse(id))
             }
         }
         val palette = blockPalettes.firstOrNull() ?: emptyList()
@@ -410,7 +413,8 @@ open class TemplateFit(
             val at = BlockPos(pos.getIntOr(0, 0), pos.getIntOr(1, 0), pos.getIntOr(2, 0))
             if (block == Blocks.JIGSAW && entry.getCompoundOrEmpty("nbt").getStringOr("name", "") == BUILDING_ENTRANCE) {
                 // Its orientation is the way it faces then which way is up, as `west_up`.
-                val facing = palettes.first().getCompoundOrEmpty(state).getCompoundOrEmpty("Properties")
+                val stateTag = palettes.first().getCompoundOrEmpty(state)
+                val facing = stateTag.getCompound("properties").orElseGet { stateTag.getCompoundOrEmpty("Properties") }
                     .getStringOr("orientation", "").substringBefore('_')
                 Direction.entries.firstOrNull { it.serializedName == facing }?.let { entrances.add(at to it) }
             }
