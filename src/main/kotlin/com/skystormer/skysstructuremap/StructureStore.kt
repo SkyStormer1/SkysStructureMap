@@ -286,7 +286,7 @@ object StructureStore {
         var joined = 0
         for (s in all.sortedBy { it.discovered }) {
             val index = kept.indexOfFirst { it.type == s.type && it.dimension == s.dimension && Specs.sameStructure(s.type, it.box, s.box) &&
-                !twoFortresses(it, s) && !twoCentres(it.centre, s.centre) }
+                !twoFortresses(it, s) && !twoCentres(it.centre, s.centre) && !twoMineshafts(it, s) }
             if (index < 0) {
                 kept.add(s)
                 continue
@@ -314,6 +314,14 @@ object StructureStore {
         if (a.type != StructureType.FORTRESS) return false
         return FortressPieces.tooManyCrossroads(a.pieces, b.pieces)
     }
+
+    /**
+     * Whether two saved mineshafts may be two: unless both were saved from the same start room.
+     * They cross and touch each other, and every load joined the ones within 24 blocks: 191 on one
+     * load, one grown to 484 by 423 blocks.
+     */
+    fun twoMineshafts(a: Structure, b: Structure): Boolean =
+        a.type == StructureType.MINESHAFT && (a.centre == null || a.centre != b.centre)
 
     /** Whether two ancient cities or mineshafts are certainly two: each has a centre seen, and they are not the same one. */
     fun twoCentres(a: Box?, b: Box?): Boolean = a != null && b != null && !a.overlaps(b)

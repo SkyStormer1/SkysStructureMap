@@ -278,7 +278,13 @@ object Tracker {
             // Never the one a group split from it is, nor one with another centre.
             .filter { saved -> detection.apart.none { it.storedId == saved.id } && !StructureStore.twoCentres(saved.centre, detection.centre) }
             .sortedByDescending { saved -> saved.centre != null && saved.centre == detection.centre }
-        val saved = if (detection.type == StructureType.FORTRESS && detection.pieces.isNotEmpty()) fortressFor(detection, near) else near.firstOrNull()
+        val saved = when {
+            detection.type == StructureType.FORTRESS && detection.pieces.isNotEmpty() -> fortressFor(detection, near)
+            // Mineshafts cross each other: only one it overlaps, the one it overlaps most.
+            detection.type == StructureType.MINESHAFT -> near.filter { it.box.overlaps(box) }
+                .maxWithOrNull(compareBy<Structure> { it.centre != null && it.centre == detection.centre }.thenBy { it.box.overlapArea(box) })
+            else -> near.firstOrNull()
+        }
         if (saved != null) {
             detection.storedId = saved.id
             Log.info("{} #{} is the one discovered before ({})", detection.type.id, detection.id, saved.id)
@@ -319,8 +325,10 @@ object Tracker {
             detection.type == StructureType.FORTRESS ->
                 fortressBase(detection, stored).union(box).let { if (box.minY == FortressPieces.LOWEST) it.copy(minY = FortressPieces.LOWEST) else it }
             // As far as the game reaches from its start room, however far its fences chain.
-            detection.type == StructureType.MINESHAFT && detection.centre != null ->
-                stored.box.union(box).clampedTo(MineshaftPieces.reachOf(detection.centre!!))
+            // Without its room in sight, no wider than one can be from where it was saved: fences
+            // chained across the mineshafts beside it grew one to 484 blocks.
+            detection.type == StructureType.MINESHAFT ->
+                stored.box.union(box).clampedTo(MineshaftPieces.reachOf(detection.centre ?: stored.centre ?: MineshaftPieces.stretch(stored.box)))
             else -> stored.box.union(box)
         }.let { grown -> if (detection.type in PROVED_THEN_SEEN && detection.piece != null) around(detection, grown, stored.centre) else grown }
         // Pieces stay once saved, so they are still there after the structure is torn down or out of
@@ -462,12 +470,19 @@ object Tracker {
      * that big. A village whose town centre is known ([Detection.centre], or [savedCentre]) is cut
      * to what the game can reach from it ([TOWN_REACH]); from a house it could be anywhere in the
      * village, so the whole width is allowed round that: player builds beside villages took their
-     * boxes up to 96 blocks past the last house.
+     * boxes up to 96 blocks past the last house. An ancient city with its centre known is cut the
+     * same way ([CITY_REACH]): the deepslate kept past its box for the next city ([CITY_MARGIN])
+     * had made its box 16 blocks too wide.
      */
     private fun around(detection: Detection, seen: Box, savedCentre: Box? = null): Box {
-        val centre = if (detection.type == StructureType.VILLAGE) detection.centre ?: savedCentre else null
+        val reachFromCentre = when (detection.type) {
+            StructureType.VILLAGE -> TOWN_REACH
+            StructureType.ANCIENT_CITY -> CITY_REACH
+            else -> null
+        }
+        val centre = if (reachFromCentre != null) detection.centre ?: savedCentre else null
         val piece = centre ?: detection.piece ?: return seen
-        val reach = if (centre != null) TOWN_REACH else Specs.spanOf(detection.type) / 2
+        val reach = if (centre != null) reachFromCentre!! else Specs.spanOf(detection.type) / 2
         return Box(
             maxOf(seen.minX, piece.centreX - reach), maxOf(seen.minY, piece.minY - HEIGHT_REACH), maxOf(seen.minZ, piece.centreZ - reach),
             minOf(seen.maxX, piece.centreX + reach), minOf(seen.maxY, piece.maxY + HEIGHT_REACH), minOf(seen.maxZ, piece.centreZ + reach),
@@ -480,6 +495,9 @@ object Tracker {
      * within 80.5; a little more for a house's eaves.
      */
     private const val TOWN_REACH = 84
+
+    /** How far an ancient city reaches from the middle of its centre piece: 116.5 at most in the test worlds. */
+    private const val CITY_REACH = 120
 
     private const val TOWN_CENTRES = "/town_centers/"
 
