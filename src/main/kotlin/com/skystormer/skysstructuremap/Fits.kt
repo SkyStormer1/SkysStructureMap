@@ -28,14 +28,24 @@ object ShipwreckFit : TemplateFit(
      * each way round its corner lands on one spot; all 16 wrecks tried, of every shape and turn,
      * were there. A player's wooden build that fits a wreck is on that spot one time in 256.
      */
-    fun refusal(match: Match): String? =
-        if (match.inChunk == SPOTS[match.rotation]) null else "a wreck at ${match.inChunk.first},${match.inChunk.second} in its chunk, not ${SPOTS[match.rotation]}"
+    fun refusal(match: Match): String? {
+        val (x, z) = OFFSETS.getValue(match.rotation)
+        val spot = Math.floorMod(x, 16) to Math.floorMod(z, 16)
+        return if (match.inChunk == spot) null else "a wreck at ${match.inChunk.first},${match.inChunk.second} in its chunk, not $spot"
+    }
 
-    private val SPOTS = mapOf(
+    /** The chunk a wreck that fits starts in: the one whose corner it was laid from. */
+    fun startChunk(match: Match): Pair<Int, Int> {
+        val (x, z) = OFFSETS.getValue(match.rotation)
+        return Math.floorDiv(BlockPos.getX(match.origin) - x, 16) to Math.floorDiv(BlockPos.getZ(match.origin) - z, 16)
+    }
+
+    /** How far the design's corner lies from its chunk's corner, each way round: (4, 15) less itself turned. */
+    private val OFFSETS = mapOf(
         net.minecraft.world.level.block.Rotation.NONE to (0 to 0),
-        net.minecraft.world.level.block.Rotation.CLOCKWISE_90 to (3 to 11),
-        net.minecraft.world.level.block.Rotation.CLOCKWISE_180 to (8 to 14),
-        net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90 to (5 to 3),
+        net.minecraft.world.level.block.Rotation.CLOCKWISE_90 to (19 to 11),
+        net.minecraft.world.level.block.Rotation.CLOCKWISE_180 to (8 to 30),
+        net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90 to (-11 to 19),
     )
 }
 

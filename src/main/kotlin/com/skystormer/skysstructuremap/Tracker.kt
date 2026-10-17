@@ -99,6 +99,53 @@ object Tracker {
         val before = detection.box
         val fitter = fitterFor(detection.type)
         if (fitter != null) matchDesign(detection, level, fitter, now) else proveInWorld(detection, level, before, now)
+        checkStart(detection)
+    }
+
+    /**
+     * Refuses one whose start chunk ([Detection.start]) is where the game starts none of its kind
+     * ([Placement.allows]), or in a square that already holds one saved from another chunk
+     * ([StructureStore.startTaken]). Kinds whose start cannot be told from what is seen are not asked.
+     */
+    private fun checkStart(detection: Detection) {
+        if (detection.box == null) return
+        if (detection.start == null) detection.start = startFromBox(detection)
+        val start = detection.start ?: return
+        val refusal = if (!Placement.allows(detection.type, start.first, start.second)) "its kind never starts in chunk ${start.first},${start.second}"
+        else StructureStore.startTaken(detection.type, detection.dimension, start)?.takeIf { it.id != detection.storedId }
+            ?.let { "the ${it.name} starting in chunk ${it.start?.first},${it.start?.second} (box ${it.box}) is the one start in its square" }
+        if (refusal != null) {
+            Log.info("{} #{} at {}: not one, starting in chunk {},{}: {}", detection.type.id, detection.id, detection.box, start.first, start.second, refusal)
+            detection.box = null
+        }
+    }
+
+    /**
+     * The chunk a design that fits says its structure starts in: a wreck's from how it was laid,
+     * a village's from its town centre, trail ruins' from their tower, which the game lays from
+     * their chunk's corner. Null when the design does not tell (a village's house).
+     */
+    private fun startOf(type: StructureType, match: TemplateFit.Match): Pair<Int, Int>? = when {
+        type == StructureType.SHIPWRECK -> ShipwreckFit.startChunk(match)
+        type == StructureType.VILLAGE && TOWN_CENTRES in match.template.name || type == StructureType.TRAIL_RUINS ->
+            Math.floorDiv(BlockPos.getX(match.origin), 16) to Math.floorDiv(BlockPos.getZ(match.origin), 16)
+        else -> null
+    }
+
+    /**
+     * For the kinds whose box is laid out from their start chunk: that chunk. A desert pyramid,
+     * jungle temple and witch hut stand from its corner; an outpost's plate is its box less 16
+     * all round; a monument's box reaches 29 past its chunk's corner.
+     */
+    private fun startFromBox(detection: Detection): Pair<Int, Int>? {
+        val box = detection.box ?: return null
+        fun at(x: Int, z: Int) = Math.floorDiv(x, 16) to Math.floorDiv(z, 16)
+        return when (detection.type) {
+            StructureType.DESERT_TEMPLE, StructureType.JUNGLE_TEMPLE, StructureType.WITCH_HUT -> if (detection.proved || detection.type == StructureType.WITCH_HUT) at(box.minX, box.minZ) else null
+            StructureType.OUTPOST -> at(box.minX + 16, box.minZ + 16)
+            StructureType.MONUMENT -> at(box.minX + 29, box.minZ + 29)
+            else -> null
+        }
     }
 
     /**
@@ -141,6 +188,7 @@ object Tracker {
             else -> fitter.fit(detection, level)
         }
         if (match != null) {
+            startOf(detection.type, match)?.let { detection.start = it }
             detection.variant = match.template.name
             detection.piece = match.box
             if (detection.type == StructureType.ANCIENT_CITY && match.template.name.startsWith(CITY_CENTRE)) detection.centre = match.box
@@ -343,7 +391,9 @@ object Tracker {
         }
         val pieces = kept + detection.pieces.filter { new -> kept.none { it.box == new.box } }
         val centre = stored.centre ?: detection.centre
-        if (better != stored.box || pieces != stored.pieces || centre != stored.centre) StructureStore.put(stored.copy(box = better, pieces = pieces, centre = centre))
+        val start = stored.start ?: detection.start
+        if (better != stored.box || pieces != stored.pieces || centre != stored.centre || start != stored.start)
+            StructureStore.put(stored.copy(box = better, pieces = pieces, centre = centre, start = start))
     }
 
     /** The pieces of the other fortresses in [part]'s group. */
@@ -418,6 +468,7 @@ object Tracker {
             variant = detection.variant,
             pieces = detection.pieces,
             centre = detection.centre,
+            start = detection.start,
         )
         StructureStore.put(structure)
         detection.storedId = structure.id

@@ -120,6 +120,9 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
     /** Where the design that proved it stands, which the rest of its box is measured from. */
     var piece: Box? = null
 
+    /** The chunk it starts in, x to z, once what was seen tells ([Tracker.startOf]). */
+    var start: Pair<Int, Int>? = null
+
     /** Adds a block; false when it was already known. */
     fun add(x: Int, y: Int, z: Int, block: Block?, keepBlock: Boolean = true, inBiome: Boolean = true): Boolean {
         val key = BlockPos.asLong(x, y, z)
@@ -205,6 +208,7 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         other.anchors?.let { a -> anchors = anchors?.union(a) ?: a }
         if (storedId == null) storedId = other.storedId
         if (centre == null) centre = other.centre
+        if (start == null) start = other.start
         for (far in other.apart) {
             far.apart.remove(other)
             if (far !== this) {

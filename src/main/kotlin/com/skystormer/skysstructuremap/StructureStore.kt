@@ -38,6 +38,8 @@ data class Structure(
      * other), so this is what tells them apart ([twoCentres]).
      */
     val centre: Box? = null,
+    /** The chunk it starts in, x to z, when what was seen tells ([Placement]). */
+    val start: Pair<Int, Int>? = null,
 ) {
     val name: String get() = type.displayName
 
@@ -331,6 +333,18 @@ object StructureStore {
     /** Whether two ancient cities or mineshafts are certainly two: each has a centre seen, and they are not the same one. */
     fun twoCentres(a: Box?, b: Box?): Boolean = a != null && b != null && !a.overlaps(b)
 
+    /**
+     * The saved structure already starting in the square [type]'s start at [start] would share
+     * ([Placement.square]), from another chunk: the game starts only one there, so both cannot be.
+     */
+    fun startTaken(type: StructureType, dimension: String, start: Pair<Int, Int>): Structure? {
+        val square = Placement.square(type, start.first, start.second) ?: return null
+        return all.firstOrNull { s ->
+            s.dimension == dimension && s.start != null && s.start != start &&
+                Placement.square(s.type, s.start.first, s.start.second) == square
+        }
+    }
+
     /** Whether [type] at [box] in [dimension] is one you deleted. */
     fun isDeleted(type: StructureType, dimension: String, box: Box): Boolean =
         deleted.any { it.type == type && it.dimension == dimension && Specs.sameStructure(type, it.box, box) }
@@ -374,6 +388,7 @@ object StructureStore {
         if (structure.outlined) addProperty("outlined", true)
         if (structure.completed) addProperty("completed", true)
         structure.centre?.let { c -> add("centre", JsonArray().also { a -> listOf(c.minX, c.minY, c.minZ, c.maxX, c.maxY, c.maxZ).forEach(a::add) }) }
+        structure.start?.let { (x, z) -> add("start", JsonArray().also { a -> a.add(x); a.add(z) }) }
         if (structure.pieces.isNotEmpty()) add("pieces", JsonArray().also { a ->
             structure.pieces.forEach { p ->
                 a.add(JsonObject().apply {
@@ -400,6 +415,7 @@ object StructureStore {
             // Only a help in telling cities apart: one that cannot be read is left out, not the city.
             centre = runCatching { json.getAsJsonArray("centre")?.map { it.asInt }?.takeIf { it.size == 6 } }.getOrNull()
                 ?.let { Box(it[0], it[1], it[2], it[3], it[4], it[5]) },
+            start = runCatching { json.getAsJsonArray("start")?.map { it.asInt }?.takeIf { it.size == 2 } }.getOrNull()?.let { it[0] to it[1] },
             pieces = json.getAsJsonArray("pieces")?.mapNotNull { element ->
                 val p = element.asJsonObject
                 val pb = p.getAsJsonArray("box")?.map { it.asInt }?.takeIf { it.size == 6 } ?: return@mapNotNull null
