@@ -44,6 +44,8 @@ class Spec(
     val reach: Reach? = Reach(1, 1, 4),
     /** A waypoint goes on top of it (a surface building) rather than in its middle. */
     val waypointAtTop: Boolean = false,
+    /** Blocks that alone prove it, which its box is kept near ([Detection.anchors]). */
+    val anchors: Set<Block> = emptySet(),
 ) {
     class Reach(val sideways: Int, val down: Int, val up: Int)
 
@@ -205,8 +207,9 @@ object Specs {
             Blocks.TRIPWIRE_HOOK, Blocks.DISPENSER, Blocks.STICKY_PISTON, Blocks.LEVER,
         ),
         minY = 50, biomes = setOf("jungle", "bamboo_jungle"), merge = 8,
-        recognise = { d -> boundsIf(d, d.count >= 150 && has(d, Blocks.CHISELED_STONE_BRICKS)) },
-        reach = Spec.Reach(1, 1, 3), waypointAtTop = true,
+        // Its footprint once proved ([TemplePieces.jungleBox]).
+        recognise = { d -> if (d.count >= 150 && has(d, Blocks.CHISELED_STONE_BRICKS)) TemplePieces.jungleBox(d) else null },
+        reach = null, waypointAtTop = true,
     )
 
     /** Cut and chiselled sandstone with the orange and blue terracotta floor, which desert villages never have. */
@@ -216,8 +219,9 @@ object Specs {
             Blocks.DYED_TERRACOTTA.orange(), Blocks.DYED_TERRACOTTA.blue(), Blocks.TNT, Blocks.STONE_PRESSURE_PLATE,
         ),
         biomes = setOf("desert"), merge = 8,
+        // Until its floor cross is found; then the box is measured from that ([TemplePieces.desertBox]).
         recognise = { d -> boundsIf(d, d.count >= 40 && has(d, Blocks.DYED_TERRACOTTA.blue()) && has(d, Blocks.DYED_TERRACOTTA.orange())) },
-        reach = Spec.Reach(1, 1, 3), waypointAtTop = true,
+        reach = null, waypointAtTop = true,
     )
 
     /** Mud bricks, bricks, coloured and glazed terracotta and suspicious gravel: what trail ruins are built of. */
@@ -307,10 +311,17 @@ object Specs {
             Blocks.TRIAL_SPAWNER, Blocks.VAULT,
         ),
         maxY = 10, merge = 32,
-        // Only the spawners and vaults decide it: players cannot place them, while tuff bricks are a common build.
-        recognise = { d -> boundsIf(d, has(d, Blocks.TRIAL_SPAWNER, Blocks.VAULT)) },
+        // Only the spawners and vaults decide it: players cannot place them, while tuff bricks are a
+        // common build. A chamber reaches no more than 20 blocks past its outermost spawner or vault
+        // (75 measured in the test world), so tuff further off is someone's build: a player's tuff
+        // beside one stretched its box 149 blocks.
+        recognise = { d -> d.anchors?.let { a -> d.bounds?.clampedTo(a.grow(CHAMBER_REACH)) } },
         reach = Spec.Reach(2, 1, 5),
+        anchors = setOf(Blocks.TRIAL_SPAWNER, Blocks.VAULT),
     )
+
+    /** How far past its spawners and vaults a trial chamber's box may reach. */
+    private const val CHAMBER_REACH = 32
 
     /**
      * The least distance, in blocks, between two structures of this kind, from the game's

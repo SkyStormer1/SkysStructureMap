@@ -78,6 +78,27 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
 
     val count: Int get() = positions.size
 
+    /**
+     * Around its blocks of the kinds that alone prove it ([Spec.anchors]): a trial chamber's
+     * spawners and vaults, which players cannot place.
+     */
+    var anchors: Box? = null
+        private set
+
+    /** [box] with its height cut to the blocks seen in it, or null when none are. */
+    fun boundsIn(box: Box): Box? {
+        var minY = Int.MAX_VALUE
+        var maxY = Int.MIN_VALUE
+        val iterator = positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            if (!box.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key))) continue
+            minY = minOf(minY, BlockPos.getY(key))
+            maxY = maxOf(maxY, BlockPos.getY(key))
+        }
+        return if (minY > maxY) null else box.copy(minY = minY, maxY = maxY)
+    }
+
     /** How many of its blocks are in [box]. */
     fun countIn(box: Box): Int {
         var n = 0
@@ -107,6 +128,7 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         if (block != null) {
             if (keepBlock) blocks.put(key, block)
             kinds.merge(block, 1, Int::plus)
+            if (block in Specs.of(type).anchors) anchors = anchors?.including(x, y, z) ?: Box.of(x, y, z)
         }
         val cell = cellKey(x, y, z)
         val old = cells.get(cell)
@@ -151,6 +173,8 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         inBiome -= moved
         cells.clear()
         bounds = null
+        // Worked out again from the blocks left when each block is kept; else kept as it was.
+        if (keepsBlocks) anchors = null
         if (keepsBlocks) kinds.clear()
         val left = positions.iterator()
         while (left.hasNext()) {
@@ -162,6 +186,7 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
             cells.put(cell, cells.get(cell)?.including(x, y, z) ?: Box.of(x, y, z))
             bounds = bounds?.including(x, y, z) ?: Box.of(x, y, z)
             if (keepsBlocks) blocks.get(key)?.let { kinds.merge(it, 1, Int::plus) }
+            if (blocks.get(key) in Specs.of(type).anchors) anchors = anchors?.including(x, y, z) ?: Box.of(x, y, z)
         }
         changed = true
         fitDirty = true
@@ -177,6 +202,7 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         inBiome += other.inBiome
         // Only shipwrecks keep each block; for the rest the counts are carried over as they are.
         if (other.blocks.isEmpty()) for ((block, n) in other.kinds) kinds.merge(block, n, Int::plus)
+        other.anchors?.let { a -> anchors = anchors?.union(a) ?: a }
         if (storedId == null) storedId = other.storedId
         if (centre == null) centre = other.centre
         for (far in other.apart) {

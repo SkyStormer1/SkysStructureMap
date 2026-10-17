@@ -20,12 +20,17 @@ interface BlockSource {
     /** The mob a spawner at [pos] spawns (`minecraft:zombie`), when that is known. */
     fun spawnerMob(pos: BlockPos): String? = null
 
+    /** The biome at [pos], as its id without `minecraft:`, when that is known. */
+    fun biome(pos: BlockPos): String? = null
+
     companion object {
         fun of(level: Level): BlockSource = object : BlockSource {
             override fun hasChunk(chunkX: Int, chunkZ: Int) = level.hasChunk(chunkX, chunkZ)
             override fun getBlockState(pos: BlockPos): BlockState = level.getBlockState(pos)
             override fun spawnerMob(pos: BlockPos): String? =
                 (level.getBlockEntity(pos) as? SpawnerBlockEntity)?.getUpdateTag(level.registryAccess())?.let(::spawnedBy)
+            override fun biome(pos: BlockPos): String? =
+                if (!level.hasChunk(pos.x shr 4, pos.z shr 4)) null else level.getBiome(pos).unwrapKey().map { it.identifier().path }.orElse(null)
         }
 
         /** The mob in a spawner's saved data (its `SpawnData`), as the server sends it and Bobby saves it. */

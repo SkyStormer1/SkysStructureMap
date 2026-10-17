@@ -143,6 +143,13 @@ object BobbyCache {
             if (index < 0 || index >= sections.size) return AIR
             return sections[index]?.getBlockState(x and 15, y and 15, z and 15) ?: AIR
         }
+
+        /** The biome at a block, as its id without `minecraft:`; biomes are kept per 4×4×4. */
+        fun biome(x: Int, y: Int, z: Int): String? {
+            val index = (y shr 4) - minSectionY
+            if (index < 0 || index >= sections.size) return null
+            return sections[index]?.getNoiseBiome((x and 15) shr 2, (y and 15) shr 2, (z and 15) shr 2)?.unwrapKey()?.map { it.identifier().path }?.orElse(null)
+        }
     }
 
     private val AIR: BlockState = Blocks.AIR.defaultBlockState()
@@ -311,6 +318,8 @@ object BobbyCache {
             chunk(pos.x shr 4, pos.z shr 4)?.getBlockState(pos.x, pos.y, pos.z) ?: AIR
 
         override fun spawnerMob(pos: BlockPos): String? = chunk(pos.x shr 4, pos.z shr 4)?.spawners?.get(pos.asLong())
+
+        override fun biome(pos: BlockPos): String? = chunk(pos.x shr 4, pos.z shr 4)?.biome(pos.x, pos.y, pos.z)
 
         private companion object {
             const val REGIONS_KEPT = 4

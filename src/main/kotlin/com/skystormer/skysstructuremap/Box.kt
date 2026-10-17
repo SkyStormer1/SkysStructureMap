@@ -28,6 +28,12 @@ data class Box(val minX: Int, val minY: Int, val minZ: Int, val maxX: Int, val m
     fun grow(sideways: Int, down: Int = sideways, up: Int = sideways) =
         Box(minX - sideways, minY - down, minZ - sideways, maxX + sideways, maxY + up, maxZ + sideways)
 
+    /** This box cut down to what lies inside [within]. */
+    fun clampedTo(within: Box) = Box(
+        maxOf(minX, within.minX), maxOf(minY, within.minY), maxOf(minZ, within.minZ),
+        minOf(maxX, within.maxX), minOf(maxY, within.maxY), minOf(maxZ, within.maxZ),
+    )
+
     fun overlaps(other: Box): Boolean =
         minX <= other.maxX && maxX >= other.minX &&
             minY <= other.maxY && maxY >= other.minY &&

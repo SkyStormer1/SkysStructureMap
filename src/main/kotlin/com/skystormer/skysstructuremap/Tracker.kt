@@ -130,7 +130,7 @@ object Tracker {
             // The bell says where a town centre is on its own, and the few other blocks the game
             // puts there do the same once the bell has been taken, as players do. Failing those,
             // one of the village's houses, by its job block or its door.
-            StructureType.VILLAGE -> fitter.fitAnchored(detection, level, TOWN_CENTRE_ANCHORS)
+            StructureType.VILLAGE -> fitter.fitAnchored(detection, level, TOWN_CENTRE_ANCHORS, accept = { townCentreRefusal(it, level) })
                 ?: VillageHouseFit.also { used = it }.fitAnchored(detection, level, JOB_BLOCKS)
                 ?: VillageHouseFit.fitAnchored(detection, level, DOORS)
                 ?: worn(detection, level)?.also { used = VillageHouseFit }
@@ -142,6 +142,7 @@ object Tracker {
             detection.variant = match.template.name
             detection.piece = match.box
             if (detection.type == StructureType.ANCIENT_CITY && match.template.name.startsWith(CITY_CENTRE)) detection.centre = match.box
+            if (detection.type == StructureType.VILLAGE && TOWN_CENTRES in match.template.name) detection.centre = match.box
         }
         detection.box = boxFrom(detection, match)
         if (match?.box != before || (match == null && detection.blocks.size >= LOG_FROM)) {
@@ -159,12 +160,12 @@ object Tracker {
     private fun boxFrom(detection: Detection, match: TemplateFit.Match?): Box? {
         if (match == null) {
             if (detection.type !in PROVED_THEN_SEEN || detection.variant == null) return detection.box
-            val piece = detection.piece ?: return detection.bounds
-            return detection.bounds?.let { around(detection.type, it, piece) }
+            if (detection.piece == null) return detection.bounds
+            return detection.bounds?.let { around(detection, it) }
         }
         return when (detection.type) {
-            StructureType.OUTPOST -> Recognise.outpostBox(match.box)
-            in PROVED_THEN_SEEN -> detection.bounds?.let { around(detection.type, it, match.box) }
+            StructureType.OUTPOST -> Recognise.outpostBox(match.box, match.rotation)
+            in PROVED_THEN_SEEN -> detection.bounds?.let { around(detection, it) }
             else -> match.box
         }
     }
@@ -177,7 +178,7 @@ object Tracker {
         detection.box = Recognise.box(detection)
         if (detection.box != null && !detection.proved) {
             detection.proved = when (detection.type) {
-                StructureType.DESERT_TEMPLE -> TemplePieces.desertCross(detection, level)
+                StructureType.DESERT_TEMPLE -> TemplePieces.desertCross(detection, level)?.also { detection.piece = TemplePieces.desertBox(it) } != null
                 StructureType.JUNGLE_TEMPLE -> TemplePieces.jungleTrap(detection, level)
                 StructureType.MONUMENT -> MonumentLayout.matches(detection.box!!, level)
                 StructureType.MINESHAFT -> MineshaftPieces.proved(detection, level)
@@ -186,8 +187,9 @@ object Tracker {
             }
             if (!detection.proved) detection.box = null
         }
-        // A dungeon's box is its room, found round the spawner when it was proved.
-        if (detection.type == StructureType.DUNGEON && detection.box != null) detection.box = detection.piece
+        // A dungeon's box is its room, found round the spawner when it was proved; a desert
+        // pyramid's is measured from its floor cross.
+        if ((detection.type == StructureType.DUNGEON || detection.type == StructureType.DESERT_TEMPLE) && detection.box != null) detection.box = detection.piece
         if (detection.type == StructureType.MINESHAFT && detection.box != null) detection.box = mineshaftBox(detection, level)
         val bricks = detection.bounds
         if (detection.type == StructureType.FORTRESS && detection.box != null && bricks != null) {
@@ -218,14 +220,8 @@ object Tracker {
                 ?: MineshaftPieces.stretch(seen).takeIf { maxOf(seen.sizeX, seen.sizeZ) > 2 * MineshaftPieces.REACH }
         }
         val centre = detection.centre ?: return seen
-        return clamp(seen, MineshaftPieces.reachOf(centre))
+        return seen.clampedTo(MineshaftPieces.reachOf(centre))
     }
-
-    /** [box] cut down to what lies inside [within]. */
-    private fun clamp(box: Box, within: Box) = Box(
-        maxOf(box.minX, within.minX), maxOf(box.minY, within.minY), maxOf(box.minZ, within.minZ),
-        minOf(box.maxX, within.maxX), minOf(box.maxY, within.maxY), minOf(box.maxZ, within.maxZ),
-    )
 
     /**
      * For a structure whose box was worked out from its one centre piece (an ancient city's centre,
@@ -324,9 +320,9 @@ object Tracker {
                 fortressBase(detection, stored).union(box).let { if (box.minY == FortressPieces.LOWEST) it.copy(minY = FortressPieces.LOWEST) else it }
             // As far as the game reaches from its start room, however far its fences chain.
             detection.type == StructureType.MINESHAFT && detection.centre != null ->
-                clamp(stored.box.union(box), MineshaftPieces.reachOf(detection.centre!!))
+                stored.box.union(box).clampedTo(MineshaftPieces.reachOf(detection.centre!!))
             else -> stored.box.union(box)
-        }.let { grown -> detection.piece?.let { around(detection.type, grown, it) } ?: grown }
+        }.let { grown -> if (detection.type in PROVED_THEN_SEEN && detection.piece != null) around(detection, grown, stored.centre) else grown }
         // Pieces stay once saved, so they are still there after the structure is torn down or out of
         // sight; but one a piece found now overlaps gives way to it (saved before pieces could be
         // told apart, or a block off).
@@ -463,15 +459,57 @@ object Tracker {
      * Everything seen, within one structure's width of the piece that matched (see [Specs.spanOf],
      * measured from the structures the game had built in the test world): a taiga village's box ran
      * 262 blocks across and 127 high, picking up whatever lay near its streets, and no village is
-     * that big.
+     * that big. A village whose town centre is known ([Detection.centre], or [savedCentre]) is cut
+     * to what the game can reach from it ([TOWN_REACH]); from a house it could be anywhere in the
+     * village, so the whole width is allowed round that: player builds beside villages took their
+     * boxes up to 96 blocks past the last house.
      */
-    private fun around(type: StructureType, seen: Box, piece: Box): Box {
-        val reach = Specs.spanOf(type) / 2
+    private fun around(detection: Detection, seen: Box, savedCentre: Box? = null): Box {
+        val centre = if (detection.type == StructureType.VILLAGE) detection.centre ?: savedCentre else null
+        val piece = centre ?: detection.piece ?: return seen
+        val reach = if (centre != null) TOWN_REACH else Specs.spanOf(detection.type) / 2
         return Box(
             maxOf(seen.minX, piece.centreX - reach), maxOf(seen.minY, piece.minY - HEIGHT_REACH), maxOf(seen.minZ, piece.centreZ - reach),
             minOf(seen.maxX, piece.centreX + reach), minOf(seen.maxY, piece.maxY + HEIGHT_REACH), minOf(seen.maxZ, piece.centreZ + reach),
         )
     }
+
+    /**
+     * How far a village reaches from the middle of its town centre: the game lays its pieces at most
+     * 80 blocks from there (`max_distance_from_center`), and every one of 497 in the test worlds kept
+     * within 80.5; a little more for a house's eaves.
+     */
+    private const val TOWN_REACH = 84
+
+    private const val TOWN_CENTRES = "/town_centers/"
+
+    /**
+     * Why a town centre that fits cannot be one, or null when it can: the game picks a village's
+     * kind (plains, desert, savanna, snowy, taiga) by the biome where it starts, which is its town
+     * centre, so a taiga centre in the plains is a player's spruce build. Asked at its middle and
+     * corners on the ground, any of them enough: a village at a biome's edge starts in one corner of
+     * it. One seen in the plains matched a taiga centre half way, anchored on a spruce trapdoor in
+     * someone's base, and was saved as a village 130 blocks from the real one.
+     */
+    private fun townCentreRefusal(match: TemplateFit.Match, level: BlockSource): String? {
+        val kind = match.template.name.substringBefore('/')
+        val allowed = VILLAGE_BIOMES[kind] ?: return null
+        val b = match.box
+        val y = b.minY + 1
+        val spots = listOf(b.centreX to b.centreZ, b.minX to b.minZ, b.minX to b.maxZ, b.maxX to b.minZ, b.maxX to b.maxZ)
+        val biomes = spots.mapNotNull { (x, z) -> level.biome(BlockPos(x, y, z)) }
+        if (biomes.isEmpty() || biomes.any { it in allowed }) return null
+        return "a $kind town centre in ${biomes.distinct().joinToString("/")}"
+    }
+
+    /** The biomes each kind of village can start in (the game's `has_structure/village_*` tags). */
+    private val VILLAGE_BIOMES = mapOf(
+        "plains" to setOf("plains", "meadow"),
+        "desert" to setOf("desert"),
+        "savanna" to setOf("savanna"),
+        "snowy" to setOf("snowy_plains"),
+        "taiga" to setOf("taiga"),
+    )
 
     /** How far above or below the piece that matched a structure still reaches. */
     private const val HEIGHT_REACH = 64

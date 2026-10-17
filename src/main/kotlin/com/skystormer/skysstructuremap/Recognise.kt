@@ -64,14 +64,23 @@ object Recognise {
     fun witchHutBox(seen: Box): Box = Box(seen.minX, seen.minY - 1, seen.minZ, seen.maxX, seen.minY + 5, seen.maxZ)
 
     /**
-     * A pillager outpost's box: always 48 × 48 blocks of platforms, the middle one lined up with
-     * the chunk its watchtower stands in and one more on each side, and 30 blocks high from the
-     * tower's base. [tower] is the watchtower's box, as matched against the game's design.
+     * A pillager outpost's box: always 48 × 48 blocks, its 16 × 16 base plate under the watchtower
+     * and 16 more on each side, and 30 blocks high from the tower's base. [tower] is the
+     * watchtower's box, as matched against the game's design, turned by [rotation].
+     *
+     * The plate is laid from a chunk's corner, turned the same way as the tower, so it starts on a
+     * chunk line on a side the turn faces away from (x: unturned or a quarter anticlockwise; z:
+     * unturned or a quarter clockwise) and a block past one on the others. The tower stands on it
+     * either flush with that edge or a block in: of the two places, only one lines up. Taking the
+     * plate as the tower's chunk (as before) put the box a block off in three outposts of four.
      */
-    fun outpostBox(tower: Box): Box {
-        val chunkX = Math.floorDiv(tower.centreX, 16) * 16
-        val chunkZ = Math.floorDiv(tower.centreZ, 16) * 16
-        return Box(chunkX - 16, tower.minY, chunkZ - 16, chunkX + 31, tower.minY + OUTPOST_HEIGHT - 1, chunkZ + 31)
+    fun outpostBox(tower: Box, rotation: net.minecraft.world.level.block.Rotation): Box {
+        val alignX = if (rotation == net.minecraft.world.level.block.Rotation.NONE || rotation == net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90) 0 else 1
+        val alignZ = if (rotation == net.minecraft.world.level.block.Rotation.NONE || rotation == net.minecraft.world.level.block.Rotation.CLOCKWISE_90) 0 else 1
+        fun plateStart(towerMin: Int, align: Int) = if (Math.floorMod(towerMin - align, 16) == 0) towerMin else towerMin - 1
+        val x = plateStart(tower.minX, alignX)
+        val z = plateStart(tower.minZ, alignZ)
+        return Box(x - 16, tower.minY, z - 16, x + 31, tower.minY + OUTPOST_HEIGHT - 1, z + 31)
     }
 
     private const val OUTPOST_HEIGHT = 30

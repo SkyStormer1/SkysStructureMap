@@ -25,8 +25,12 @@ object TemplePieces {
 
     private const val CROSS_NEEDED = 10
 
-    /** Whether a desert pyramid's floor cross is among [detection]'s blocks. */
-    fun desertCross(detection: Detection, level: BlockSource): Boolean {
+    /**
+     * The middle block of a desert pyramid's floor cross among [detection]'s blocks, or null. The
+     * cross is laid around 10,0,10 of the pyramid's 21 × 21 footprint, so the middle is the
+     * pyramid's middle too ([desertBox]).
+     */
+    fun desertCross(detection: Detection, level: BlockSource): BlockPos? {
         val cursor = BlockPos.MutableBlockPos()
         val iterator = detection.positions.iterator()
         while (iterator.hasNext()) {
@@ -42,11 +46,48 @@ object TemplePieces {
                 for ((dx, dz) in CROSS) {
                     if (isTerracotta(level, cursor.set(x - ox + dx, y, z - oz + dz))) found++
                 }
-                if (found >= CROSS_NEEDED) return true
+                if (found >= CROSS_NEEDED) return BlockPos(x - ox, y, z - oz)
             }
         }
-        return false
+        return null
     }
+
+    /**
+     * A desert pyramid's whole box from the middle of its floor cross: 21 × 21, from the hidden
+     * chamber 14 below the floor to the tops of its towers 14 above. What is seen of one is never
+     * the whole of it: its outer stairs and walls are plain sandstone, which is not looked for, so
+     * the box from what was seen came out 18 blocks wide on one side and up to three off; and
+     * where a desert village or a player's sandstone build touched it, hundreds of blocks across.
+     */
+    fun desertBox(cross: BlockPos): Box =
+        Box(cross.x - DESERT_HALF, cross.y - DESERT_DEPTH, cross.z - DESERT_HALF, cross.x + DESERT_HALF, cross.y + DESERT_DEPTH, cross.z + DESERT_HALF)
+
+    private const val DESERT_HALF = 10
+    private const val DESERT_DEPTH = 14
+
+    /**
+     * A jungle temple's footprint: the game builds it from the north-west corner of its chunk, 12
+     * by 15 blocks either way round (`JungleTemplePiece`). Of the places it could be near what was
+     * seen, the one holding most of [detection]'s blocks; its height is what was seen within it.
+     * The box from what was seen alone took in a player's cobblestone beside one.
+     */
+    fun jungleBox(detection: Detection): Box? {
+        val seen = detection.bounds ?: return null
+        val chunkX = Math.floorDiv(seen.centreX, 16)
+        val chunkZ = Math.floorDiv(seen.centreZ, 16)
+        val places = (chunkX - 1..chunkX + 1).flatMap { cx ->
+            (chunkZ - 1..chunkZ + 1).flatMap { cz ->
+                listOf(JUNGLE_WIDTH to JUNGLE_DEPTH, JUNGLE_DEPTH to JUNGLE_WIDTH).map { (w, d) ->
+                    Box(cx * 16, seen.minY, cz * 16, cx * 16 + w - 1, seen.maxY, cz * 16 + d - 1)
+                }
+            }
+        }
+        val best = places.maxByOrNull { detection.countIn(it) } ?: return null
+        return detection.boundsIn(best)
+    }
+
+    private const val JUNGLE_WIDTH = 12
+    private const val JUNGLE_DEPTH = 15
 
     private fun isTerracotta(level: BlockSource, pos: BlockPos): Boolean {
         if (!level.hasChunk(pos.x shr 4, pos.z shr 4)) return false
