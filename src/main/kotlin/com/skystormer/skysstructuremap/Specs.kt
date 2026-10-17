@@ -32,6 +32,13 @@ class Spec(
      * stony shore beside the plains it belongs to; checking each block lost that tower in testing.
      */
     val biomeAsWhole: Boolean = false,
+    /**
+     * A block also counts as in its biomes when its section of the chunk (16 blocks each way), or
+     * the one above or below, holds one of them. The game asks a wreck's biome only where it starts:
+     * its hull runs on into a river, the snowy plains past a frozen ocean, or the plains behind a
+     * beach, and wrecks seen whole in Bobby's cache were never found with those blocks left out.
+     */
+    val biomeNearby: Boolean = false,
     /** Blocks this close to a group join it rather than starting another. */
     val merge: Int,
     /** The structure's box once enough is seen, else null. */
@@ -86,7 +93,7 @@ object Specs {
 
     private val SHIPWRECK by lazy {
         Spec(
-            ShipwreckFit.signatureBlocks, minY = 0, biomes = Biomes.OCEAN + Biomes.BEACH, merge = 4,
+            ShipwreckFit.signatureBlocks, minY = 0, biomes = Biomes.OCEAN + Biomes.BEACH, biomeNearby = true, merge = 4,
             recognise = { d -> d.box }, reach = null, waypointAtTop = true,
         )
     }

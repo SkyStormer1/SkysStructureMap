@@ -76,6 +76,8 @@ object ChunkScanner {
         if (spec.blocks.isEmpty() && spec.tags.isEmpty()) return emptyList()
         val test = { state: BlockState -> spec.matches(state) }
         val found = ArrayList<Found>()
+        // Per section, whether it holds one of the kind's biomes; worked out only when asked.
+        val nearby = arrayOfNulls<Boolean>(sections.size)
         for (index in sections.indices) {
             val section = sections[index] ?: continue
             val baseY = (minSectionY + index) shl 4
@@ -90,7 +92,8 @@ object ChunkScanner {
                         if (!spec.matches(state)) continue
                         // Wood is everywhere on land, bricks under the sea, and so on: where a
                         // block is can matter as much as what it is.
-                        val allowed = !spec.biomeFiltered || spec.biomeAllowed(biomeAt(section, x, y, z))
+                        val allowed = !spec.biomeFiltered || spec.biomeAllowed(biomeAt(section, x, y, z)) ||
+                            (spec.biomeNearby && holdsBiome(sections, index, spec, nearby))
                         if (!allowed && !spec.biomeAsWhole) continue
                         found.add(Found(baseX + x, worldY, baseZ + z, state.block, allowed))
                     }
@@ -99,6 +102,20 @@ object ChunkScanner {
         }
         return found
     }
+
+    /** Whether section [index], or the one above or below it, holds a biome [spec] allows ([Spec.biomeNearby]). */
+    private fun holdsBiome(sections: Array<out LevelChunkSection?>, index: Int, spec: Spec, known: Array<Boolean?>): Boolean =
+        (index - 1..index + 1).any { i ->
+            if (i !in sections.indices) return@any false
+            known[i] ?: run {
+                val section = sections[i]
+                val holds = section != null && (0 until 4).any { bx -> (0 until 4).any { by -> (0 until 4).any { bz ->
+                    spec.biomeAllowed(section.getNoiseBiome(bx, by, bz).unwrapKey().map { it.identifier().path }.orElse(""))
+                } } }
+                known[i] = holds
+                holds
+            }
+        }
 
     /** The biome at a block of a section, as its id without `minecraft:`; biomes are kept per 4×4×4. */
     private fun biomeAt(section: LevelChunkSection, x: Int, y: Int, z: Int): String =
