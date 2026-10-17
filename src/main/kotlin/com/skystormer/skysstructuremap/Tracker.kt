@@ -134,15 +134,17 @@ object Tracker {
 
     /**
      * For the kinds whose box is laid out from their start chunk: that chunk. A desert pyramid,
-     * jungle temple and witch hut stand from its corner; an outpost's plate is its box less 16
-     * all round; a monument's box reaches 29 past its chunk's corner.
+     * jungle temple and witch hut stand from its corner; an outpost's chunk corner is 31 in from
+     * its box's west and north sides (its plate is laid from the corner, turned, and the box
+     * reaches 16 past it), as for all 58 in the test worlds; a monument's box reaches 29 past its
+     * chunk's corner.
      */
     private fun startFromBox(detection: Detection): Pair<Int, Int>? {
         val box = detection.box ?: return null
         fun at(x: Int, z: Int) = Math.floorDiv(x, 16) to Math.floorDiv(z, 16)
         return when (detection.type) {
             StructureType.DESERT_TEMPLE, StructureType.JUNGLE_TEMPLE, StructureType.WITCH_HUT -> if (detection.proved || detection.type == StructureType.WITCH_HUT) at(box.minX, box.minZ) else null
-            StructureType.OUTPOST -> at(box.minX + 16, box.minZ + 16)
+            StructureType.OUTPOST -> at(box.minX + 31, box.minZ + 31)
             StructureType.MONUMENT -> at(box.minX + 29, box.minZ + 29)
             else -> null
         }

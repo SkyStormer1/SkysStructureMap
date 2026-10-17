@@ -90,6 +90,7 @@ object ChunkScanner {
                     for (x in 0 until 16) {
                         val state = section.getBlockState(x, y, z)
                         if (!spec.matches(state)) continue
+                        spec.highest[state.block]?.let { if (worldY > it) continue }
                         // Wood is everywhere on land, bricks under the sea, and so on: where a
                         // block is can matter as much as what it is.
                         val allowed = !spec.biomeFiltered || spec.biomeAllowed(biomeAt(section, x, y, z)) ||

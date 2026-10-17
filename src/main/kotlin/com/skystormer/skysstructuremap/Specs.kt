@@ -39,6 +39,8 @@ class Spec(
      * beach, and wrecks seen whole in Bobby's cache were never found with those blocks left out.
      */
     val biomeNearby: Boolean = false,
+    /** Signature blocks never found above these heights in this kind (see [MINESHAFT]). */
+    val highest: Map<Block, Int> = emptyMap(),
     /** Blocks this close to a group join it rather than starting another. */
     val merge: Int,
     /** The structure's box once enough is seen, else null. */
@@ -260,7 +262,10 @@ object Specs {
      */
     private val MINESHAFT = Spec(
         // Not in the deep dark: an ancient city's dark oak frames stand like supports.
-        setOf(Blocks.OAK_FENCE, Blocks.DARK_OAK_FENCE), notBiomes = listOf("deep_dark"), merge = 24,
+        // Oak ones never above y 52: the highest piece of 9,389 in the test worlds. Fences above
+        // that are villages' and players', and chained mineshafts kilometres apart into one group.
+        // Badlands mineshafts (dark oak) reach the surface, up to y 135.
+        setOf(Blocks.OAK_FENCE, Blocks.DARK_OAK_FENCE), notBiomes = listOf("deep_dark"), highest = mapOf(Blocks.OAK_FENCE to 52), merge = 24,
         recognise = { d -> d.bounds },
         reach = Spec.Reach(3, 1, 4),
     )
