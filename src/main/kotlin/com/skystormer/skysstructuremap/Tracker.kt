@@ -269,7 +269,7 @@ object Tracker {
         val seen = detection.bounds ?: return null
         if (detection.centre == null) {
             detection.centre = MineshaftPieces.startRoom(detection, level)
-                ?: MineshaftPieces.stretch(seen).takeIf { maxOf(seen.sizeX, seen.sizeZ) > 2 * MineshaftPieces.REACH }
+                ?: MineshaftPieces.stretch(seen, detection).takeIf { maxOf(seen.sizeX, seen.sizeZ) > 2 * MineshaftPieces.REACH }
         }
         val centre = detection.centre ?: return seen
         return seen.clampedTo(MineshaftPieces.reachOf(centre))

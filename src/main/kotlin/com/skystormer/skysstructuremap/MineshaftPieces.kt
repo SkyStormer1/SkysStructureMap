@@ -70,11 +70,31 @@ object MineshaftPieces {
 
     /**
      * Where a mineshaft whose start room is not in sight is reckoned to be, from the fences [seen]:
-     * a stretch as wide as one can be, from their north-west corner. Not every start room can be
-     * found (one opens into a cave with no walls; at another the game's own record had no room at
-     * all), and fences chained across many mineshafts would otherwise make one huge one.
+     * a stretch as wide as one can be, from their north-west corner, or, given [detection], from
+     * its fence nearest that corner: fences running in an L leave the corner itself empty, and a
+     * stretch holding none of them would split off every one, again and again. Not every start
+     * room can be found (one opens into a cave with no walls; at another the game's own record had
+     * no room at all), and fences chained across many mineshafts would otherwise make one huge one.
      */
-    fun stretch(seen: Box): Box = Box(seen.minX, seen.minY, seen.minZ, seen.minX + 2 * REACH, seen.maxY, seen.minZ + 2 * REACH)
+    fun stretch(seen: Box, detection: Detection? = null): Box {
+        var x = seen.minX
+        var z = seen.minZ
+        if (detection != null) {
+            var nearest = Long.MAX_VALUE
+            val iterator = detection.positions.iterator()
+            while (iterator.hasNext()) {
+                val key = iterator.nextLong()
+                val dx = (BlockPos.getX(key) - seen.minX).toLong()
+                val dz = (BlockPos.getZ(key) - seen.minZ).toLong()
+                if (dx * dx + dz * dz < nearest) {
+                    nearest = dx * dx + dz * dz
+                    x = BlockPos.getX(key)
+                    z = BlockPos.getZ(key)
+                }
+            }
+        }
+        return Box(x, seen.minY, z, x + 2 * REACH, seen.maxY, z + 2 * REACH)
+    }
 
     /**
      * The start room of one of [detection]'s mineshafts, or null when none is in sight. Every

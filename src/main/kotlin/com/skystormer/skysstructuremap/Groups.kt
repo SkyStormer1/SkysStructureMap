@@ -66,7 +66,9 @@ class Groups(private var nextId: Int = 1) {
      * matched by itself. Answers the new group.
      */
     fun splitOff(detection: Detection, keep: Box, least: Int): Detection? {
-        if (detection.countOutside(keep) < least) return null
+        val outside = detection.countOutside(keep)
+        // Every block outside: the new group would be this one again, split again for ever.
+        if (outside < least || outside == detection.count) return null
         val other = Detection(nextId++, detection.type, detection.dimension)
         detection.moveOutside(keep, other)
         detection.apart.add(other)
