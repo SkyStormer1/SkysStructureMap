@@ -83,9 +83,9 @@ object BobbyScan {
         var known = 0
         var deleted = 0
 
-        private var chunks = 0
-        private var unreadable = 0
-        private var regionsDone = 0
+        private val tally = Tally()
+        private val chunks get() = tally.chunks
+        private val unreadable get() = tally.unreadable
         private var lastProgress = System.currentTimeMillis()
 
         fun run() {
@@ -107,50 +107,7 @@ object BobbyScan {
 
         /** One dimension: every chunk read for signature blocks, then each group matched and handed over. */
         private fun scan(dimension: String, files: List<Path>) {
-            // Numbered well away from the groups around you, so the log tells them apart.
-            val groups = Groups(nextId = 1_000_000)
-            for (file in files) {
-                if (stopped) return
-                val region = try {
-                    BobbyCache.Region(file)
-                } catch (e: Exception) {
-                    Log.warn("Could not read {}: {}", file, e.toString())
-                    unreadable++
-                    continue
-                }
-                for ((x, z) in region.chunks()) {
-                    val chunk = try {
-                        region.tag(x, z)?.let(reader::chunk)
-                    } catch (e: Exception) {
-                        unreadable++
-                        null
-                    } ?: continue
-                    chunks++
-                    for ((type, blocks) in ChunkScanner.find(chunk.sections, chunk.minSectionY, x * 16, z * 16, dimension)) {
-                        groups.add(type, dimension, blocks, Tracker.keepsBlocks(type))
-                    }
-                }
-                regionsDone++
-                progress("Reading Bobby's cache: $regionsDone of ${found.regionCount} regions, $chunks chunks")
-            }
-            val blocks = BobbyCache.CachedBlocks(files, reader)
-            val recognised = ArrayList<Detection>()
-            // Grows as a city's or mineshaft's group gives up the next one's blocks (Tracker.splitOffNext).
-            val all = ArrayList(groups.detections)
-            var index = 0
-            while (index < all.size) {
-                if (stopped) return
-                val detection = all[index++]
-                try {
-                    Tracker.recognise(detection, blocks, now = true)
-                    Tracker.splitOffNext(groups, detection)?.let(all::add)
-                } catch (e: Exception) {
-                    Log.error("Could not match ${detection.type.id} #${detection.id} from Bobby's cache", e)
-                }
-                if (detection.box != null) recognised.add(detection)
-                progress("Matching what Bobby saw in the ${dimensionName(dimension)}: $index of ${all.size}")
-            }
-            Log.info("Bobby scan of {}: {} groups, {} recognised", dimension, all.size, recognised.size)
+            val recognised = recognise(dimension, files, reader, tally, { stopped }, ::progress, found.regionCount) ?: return
             onMain { takeIn(recognised) }
         }
 
@@ -162,17 +119,14 @@ object BobbyScan {
                 stopped = true
                 return
             }
-            // A fortress group holding more than one fortress is saved as one for each.
-            for (detection in recognised.flatMap { it.parts.ifEmpty { listOf(it) } }) {
-                when (Tracker.takeIn(detection)) {
+            saveFound(recognised) { detection, taken ->
+                when (taken) {
                     Tracker.Taken.NEW -> new.merge(detection.type, 1, Int::plus)
                     Tracker.Taken.KNOWN -> known++
                     Tracker.Taken.DELETED -> deleted++
                     Tracker.Taken.NOT_ONE -> {}
                 }
             }
-            Tracker.relinkUndiscovered()
-            StructureStore.saveIfChanged()
         }
 
         private fun finish(seconds: Long) {
@@ -201,6 +155,78 @@ object BobbyScan {
         }
 
         private fun onMain(action: () -> Unit) = Minecraft.getInstance().execute { action() }
+    }
+
+    /** Chunks read and not readable so far in a scan, and region files done. */
+    class Tally {
+        @Volatile var chunks = 0
+        @Volatile var unreadable = 0
+        @Volatile var regionsDone = 0
+    }
+
+    /**
+     * One dimension of Bobby's cache: every chunk in [files] read for signature blocks, then each
+     * group matched. Answers the groups recognised, or null when [stopped] first. Any thread; the
+     * saved structures are not touched ([saveFound] does that).
+     */
+    fun recognise(dimension: String, files: List<Path>, reader: BobbyCache.Reader, tally: Tally,
+                  stopped: () -> Boolean = { false }, progress: (String) -> Unit = {}, regionCount: Int = files.size): List<Detection>? {
+        // Numbered well away from the groups around you, so the log tells them apart.
+        val groups = Groups(nextId = 1_000_000)
+        for (file in files) {
+            if (stopped()) return null
+            val region = try {
+                BobbyCache.Region(file)
+            } catch (e: Exception) {
+                Log.warn("Could not read {}: {}", file, e.toString())
+                tally.unreadable++
+                continue
+            }
+            for ((x, z) in region.chunks()) {
+                val chunk = try {
+                    region.tag(x, z)?.let(reader::chunk)
+                } catch (e: Exception) {
+                    tally.unreadable++
+                    null
+                } ?: continue
+                tally.chunks++
+                for ((type, blocks) in ChunkScanner.find(chunk.sections, chunk.minSectionY, x * 16, z * 16, dimension)) {
+                    groups.add(type, dimension, blocks, Tracker.keepsBlocks(type))
+                }
+            }
+            tally.regionsDone++
+            progress("Reading Bobby's cache: ${tally.regionsDone} of $regionCount regions, ${tally.chunks} chunks")
+        }
+        val blocks = BobbyCache.CachedBlocks(files, reader)
+        val recognised = ArrayList<Detection>()
+        // Grows as a city's or mineshaft's group gives up the next one's blocks (Tracker.splitOffNext).
+        val all = ArrayList(groups.detections)
+        var index = 0
+        while (index < all.size) {
+            if (stopped()) return null
+            val detection = all[index++]
+            try {
+                Tracker.recognise(detection, blocks, now = true)
+                Tracker.splitOffNext(groups, detection)?.let(all::add)
+            } catch (e: Exception) {
+                Log.error("Could not match ${detection.type.id} #${detection.id} from Bobby's cache", e)
+            }
+            if (detection.box != null) recognised.add(detection)
+            progress("Matching what Bobby saw in the ${dimensionName(dimension)}: $index of ${all.size}")
+        }
+        Log.info("Bobby scan of {}: {} groups, {} recognised", dimension, all.size, recognised.size)
+        return recognised
+    }
+
+    /**
+     * Saves what a scan recognised: new ones as discovered, known ones grown, deleted ones left
+     * deleted ([Tracker.takeIn]); [taken] hears what became of each. Main thread in the game.
+     */
+    fun saveFound(recognised: List<Detection>, taken: (Detection, Tracker.Taken) -> Unit = { _, _ -> }) {
+        // A fortress group holding more than one fortress is saved as one for each.
+        for (detection in recognised.flatMap { it.parts.ifEmpty { listOf(it) } }) taken(detection, Tracker.takeIn(detection))
+        Tracker.relinkUndiscovered()
+        StructureStore.saveIfChanged()
     }
 
     private const val PROGRESS_EVERY = 3000L

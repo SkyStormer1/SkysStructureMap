@@ -106,8 +106,13 @@ object StructureStore {
             return close()
         }
         val (name, key) = world
+        openAt(FabricLoader.getInstance().configDir.resolve("skysstructuremap").resolve("$key.json"), name)
+    }
+
+    /** Opens the structures file at [path] for the world called [name]: [open] does, and a scan of Bobby's cache run outside the game. */
+    fun openAt(path: Path, name: String) {
         worldName = name
-        file = FabricLoader.getInstance().configDir.resolve("skysstructuremap").resolve("$key.json")
+        file = path
         val loaded = read(file!!)
         if (loaded == null) {
             all = emptyList()

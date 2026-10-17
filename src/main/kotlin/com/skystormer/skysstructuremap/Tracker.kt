@@ -136,6 +136,8 @@ object Tracker {
                 ?: worn(detection, level)?.also { used = VillageHouseFit }
             StructureType.RUINED_PORTAL ->
                 if (RuinedPortalFit.worthTrying(detection)) fitter.fit(detection, level, accept = RuinedPortalFit.refusal(level)) else null
+            StructureType.SHIPWRECK -> fitter.fit(detection, level, accept = ShipwreckFit::refusal)
+            StructureType.TRAIL_RUINS -> fitter.fit(detection, level, accept = TrailRuinsFit::refusal)
             else -> fitter.fit(detection, level)
         }
         if (match != null) {
@@ -510,6 +512,8 @@ object Tracker {
      * someone's base, and was saved as a village 130 blocks from the real one.
      */
     private fun townCentreRefusal(match: TemplateFit.Match, level: BlockSource): String? {
+        // The village starts from it, laid from its chunk's corner: all 497 in the test worlds were.
+        if (match.inChunk != (0 to 0)) return "a town centre off its chunk's corner"
         val kind = match.template.name.substringBefore('/')
         val allowed = VILLAGE_BIOMES[kind] ?: return null
         val b = match.box

@@ -21,7 +21,23 @@ object ShipwreckFit : TemplateFit(
         "upsidedown_backhalf", "upsidedown_backhalf_degraded",
     ),
     anyWood = true,
-)
+) {
+    /**
+     * Why a fit cannot be a wreck from where it lies in its chunk, or null when it can. The game
+     * lays every wreck from its chunk's corner, turned about one block of the design (4, 15), so
+     * each way round its corner lands on one spot; all 16 wrecks tried, of every shape and turn,
+     * were there. A player's wooden build that fits a wreck is on that spot one time in 256.
+     */
+    fun refusal(match: Match): String? =
+        if (match.inChunk == SPOTS[match.rotation]) null else "a wreck at ${match.inChunk.first},${match.inChunk.second} in its chunk, not ${SPOTS[match.rotation]}"
+
+    private val SPOTS = mapOf(
+        net.minecraft.world.level.block.Rotation.NONE to (0 to 0),
+        net.minecraft.world.level.block.Rotation.CLOCKWISE_90 to (3 to 11),
+        net.minecraft.world.level.block.Rotation.CLOCKWISE_180 to (8 to 14),
+        net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90 to (5 to 3),
+    )
+}
 
 /**
  * A pillager outpost's watchtower, plain or overgrown. Its birch and dark oak planks, fences and
@@ -72,7 +88,10 @@ object TrailRuinsFit : TemplateFit(
     aliases = mapOf("dirt" to "gravel", "coarse_dirt" to "gravel", "suspicious_gravel" to "gravel", "packed_mud" to "mud_bricks"),
     loose = setOf("gravel"),
     minVotes = 25,
-)
+) {
+    /** A tower is where the ruins start, so the game lays its corner on its chunk's corner, as all 166 in the test worlds were. */
+    fun refusal(match: Match): String? = if (match.inChunk == (0 to 0)) null else "a tower off its chunk's corner"
+}
 
 /**
  * An end city's pieces: every city starts from its base floor, and the game places each piece as

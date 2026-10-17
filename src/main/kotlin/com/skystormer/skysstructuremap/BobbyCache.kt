@@ -158,7 +158,9 @@ object BobbyCache {
      * Turns what Bobby saved into chunks: made on the main thread (it needs the game's list of
      * biomes), then used from the scan's own thread. The same codecs Bobby itself reads them with.
      */
-    class Reader(level: ClientLevel) {
+    class Reader(registries: net.minecraft.core.RegistryAccess) {
+
+        constructor(level: ClientLevel) : this(level.registryAccess())
 
         private val biomeCodec: Codec<PalettedContainer<Holder<Biome>>>
         private val plains: Holder<Biome>
@@ -166,7 +168,7 @@ object BobbyCache {
         private val dataVersion = SharedConstants.getCurrentVersion().dataVersion().version()
 
         init {
-            val registry = level.registryAccess().lookupOrThrow(Registries.BIOME)
+            val registry = registries.lookupOrThrow(Registries.BIOME)
             plains = registry.get(net.minecraft.world.level.biome.Biomes.PLAINS.identifier()).orElseThrow()
             biomeStrategy = Strategy.createForBiomes(registry.asHolderIdMap())
             biomeCodec = PalettedContainer.codecRW(registry.holderByNameCodec(), biomeStrategy, plains)

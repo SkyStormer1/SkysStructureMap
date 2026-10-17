@@ -159,6 +159,9 @@ open class TemplateFit(
         /** How much of what could be checked matched. */
         val share: Double get() = if (known == 0) 0.0 else matched.toDouble() / known
 
+        /** Where the design's own corner (its block 0, 0, 0) lies in its chunk, x to z. */
+        val inChunk: Pair<Int, Int> get() = Math.floorMod(BlockPos.getX(origin), 16) to Math.floorMod(BlockPos.getZ(origin), 16)
+
         /** The design's [Template.entrances] where it was placed: each in the world, and the way it faces. */
         fun entrances(): List<Pair<BlockPos, Direction>> = template.entrances.map { (pos, facing) ->
             val turned = pos.rotate(rotation)
