@@ -31,7 +31,7 @@ object MineshaftPieces {
 
     /**
      * Whether [detection]'s fences hold up at least [SUPPORTS] corridor supports, one with a rail
-     * or cobweb in its corridor: every one of 300 mineshafts saved from SiteB had one, and a
+     * or cobweb in its corridor: every one of 300 mineshafts sampled on a server had one, and a
      * player's dark oak fences under planks, 82 of them, none. Those supports are kept in
      * [Detection.furnished], for the part of a long chain saved as one mineshaft to need one too.
      */

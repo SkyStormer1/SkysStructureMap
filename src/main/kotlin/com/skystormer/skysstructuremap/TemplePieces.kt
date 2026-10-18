@@ -27,8 +27,8 @@ object TemplePieces {
 
     /**
      * The four blocks beside the middle, which the game leaves sandstone: never terracotta. A
-     * badlands layer is terracotta all through, so it holds the whole cross anywhere: one of SiteB's
-     * pyramids was placed on the badlands 70 blocks from where it stands.
+     * badlands layer is terracotta all through, so it holds the whole cross anywhere: one pyramid
+     * was placed on the badlands 70 blocks from where it stands.
      */
     private val GAPS = listOf(0 to -1, 0 to 1, -1 to 0, 1 to 0)
 
