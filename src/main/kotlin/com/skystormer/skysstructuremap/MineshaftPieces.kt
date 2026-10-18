@@ -9,8 +9,10 @@ import net.minecraft.world.level.block.Blocks
  * A mineshaft's corridors are held up by supports the game lays the same way every time
  * (`MineshaftPieces.MineShaftCorridor.placeSupport`): two fence posts two blocks high, two blocks
  * apart across the corridor, with planks on top of each (and nearly always across the gap), and the
- * corridor open between them. Fences are what farms and houses are fenced with; a run of these
- * frames is not.
+ * corridor open between them. Where a corridor crosses a cave with no ground near under it, the game
+ * hangs it from the roof instead (`fillPillarDownOrChainUp`): a fence on the corridor's plank floor
+ * with a chain up from it, two blocks apart across the corridor the same way. Fences are what farms
+ * and houses are fenced with; a run of these frames is not.
  */
 object MineshaftPieces {
 
@@ -92,10 +94,15 @@ object MineshaftPieces {
         return found
     }
 
-    /** A post standing at [x], [y], [z]: two fences on a block that is not one, under planks. */
-    private fun post(level: BlockSource, cursor: BlockPos.MutableBlockPos, x: Int, y: Int, z: Int): Boolean =
-        isFence(level, cursor.set(x, y, z)) && isFence(level, cursor.set(x, y + 1, z)) &&
-            !isFence(level, cursor.set(x, y - 1, z)) && isPlanks(level, cursor.set(x, y + 2, z))
+    /**
+     * A post at [x], [y], [z]: two fences on a block that is not one, under planks; or, hung from
+     * the roof over a cave, a fence on planks with a chain on it.
+     */
+    private fun post(level: BlockSource, cursor: BlockPos.MutableBlockPos, x: Int, y: Int, z: Int): Boolean {
+        if (!isFence(level, cursor.set(x, y, z)) || isFence(level, cursor.set(x, y - 1, z))) return false
+        if (isFence(level, cursor.set(x, y + 1, z))) return isPlanks(level, cursor.set(x, y + 2, z))
+        return isChain(level, cursor.set(x, y + 1, z)) && isPlanks(level, cursor.set(x, y - 1, z))
+    }
 
     /** The other post 2 along ([dx], [dz]), and the corridor open between the two. */
     private fun support(level: BlockSource, cursor: BlockPos.MutableBlockPos, x: Int, y: Int, z: Int, dx: Int, dz: Int): Boolean {
@@ -215,6 +222,9 @@ object MineshaftPieces {
 
     private fun isPlanks(level: BlockSource, pos: BlockPos): Boolean =
         level.hasChunk(pos.x shr 4, pos.z shr 4) && level.getBlockState(pos).block in PLANKS
+
+    private fun isChain(level: BlockSource, pos: BlockPos): Boolean =
+        level.hasChunk(pos.x shr 4, pos.z shr 4) && level.getBlockState(pos).block == Blocks.IRON_CHAIN
 
     // What 26.2's `blocksMotion` said, which 26.3 removed: solid, but not a cobweb or a bamboo shoot.
     private fun blocks(level: BlockSource, pos: BlockPos): Boolean =
