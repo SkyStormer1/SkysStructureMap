@@ -26,6 +26,13 @@ object TemplePieces {
     private const val CROSS_NEEDED = 10
 
     /**
+     * The four blocks beside the middle, which the game leaves sandstone: never terracotta. A
+     * badlands layer is terracotta all through, so it holds the whole cross anywhere: one of SiteB's
+     * pyramids was placed on the badlands 70 blocks from where it stands.
+     */
+    private val GAPS = listOf(0 to -1, 0 to 1, -1 to 0, 1 to 0)
+
+    /**
      * The middle block of a desert pyramid's floor cross among [detection]'s blocks, or null. The
      * cross is laid around 10,0,10 of the pyramid's 21 × 21 footprint, so the middle is the
      * pyramid's middle too ([desertBox]).
@@ -46,7 +53,12 @@ object TemplePieces {
                 for ((dx, dz) in CROSS) {
                     if (isTerracotta(level, cursor.set(x - ox + dx, y, z - oz + dz))) found++
                 }
-                if (found >= CROSS_NEEDED) return BlockPos(x - ox, y, z - oz)
+                // The game lays a pyramid from its chunk's corner, so its cross is 10 in from one;
+                // the lower one under it, 4 down and a few blocks over, is not.
+                if (Math.floorMod(x - ox - DESERT_HALF, 16) != 0 || Math.floorMod(z - oz - DESERT_HALF, 16) != 0) continue
+                if (found >= CROSS_NEEDED && GAPS.none { (dx, dz) -> isTerracotta(level, cursor.set(x - ox + dx, y, z - oz + dz)) }) {
+                    return BlockPos(x - ox, y, z - oz)
+                }
             }
         }
         return null
