@@ -112,10 +112,9 @@ abstract class FramedScreen(title: Component) : Screen(title) {
 
     private fun trackHeight(): Int = bottom() - top() - 2
 
-    private fun thumbHeight(): Int =
-        (trackHeight() * trackHeight() / maxOf(1, contentHeight + PAD * 2)).coerceIn(minOf(16, trackHeight()), trackHeight())
+    private fun thumbHeight(): Int = ScrollBar.thumbHeight(trackHeight(), trackHeight(), contentHeight + PAD * 2)
 
-    private fun thumbTop(): Int = top() + 1 + (trackHeight() - thumbHeight()) * scroll / maxOf(1, maxScroll())
+    private fun thumbTop(): Int = ScrollBar.thumbTop(top() + 1, trackHeight(), thumbHeight(), scroll, maxScroll())
 
     /** Moves the scrolled widgets rather than rebuilding them, so a half-typed box keeps its text and focus. */
     private fun scrollTo(wanted: Int) {
@@ -172,8 +171,7 @@ abstract class FramedScreen(title: Component) : Screen(title) {
 
     /** Puts the middle of the bar's thumb under the mouse. */
     private fun dragBarTo(mouseY: Double) {
-        val room = maxOf(1, trackHeight() - thumbHeight())
-        scrollTo(((mouseY - top() - 1 - thumbHeight() / 2.0) / room * maxScroll()).roundToInt())
+        scrollTo(ScrollBar.scrollFor(mouseY, top() + 1, trackHeight(), thumbHeight(), thumbHeight() / 2.0, maxScroll()))
     }
 
     companion object {
