@@ -63,4 +63,24 @@ object Placement {
         val spread = spreads[type] ?: return null
         return Triple(spread.set, Math.floorDiv(chunkX, spread.spacing), Math.floorDiv(chunkZ, spread.spacing))
     }
+
+    /**
+     * For the kinds whose box is laid out from their start chunk: that chunk. A desert pyramid,
+     * jungle temple and witch hut stand from its corner; an outpost's chunk corner is 31 in from
+     * its box's west and north sides (its plate is laid from the corner, turned, and the box
+     * reaches 16 past it), as for all 58 in the test worlds; a monument's box reaches 29 past its
+     * chunk's corner. Null for a pyramid or temple whose box is not the size the game lays (one
+     * saved from what was seen), and for other kinds.
+     */
+    fun startFromBox(type: StructureType, box: Box): Pair<Int, Int>? {
+        fun at(x: Int, z: Int) = Math.floorDiv(x, 16) to Math.floorDiv(z, 16)
+        return when (type) {
+            StructureType.DESERT_TEMPLE -> if (box.sizeX == 21 && box.sizeZ == 21) at(box.minX, box.minZ) else null
+            StructureType.JUNGLE_TEMPLE -> if (setOf(box.sizeX, box.sizeZ) == setOf(12, 15)) at(box.minX, box.minZ) else null
+            StructureType.WITCH_HUT -> at(box.minX, box.minZ)
+            StructureType.OUTPOST -> at(box.minX + 31, box.minZ + 31)
+            StructureType.MONUMENT -> at(box.minX + 29, box.minZ + 29)
+            else -> null
+        }
+    }
 }

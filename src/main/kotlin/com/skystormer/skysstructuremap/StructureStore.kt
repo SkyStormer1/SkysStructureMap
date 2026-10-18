@@ -339,9 +339,11 @@ object StructureStore {
      */
     fun startTaken(type: StructureType, dimension: String, start: Pair<Int, Int>): Structure? {
         val square = Placement.square(type, start.first, start.second) ?: return null
+        // One saved before starts were kept has its start worked out from its box, where it can be.
         return all.firstOrNull { s ->
-            s.dimension == dimension && s.start != null && s.start != start &&
-                Placement.square(s.type, s.start.first, s.start.second) == square
+            if (s.type != type || s.dimension != dimension) return@firstOrNull false
+            val its = s.start ?: Placement.startFromBox(s.type, s.box) ?: return@firstOrNull false
+            its != start && Placement.square(s.type, its.first, its.second) == square
         }
     }
 

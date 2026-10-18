@@ -113,7 +113,7 @@ object Tracker {
         val start = detection.start ?: return
         val refusal = if (!Placement.allows(detection.type, start.first, start.second)) "its kind never starts in chunk ${start.first},${start.second}"
         else StructureStore.startTaken(detection.type, detection.dimension, start)?.takeIf { it.id != detection.storedId }
-            ?.let { "the ${it.name} starting in chunk ${it.start?.first},${it.start?.second} (box ${it.box}) is the one start in its square" }
+            ?.let { "the ${it.name} (box ${it.box}) is the one start in its square" }
         if (refusal != null) {
             Log.info("{} #{} at {}: not one, starting in chunk {},{}: {}", detection.type.id, detection.id, detection.box, start.first, start.second, refusal)
             detection.box = null
@@ -132,22 +132,11 @@ object Tracker {
         else -> null
     }
 
-    /**
-     * For the kinds whose box is laid out from their start chunk: that chunk. A desert pyramid,
-     * jungle temple and witch hut stand from its corner; an outpost's chunk corner is 31 in from
-     * its box's west and north sides (its plate is laid from the corner, turned, and the box
-     * reaches 16 past it), as for all 58 in the test worlds; a monument's box reaches 29 past its
-     * chunk's corner.
-     */
+    /** For the kinds whose box is laid out from their start chunk ([Placement.startFromBox]): that chunk, once proved. */
     private fun startFromBox(detection: Detection): Pair<Int, Int>? {
         val box = detection.box ?: return null
-        fun at(x: Int, z: Int) = Math.floorDiv(x, 16) to Math.floorDiv(z, 16)
-        return when (detection.type) {
-            StructureType.DESERT_TEMPLE, StructureType.JUNGLE_TEMPLE, StructureType.WITCH_HUT -> if (detection.proved || detection.type == StructureType.WITCH_HUT) at(box.minX, box.minZ) else null
-            StructureType.OUTPOST -> at(box.minX + 31, box.minZ + 31)
-            StructureType.MONUMENT -> at(box.minX + 29, box.minZ + 29)
-            else -> null
-        }
+        val laidOut = detection.proved || detection.type !in setOf(StructureType.DESERT_TEMPLE, StructureType.JUNGLE_TEMPLE)
+        return if (laidOut) Placement.startFromBox(detection.type, box) else null
     }
 
     /**

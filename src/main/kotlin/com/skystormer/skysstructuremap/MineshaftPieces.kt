@@ -66,7 +66,7 @@ object MineshaftPieces {
      * its start room, or, for one whose room was never seen, the stretch it was cut to ([stretch]).
      */
     fun reachOf(centre: Box): Box =
-        if (centre.sizeX > ROOM) centre else centre.grow(REACH, down = REACH_HEIGHT, up = REACH_HEIGHT)
+        if (centre.sizeX > REACH) centre else centre.grow(REACH, down = REACH_HEIGHT, up = REACH_HEIGHT)
 
     /**
      * Where a mineshaft whose start room is not in sight is reckoned to be, from the fences [seen]:
