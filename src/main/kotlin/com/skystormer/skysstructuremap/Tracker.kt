@@ -476,10 +476,11 @@ object Tracker {
         link(detection, box)
         if (detection.storedId != null) return
         // One whose start room is not in sight is a mineshaft of its own only with enough fences
-        // outside those saved: the rest are theirs, chained in where mineshafts cross.
+        // outside those saved, a rail or cobweb by one of their supports: the rest are theirs,
+        // chained in where mineshafts cross.
         if (detection.type == StructureType.MINESHAFT && detection.centre?.let(MineshaftPieces::isStretch) == true) {
             val own = ownFences(detection, box, null)
-            if (own == null || own.second < MineshaftPieces.SUPPORTS * 4) return
+            if (own == null || own.second < MineshaftPieces.SUPPORTS * 4 || !MineshaftPieces.furnishedIn(detection, own.first)) return
             detection.box = own.first
         }
         val structure = Structure(

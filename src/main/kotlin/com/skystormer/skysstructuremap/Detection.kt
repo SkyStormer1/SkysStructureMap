@@ -117,6 +117,9 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
     /** Temples: the game's own layout has been found in it, so it stays recognised. */
     var proved = false
 
+    /** A mineshaft's supports with a rail or cobweb in their corridor, as block positions ([MineshaftPieces.proved]). */
+    val furnished = LongArrayList()
+
     /** Where the design that proved it stands, which the rest of its box is measured from. */
     var piece: Box? = null
 

@@ -32,14 +32,16 @@ object MineshaftPieces {
     /**
      * Whether [detection]'s fences hold up at least [SUPPORTS] corridor supports, one with a rail
      * or cobweb in its corridor: every one of 300 mineshafts saved from SiteB had one, and a
-     * player's dark oak fences under planks, 82 of them, none.
+     * player's dark oak fences under planks, 82 of them, none. Those supports are kept in
+     * [Detection.furnished], for the part of a long chain saved as one mineshaft to need one too.
      */
     fun proved(detection: Detection, level: BlockSource): Boolean =
-        supports(detection, level, SUPPORTS) >= SUPPORTS && furnished(detection, level)
+        supports(detection, level, SUPPORTS) >= SUPPORTS && furnish(detection, level)
 
-    /** Whether a rail or cobweb stands in the corridor of one of [detection]'s supports, within [ALONG] of it. */
-    private fun furnished(detection: Detection, level: BlockSource): Boolean {
+    /** Finds the supports with a rail or cobweb in their corridor, within [ALONG] of them; whether there are any. */
+    private fun furnish(detection: Detection, level: BlockSource): Boolean {
         val cursor = BlockPos.MutableBlockPos()
+        detection.furnished.clear()
         val iterator = detection.positions.iterator()
         while (iterator.hasNext()) {
             val key = iterator.nextLong()
@@ -48,15 +50,24 @@ object MineshaftPieces {
             val z = BlockPos.getZ(key)
             if (!post(level, cursor, x, y, z)) continue
             // Posts 2 east: the corridor runs north and south between them; 2 south, east and west.
-            for ((dx, dz) in listOf(1 to 0, 0 to 1)) {
+            supports@ for ((dx, dz) in listOf(1 to 0, 0 to 1)) {
                 if (!post(level, cursor, x + 2 * dx, y, z + 2 * dz)) continue
                 for (along in -ALONG..ALONG) for (across in 0..2) for (dy in 0..2) {
                     val block = level.getBlockState(cursor.set(x + dx * across + dz * along, y + dy, z + dz * across + dx * along)).block
-                    if (block in FURNISHING) return true
+                    if (block in FURNISHING) {
+                        detection.furnished.add(key)
+                        break@supports
+                    }
                 }
             }
         }
-        return false
+        return !detection.furnished.isEmpty
+    }
+
+    /** Whether one of [detection]'s furnished supports stands in [box]. */
+    fun furnishedIn(detection: Detection, box: Box): Boolean = (0 until detection.furnished.size).any { i ->
+        val key = detection.furnished.getLong(i)
+        box.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key))
     }
 
     private val FURNISHING: Set<Block> = setOf(Blocks.RAIL, Blocks.COBWEB)
