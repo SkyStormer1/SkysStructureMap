@@ -66,15 +66,17 @@ object MineshaftPieces {
      * its start room, or, for one whose room was never seen, the stretch it was cut to ([stretch]).
      */
     fun reachOf(centre: Box): Box =
-        if (centre.sizeX > REACH) centre else centre.grow(REACH, down = REACH_HEIGHT, up = REACH_HEIGHT)
+        if (isStretch(centre)) centre else centre.grow(REACH, down = REACH_HEIGHT, up = REACH_HEIGHT)
 
     /**
      * Where a mineshaft whose start room is not in sight is reckoned to be, from the fences [seen]:
-     * a stretch as wide as one can be, from their north-west corner, or, given [detection], from
-     * its fence nearest that corner: fences running in an L leave the corner itself empty, and a
-     * stretch holding none of them would split off every one, again and again. Not every start
-     * room can be found (one opens into a cave with no walls; at another the game's own record had
-     * no room at all), and fences chained across many mineshafts would otherwise make one huge one.
+     * a stretch as wide as one can be, from their north-west corner, or, given [detection], the
+     * tile of a fixed grid of such stretches holding its fence nearest that corner. Fences running
+     * in an L leave the corner itself empty, and a stretch holding none of them would split off
+     * every one, again and again; a stretch from the nearest fence would leave a few behind, the
+     * next one a few blocks over, the same mineshaft twice. Not every start room can be found (one
+     * opens into a cave with no walls; at another the game's own record had no room at all), and
+     * fences chained across many mineshafts would otherwise make one huge one.
      */
     fun stretch(seen: Box, detection: Detection? = null): Box {
         var x = seen.minX
@@ -88,13 +90,18 @@ object MineshaftPieces {
                 val dz = (BlockPos.getZ(key) - seen.minZ).toLong()
                 if (dx * dx + dz * dz < nearest) {
                     nearest = dx * dx + dz * dz
-                    x = BlockPos.getX(key)
-                    z = BlockPos.getZ(key)
+                    x = Math.floorDiv(BlockPos.getX(key), TILE) * TILE
+                    z = Math.floorDiv(BlockPos.getZ(key), TILE) * TILE
                 }
             }
         }
-        return Box(x, seen.minY, z, x + 2 * REACH, seen.maxY, z + 2 * REACH)
+        return Box(x, seen.minY, z, x + TILE - 1, seen.maxY, z + TILE - 1)
     }
+
+    /** Whether [centre] is a stretch ([stretch]), not a start room. */
+    fun isStretch(centre: Box): Boolean = centre.sizeX > REACH
+
+    private const val TILE = 2 * REACH + 1
 
     /**
      * The start room of one of [detection]'s mineshafts, or null when none is in sight. Every

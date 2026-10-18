@@ -368,8 +368,11 @@ object Tracker {
             // As far as the game reaches from its start room, however far its fences chain.
             // Without its room in sight, no wider than one can be from where it was saved: fences
             // chained across the mineshafts beside it grew one to 484 blocks.
-            detection.type == StructureType.MINESHAFT ->
-                stored.box.union(box).clampedTo(MineshaftPieces.reachOf(detection.centre ?: stored.centre ?: MineshaftPieces.stretch(stored.box)))
+            // Only by its own fences: those in another saved one are that one's, where they cross.
+            detection.type == StructureType.MINESHAFT -> {
+                val reach = MineshaftPieces.reachOf(stored.centre ?: detection.centre ?: MineshaftPieces.stretch(stored.box))
+                (ownFences(detection, reach, stored.id)?.let { stored.box.union(it.first) } ?: stored.box).clampedTo(reach)
+            }
             else -> stored.box.union(box)
         }.let { grown -> if (detection.type in PROVED_THEN_SEEN && detection.piece != null) around(detection, grown, stored.centre) else grown }
         // Pieces stay once saved, so they are still there after the structure is torn down or out of
@@ -438,6 +441,28 @@ object Tracker {
         }
     }
 
+    /**
+     * The outline of [detection]'s fences within [within] that stand in no saved mineshaft but
+     * the one [except] names, and how many there are; null for none.
+     */
+    private fun ownFences(detection: Detection, within: Box, except: String?): Pair<Box, Int>? {
+        val others = StructureStore.inDimension(detection.dimension)
+            .filter { it.type == StructureType.MINESHAFT && it.id != except && it.box.overlaps(within) }.map { it.box }
+        var bounds: Box? = null
+        var count = 0
+        val iterator = detection.positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            val x = BlockPos.getX(key)
+            val y = BlockPos.getY(key)
+            val z = BlockPos.getZ(key)
+            if (!within.contains(x, y, z) || others.any { it.contains(x, y, z) }) continue
+            bounds = bounds?.including(x, y, z) ?: Box.of(x, y, z)
+            count++
+        }
+        return bounds?.let { it to count }
+    }
+
     private fun discover(detection: Detection, announce: Boolean = Config.announce) {
         val box = detection.box ?: return
         if (!StructureStore.isOpen) {
@@ -450,11 +475,18 @@ object Tracker {
         // was saved afresh, so one deleted on purpose came back.
         link(detection, box)
         if (detection.storedId != null) return
+        // One whose start room is not in sight is a mineshaft of its own only with enough fences
+        // outside those saved: the rest are theirs, chained in where mineshafts cross.
+        if (detection.type == StructureType.MINESHAFT && detection.centre?.let(MineshaftPieces::isStretch) == true) {
+            val own = ownFences(detection, box, null)
+            if (own == null || own.second < MineshaftPieces.SUPPORTS * 4) return
+            detection.box = own.first
+        }
         val structure = Structure(
             id = UUID.randomUUID().toString(),
             type = detection.type,
             dimension = detection.dimension,
-            box = box,
+            box = detection.box ?: box,
             discovered = System.currentTimeMillis(),
             variant = detection.variant,
             pieces = detection.pieces,
@@ -463,7 +495,7 @@ object Tracker {
         )
         StructureStore.put(structure)
         detection.storedId = structure.id
-        Log.info("Discovered {} #{} at {} {} {}, box {}", detection.type.id, detection.id, box.centreX, structure.waypointY, box.centreZ, box)
+        Log.info("Discovered {} #{} at {} {} {}, box {}", detection.type.id, detection.id, structure.box.centreX, structure.waypointY, structure.box.centreZ, structure.box)
         if (announce) {
             Minecraft.getInstance().player?.sendSystemMessage(
                 Component.literal("Discovered ").withStyle { it.withColor(0xAAAAAA) }
