@@ -120,6 +120,9 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
     /** A mineshaft's supports with a rail or cobweb in their corridor, as block positions ([MineshaftPieces.proved]). */
     val furnished = LongArrayList()
 
+    /** Whether [furnished] was worked out for the blocks it holds now: more blocks seen, it is worked out again. */
+    var furnishChecked = false
+
     /** Where the design that proved it stands, which the rest of its box is measured from. */
     var piece: Box? = null
 
@@ -142,6 +145,7 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         bounds = bounds?.including(x, y, z) ?: Box.of(x, y, z)
         fitDirty = true
         changed = true
+        furnishChecked = false
         return true
     }
 
@@ -177,6 +181,16 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         }
         into.inBiome += moved
         inBiome -= moved
+        // Its furnished supports go with their blocks, so neither has to look for them again.
+        val checked = furnishChecked
+        val stays = LongArrayList()
+        for (i in 0 until furnished.size) {
+            val key = furnished.getLong(i)
+            if (keep.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key))) stays.add(key) else into.furnished.add(key)
+        }
+        furnished.clear()
+        furnished.addAll(stays)
+        into.furnishChecked = checked
         cells.clear()
         bounds = null
         // Worked out again from the blocks left when each block is kept; else kept as it was.

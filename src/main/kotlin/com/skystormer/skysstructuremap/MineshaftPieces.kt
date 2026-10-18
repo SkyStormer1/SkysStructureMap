@@ -40,6 +40,7 @@ object MineshaftPieces {
 
     /** Finds the supports with a rail or cobweb in their corridor, within [ALONG] of them; whether there are any. */
     private fun furnish(detection: Detection, level: BlockSource): Boolean {
+        if (detection.furnishChecked) return !detection.furnished.isEmpty
         val cursor = BlockPos.MutableBlockPos()
         detection.furnished.clear()
         val iterator = detection.positions.iterator()
@@ -61,6 +62,7 @@ object MineshaftPieces {
                 }
             }
         }
+        detection.furnishChecked = true
         return !detection.furnished.isEmpty
     }
 
