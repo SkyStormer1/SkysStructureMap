@@ -49,8 +49,6 @@ object Placement {
         }
     }
 
-    fun spread(type: StructureType): Spread? = spreads[type]
-
     /** Whether [type] can start in chunk [chunkX], [chunkZ]; true for a kind not spread this way. */
     fun allows(type: StructureType, chunkX: Int, chunkZ: Int): Boolean {
         val spread = spreads[type] ?: return true

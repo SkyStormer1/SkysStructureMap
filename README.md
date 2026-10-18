@@ -29,9 +29,14 @@ copy of Minecraft:
   as the game lays them.
 - **Nether fortresses** need their pieces laid out as the game builds them: a bridge crossroads, or several rooms,
   bridges and corridors; **desert temples** the
-  terracotta cross over their hidden chamber; **jungle temples** their lever wall and trap; **witch huts** their exact
-  size and fittings; **mineshafts** the fence and plank supports along their corridors; **dungeons** the mossy
+  terracotta cross over their hidden chamber, 10 blocks in from a chunk corner as the game lays it (a badlands layer
+  is terracotta all through, and holds a cross anywhere); **jungle temples** their lever wall and trap; **witch huts** their exact
+  size and fittings; **mineshafts** the fence and plank supports along their corridors, with a rail or cobweb by one of them, and
+  only their own fences, not those of a mineshaft crossing them; **dungeons** the mossy
   cobblestone floor around their spawner.
+- Where what is seen tells which chunk a structure starts in (a village's town centre, a wreck, a temple, an
+  outpost, a monument), it must be a chunk the game can start that kind in, and only one may start in each of the
+  squares the game spreads them over, so a copy built near a real one is not taken for a second.
 - A **ruined portal** must still have some of its obsidian, or the magma the game mixes into its netherrack, so a
   player's netherrack build never counts.
 - **Strongholds, trial chambers and end gateways** go by blocks no player can place in survival: end portal frames,
