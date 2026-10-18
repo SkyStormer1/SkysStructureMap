@@ -29,8 +29,38 @@ object MineshaftPieces {
     private val FENCES: Set<Block> = setOf(Blocks.OAK_FENCE, Blocks.DARK_OAK_FENCE)
     private val PLANKS: Set<Block> = setOf(Blocks.OAK_PLANKS, Blocks.DARK_OAK_PLANKS)
 
-    /** Whether [detection]'s fences hold up at least [SUPPORTS] corridor supports. */
-    fun proved(detection: Detection, level: BlockSource): Boolean = supports(detection, level, SUPPORTS) >= SUPPORTS
+    /**
+     * Whether [detection]'s fences hold up at least [SUPPORTS] corridor supports, one with a rail
+     * or cobweb in its corridor: every one of 300 mineshafts saved from SiteB had one, and a
+     * player's dark oak fences under planks, 82 of them, none.
+     */
+    fun proved(detection: Detection, level: BlockSource): Boolean =
+        supports(detection, level, SUPPORTS) >= SUPPORTS && furnished(detection, level)
+
+    /** Whether a rail or cobweb stands in the corridor of one of [detection]'s supports, within [ALONG] of it. */
+    private fun furnished(detection: Detection, level: BlockSource): Boolean {
+        val cursor = BlockPos.MutableBlockPos()
+        val iterator = detection.positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            val x = BlockPos.getX(key)
+            val y = BlockPos.getY(key)
+            val z = BlockPos.getZ(key)
+            if (!post(level, cursor, x, y, z)) continue
+            // Posts 2 east: the corridor runs north and south between them; 2 south, east and west.
+            for ((dx, dz) in listOf(1 to 0, 0 to 1)) {
+                if (!post(level, cursor, x + 2 * dx, y, z + 2 * dz)) continue
+                for (along in -ALONG..ALONG) for (across in 0..2) for (dy in 0..2) {
+                    val block = level.getBlockState(cursor.set(x + dx * across + dz * along, y + dy, z + dz * across + dx * along)).block
+                    if (block in FURNISHING) return true
+                }
+            }
+        }
+        return false
+    }
+
+    private val FURNISHING: Set<Block> = setOf(Blocks.RAIL, Blocks.COBWEB)
+    private const val ALONG = 8
 
     /** How many supports [detection]'s fences make, counting no further than [enough]. */
     fun supports(detection: Detection, level: BlockSource, enough: Int = Int.MAX_VALUE): Int {
