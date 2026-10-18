@@ -400,11 +400,11 @@ object Specs {
      * as completed came back unmarked as the other copy).
      */
     fun sameStructure(type: StructureType, a: Box, b: Box): Boolean {
-        if (a.grow(of(type).merge).overlaps(b)) return true
         // A dungeon's box is its room, found round its spawner: two rooms apart are two dungeons,
-        // however near, and the game often lays one over another (two in Bobby's cache were 44
-        // blocks apart, one above the other, and were joined as one).
-        if (type == StructureType.DUNGEON) return false
+        // however near. The game often lays them side by side or one over another: in Bobby's
+        // cache, two a block apart and two 44 apart, one above the other, were joined as one.
+        if (type == StructureType.DUNGEON) return a.overlaps(b)
+        if (a.grow(of(type).merge).overlaps(b)) return true
         val both = a.union(b)
         if (maxOf(both.sizeX, both.sizeZ) <= span(type)) return true
         val dx = Math.abs(a.centreX - b.centreX)
