@@ -492,3 +492,103 @@ object RuinedPortalFit : TemplateFit(
 
     private const val MIN_MAGMA = 2
 }
+
+/**
+ * An igloo's dome (`igloo/top`): snow blocks round a bed, a furnace, a crafting table, carpet and a
+ * redstone torch, with a trapdoor over the ladder when it has a basement. The game lays it from its
+ * chunk's corner, turned about one block of the design (3, 5, 5), so each way round it lands on one
+ * spot of its chunk (the game's `IglooPieces`).
+ */
+object IglooFit : TemplateFit(
+    "igloo",
+    listOf("top"),
+    anyWood = false,
+    // Only the furnishings vote: snow blocks are the ground of every snowy slope.
+    votingKinds = setOf(
+        Blocks.CARPET.white(), Blocks.CARPET.lightGray(), Blocks.REDSTONE_TORCH, Blocks.FURNACE, Blocks.CRAFTING_TABLE,
+        Blocks.OAK_TRAPDOOR, Blocks.BED.red(),
+    ),
+) {
+    fun refusal(match: Match): String? {
+        val (x, z) = OFFSETS.getValue(match.rotation)
+        return if (match.inChunk == Math.floorMod(x, 16) to Math.floorMod(z, 16)) null
+        else "an igloo at ${match.inChunk.first},${match.inChunk.second} in its chunk, not ${Math.floorMod(x, 16)},${Math.floorMod(z, 16)}"
+    }
+
+    /** The chunk an igloo that fits starts in: the one whose corner it was laid from. */
+    fun startChunk(match: Match): Pair<Int, Int> {
+        val (x, z) = OFFSETS.getValue(match.rotation)
+        return Math.floorDiv(BlockPos.getX(match.origin) - x, 16) to Math.floorDiv(BlockPos.getZ(match.origin) - z, 16)
+    }
+
+    /** How far the design's corner lies from its chunk's corner, each way round: its pivot (3, 5) less itself turned. */
+    private val OFFSETS = mapOf(
+        net.minecraft.world.level.block.Rotation.NONE to (0 to 0),
+        net.minecraft.world.level.block.Rotation.CLOCKWISE_90 to (8 to 2),
+        net.minecraft.world.level.block.Rotation.CLOCKWISE_180 to (6 to 10),
+        net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90 to (-2 to 8),
+    )
+}
+
+/**
+ * An ocean ruin's 48 designs: stone brick ones (plain, cracked or mossy) in cold seas, cut sandstone
+ * ones in warm. The game leaves out a block in five of small ones and one in ten of big ones as it
+ * places them, and makes some of their gravel and sand suspicious, which count as what they replace.
+ * Gravel and sand are the sea floor anyway, so the rest of a design must match by itself as well.
+ * A big ruin has small ones round it, which [Specs] keeps in its box.
+ */
+object OceanRuinFit : TemplateFit(
+    "underwater_ruin",
+    listOf("brick", "cracked", "mossy", "warm").flatMap { kind -> (1..8).map { "${kind}_$it" } } +
+        listOf("big_brick", "big_cracked", "big_mossy").flatMap { kind -> listOf(1, 2, 3, 8).map { "${kind}_$it" } } +
+        (4..7).map { "big_warm_$it" },
+    anyWood = false,
+    agreement = 0.3,
+    samples = 120,
+    aliases = mapOf("suspicious_gravel" to "gravel", "suspicious_sand" to "sand"),
+    loose = setOf("gravel", "sand"),
+    minVotes = 15,
+    // Only its stonework votes: the sea floor's gravel and sand are everywhere.
+    votingKinds = setOf(
+        Blocks.STONE_BRICKS, Blocks.CRACKED_STONE_BRICKS, Blocks.MOSSY_STONE_BRICKS, Blocks.CHISELED_STONE_BRICKS,
+        Blocks.MOSSY_COBBLESTONE, Blocks.CUT_SANDSTONE, Blocks.CHISELED_SANDSTONE, Blocks.POLISHED_GRANITE,
+    ),
+    closest = true,
+)
+
+/**
+ * An abandoned camp's tent, one of 180 designs over 18 biomes: white wool stairs over straw beds,
+ * with fences and a dirt path. The tent is where the camp starts, laid from its chunk's corner as
+ * trail ruins' tower is; its campsite and trees join it from there.
+ */
+object CampFit : TemplateFit(
+    "abandoned_camp/tent",
+    CAMP_BIOMES.flatMap { biome -> poolLocations("abandoned_camp/tent/$biome", "abandoned_camp/tent/") },
+    anyWood = false,
+    votingKinds = setOf(Blocks.WOOL_STAIRS.white(), Blocks.STRAW_BED),
+) {
+    fun refusal(match: Match): String? = if (match.inChunk == (0 to 0)) null else "a tent off its chunk's corner"
+}
+
+/** The biomes the game has a camp for, each with its own tents (`worldgen/structure/abandoned_camp_<biome>`). */
+private val CAMP_BIOMES = listOf(
+    "bamboo_jungle", "birch_forest", "cherry_grove", "dappled_forest", "flower_forest", "forest", "meadow",
+    "old_growth_birch_forest", "old_growth_pine_taiga", "old_growth_spruce_taiga", "pale_garden", "savanna",
+    "snowy_taiga", "sparse_jungle", "swamp", "taiga", "windswept_forest", "wooded_badlands",
+)
+
+/**
+ * The designs a template pool of the game's draws from (`worldgen/template_pool/<pool>.json`), as
+ * paths under [under]: read from the game's own files, so a design added in an update is matched too.
+ */
+private fun poolLocations(pool: String, under: String): List<String> = try {
+    TemplateFit::class.java.getResourceAsStream("/data/minecraft/worldgen/template_pool/$pool.json")?.use { stream ->
+        com.google.gson.JsonParser.parseReader(stream.reader()).asJsonObject.getAsJsonArray("elements").mapNotNull { entry ->
+            entry.asJsonObject.getAsJsonObject("element")?.get("location")?.asString
+                ?.removePrefix("minecraft:")?.takeIf { it.startsWith(under) }?.removePrefix(under)
+        }
+    } ?: emptyList<String>().also { Log.warn("Template pool {} is not in the game jar", pool) }
+} catch (e: Exception) {
+    Log.error("Could not read template pool $pool", e)
+    emptyList()
+}

@@ -59,7 +59,7 @@ open class TemplateFit(
      * with every brick in a design would be slow and say little, while its stairs, chiselled and
      * gilded blocks are few and in known places. Everything is still checked block for block.
      */
-    private val votingKinds: Set<Block> = emptySet(),
+    val votingKinds: Set<Block> = emptySet(),
     /**
      * The game may also place it mirrored, front to back, as it does ruined portals: each design is
      * tried that way too, as a design of its own.

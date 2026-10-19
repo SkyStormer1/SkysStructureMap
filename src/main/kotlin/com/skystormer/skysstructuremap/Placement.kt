@@ -32,6 +32,8 @@ object Placement {
         StructureType.JUNGLE_TEMPLE to BuiltinStructureSets.JUNGLE_TEMPLES,
         StructureType.WITCH_HUT to BuiltinStructureSets.SWAMP_HUTS,
         StructureType.MONUMENT to BuiltinStructureSets.OCEAN_MONUMENTS,
+        StructureType.ABANDONED_CAMP to BuiltinStructureSets.ABANDONED_CAMP,
+        StructureType.IGLOO to BuiltinStructureSets.IGLOOS,
     )
 
     private val spreads: Map<StructureType, Spread> by lazy {
@@ -78,6 +80,7 @@ object Placement {
             StructureType.WITCH_HUT -> at(box.minX, box.minZ)
             StructureType.OUTPOST -> at(box.minX + 31, box.minZ + 31)
             StructureType.MONUMENT -> at(box.minX + 29, box.minZ + 29)
+            StructureType.BURIED_TREASURE -> at(box.minX, box.minZ)
             else -> null
         }
     }

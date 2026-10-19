@@ -17,6 +17,8 @@ enum class StructureType(
     MANSION("mansion", "Woodland Mansion", "Woodland Mansions", 0xFF6A4A2A.toInt(), OVERWORLD),
     STRONGHOLD("stronghold", "Stronghold", "Strongholds", 0xFF2E8B57.toInt(), OVERWORLD),
     WITCH_HUT("witch_hut", "Witch Hut", "Witch Huts", 0xFF7A3AA0.toInt(), OVERWORLD),
+    IGLOO("igloo", "Igloo", "Igloos", 0xFFD8E8F4.toInt(), OVERWORLD),
+    ABANDONED_CAMP("abandoned_camp", "Abandoned Camp", "Abandoned Camps", 0xFFE8E0C8.toInt(), OVERWORLD),
     JUNGLE_TEMPLE("jungle_temple", "Jungle Temple", "Jungle Temples", 0xFF5E7A4A.toInt(), OVERWORLD),
     DESERT_TEMPLE("desert_temple", "Desert Temple", "Desert Temples", 0xFFE0C080.toInt(), OVERWORLD),
     TRAIL_RUINS("trail_ruins", "Trail Ruins", "Trail Ruins", 0xFFA0603A.toInt(), OVERWORLD),
@@ -24,6 +26,8 @@ enum class StructureType(
     TRIAL_CHAMBERS("trial_chambers", "Trial Chambers", "Trial Chambers", 0xFFC87850.toInt(), OVERWORLD),
     MONUMENT("monument", "Ocean Monument", "Ocean Monuments", 0xFF3FD0C0.toInt(), OVERWORLD),
     SHIPWRECK("shipwreck", "Shipwreck", "Shipwrecks", 0xFFC8904A.toInt(), OVERWORLD),
+    OCEAN_RUIN("ocean_ruin", "Ocean Ruin", "Ocean Ruins", 0xFF8AA0A0.toInt(), OVERWORLD),
+    BURIED_TREASURE("buried_treasure", "Buried Treasure", "Buried Treasure", 0xFFF0C040.toInt(), OVERWORLD),
     RUINED_PORTAL("ruined_portal", "Ruined Portal", "Ruined Portals", 0xFF8A4AD0.toInt(), OVERWORLD),
     MINESHAFT("mineshaft", "Mineshaft", "Mineshafts", 0xFFA07840.toInt(), OVERWORLD),
     DUNGEON("dungeon", "Dungeon", "Dungeons", 0xFF708A60.toInt(), OVERWORLD),
@@ -40,6 +44,17 @@ enum class StructureType(
 
     companion object {
         fun byId(id: String): StructureType? = entries.firstOrNull { it.id == id }
+
+        /** The kinds added since settings began listing the kinds they knew ([newTo]). */
+        private val ADDED_SINCE_LISTED = setOf(IGLOO, ABANDONED_CAMP, OCEAN_RUIN, BURIED_TREASURE)
+
+        /**
+         * The kinds a settings file was saved without knowing, given the ids it lists as known (null
+         * for a file from before it listed them): those are switched on, as for a new player, rather
+         * than off for being missing from its list of kinds shown.
+         */
+        fun newTo(known: Collection<String>?): Set<StructureType> =
+            if (known == null) ADDED_SINCE_LISTED else entries.filterTo(HashSet()) { it.id !in known }
     }
 }
 

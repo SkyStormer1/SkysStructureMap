@@ -127,7 +127,9 @@ object Tracker {
      */
     private fun startOf(type: StructureType, match: TemplateFit.Match): Pair<Int, Int>? = when {
         type == StructureType.SHIPWRECK -> ShipwreckFit.startChunk(match)
-        type == StructureType.VILLAGE && TOWN_CENTRES in match.template.name || type == StructureType.TRAIL_RUINS ->
+        type == StructureType.IGLOO -> IglooFit.startChunk(match)
+        type == StructureType.VILLAGE && TOWN_CENTRES in match.template.name || type == StructureType.TRAIL_RUINS ||
+            type == StructureType.ABANDONED_CAMP ->
             Math.floorDiv(BlockPos.getX(match.origin), 16) to Math.floorDiv(BlockPos.getZ(match.origin), 16)
         else -> null
     }
@@ -176,6 +178,8 @@ object Tracker {
                 if (RuinedPortalFit.worthTrying(detection)) fitter.fit(detection, level, accept = RuinedPortalFit.refusal(level)) else null
             StructureType.SHIPWRECK -> fitter.fit(detection, level, accept = ShipwreckFit::refusal)
             StructureType.TRAIL_RUINS -> fitter.fit(detection, level, accept = TrailRuinsFit::refusal)
+            StructureType.IGLOO -> fitter.fit(detection, level, accept = IglooFit::refusal)
+            StructureType.ABANDONED_CAMP -> fitter.fit(detection, level, accept = CampFit::refusal)
             else -> fitter.fit(detection, level)
         }
         if (match != null) {
@@ -224,6 +228,7 @@ object Tracker {
                 StructureType.MONUMENT -> MonumentLayout.matches(detection.box!!, level)
                 StructureType.MINESHAFT -> MineshaftPieces.proved(detection, level)
                 StructureType.DUNGEON -> Dungeons.room(detection, level)?.also { detection.piece = it } != null
+                StructureType.BURIED_TREASURE -> BuriedTreasure.buried(detection.box!!, level)
                 else -> true
             }
             if (!detection.proved) detection.box = null
@@ -521,11 +526,17 @@ object Tracker {
         StructureType.ANCIENT_CITY -> AncientCityFit
         StructureType.MANSION -> MansionFit
         StructureType.RUINED_PORTAL -> RuinedPortalFit
+        StructureType.IGLOO -> IglooFit
+        StructureType.ABANDONED_CAMP -> CampFit
+        StructureType.OCEAN_RUIN -> OceanRuinFit
         else -> null
     }
 
     /** Kinds proved once by one piece matching, whose box is then everything seen around it. */
-    private val PROVED_THEN_SEEN = setOf(StructureType.VILLAGE, StructureType.TRAIL_RUINS, StructureType.END_CITY, StructureType.BASTION, StructureType.ANCIENT_CITY, StructureType.MANSION)
+    private val PROVED_THEN_SEEN = setOf(
+        StructureType.VILLAGE, StructureType.TRAIL_RUINS, StructureType.END_CITY, StructureType.BASTION, StructureType.ANCIENT_CITY,
+        StructureType.MANSION, StructureType.ABANDONED_CAMP, StructureType.OCEAN_RUIN,
+    )
 
     /**
      * Blocks a village's town centre has in only a few places, so one of them says where the centre

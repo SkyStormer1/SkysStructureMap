@@ -209,6 +209,51 @@ object Specs {
         reach = null, waypointAtTop = true,
     )
 
+    /**
+     * An igloo's furnishings: its carpet, bed, furnace, crafting table, redstone torch and trapdoor.
+     * Not its snow blocks, which are the ground of every snowy slope; the match checks those. Set
+     * once its dome matches ([IglooFit]).
+     */
+    private val IGLOO = Spec(
+        IglooFit.votingKinds,
+        biomes = setOf("snowy_taiga", "snowy_plains", "snowy_slopes"), biomeNearby = true, merge = 6,
+        recognise = { d -> d.box },
+        reach = null, waypointAtTop = true,
+    )
+
+    /**
+     * A camp's tent (white wool stairs and straw beds) and its campfire. Set once the tent matches
+     * ([CampFit]); its box is then what is seen round the tent, as far as a camp reaches.
+     */
+    private val ABANDONED_CAMP = Spec(
+        CampFit.votingKinds + Blocks.CAMPFIRE, merge = 16,
+        recognise = { d -> d.box },
+        reach = Spec.Reach(2, 2, 4), waypointAtTop = true,
+    )
+
+    /**
+     * An ocean ruin's stonework, and the suspicious gravel and sand the game hides its finds in, on
+     * the sea floor. Set once one of its designs matches ([OceanRuinFit]); its box is then what is
+     * seen round it, which takes in the small ruins round a big one.
+     */
+    private val OCEAN_RUIN = Spec(
+        OceanRuinFit.votingKinds + setOf(Blocks.SUSPICIOUS_GRAVEL, Blocks.SUSPICIOUS_SAND),
+        maxY = 62, biomes = Biomes.OCEAN, biomeNearby = true, merge = 16,
+        recognise = { d -> d.box },
+        reach = Spec.Reach(2, 2, 4),
+    )
+
+    /**
+     * A chest the game buries on a beach: always in the same column of its chunk (9, 9, its
+     * `locate_offset`), sat on the stone or sandstone it dug down to. A player's chest is that
+     * nowhere near as often; proved by [BuriedTreasure].
+     */
+    private val BURIED_TREASURE = Spec(
+        setOf(Blocks.CHEST), biomes = Biomes.BEACH, biomeNearby = true, merge = 1,
+        recognise = { d -> d.bounds?.takeIf { it.sizeX == 1 && it.sizeZ == 1 && it.sizeY == 1 && Math.floorMod(it.minX, 16) == 9 && Math.floorMod(it.minZ, 16) == 9 } },
+        reach = null,
+    )
+
     /** Cobblestone and mossy cobblestone above ground in a jungle (dungeons are below), with its chiselled stone bricks. */
     private val JUNGLE_TEMPLE = Spec(
         setOf(
@@ -346,6 +391,7 @@ object Specs {
         StructureType.VILLAGE, StructureType.TRAIL_RUINS -> 9
         StructureType.OUTPOST, StructureType.WITCH_HUT, StructureType.JUNGLE_TEMPLE,
         StructureType.DESERT_TEMPLE, StructureType.ANCIENT_CITY -> 9
+        StructureType.IGLOO, StructureType.ABANDONED_CAMP, StructureType.OCEAN_RUIN -> 9
         StructureType.MANSION -> 21
         StructureType.STRONGHOLD -> 32
         StructureType.TRIAL_CHAMBERS -> 13
@@ -353,7 +399,7 @@ object Specs {
         StructureType.SHIPWRECK, StructureType.FORTRESS, StructureType.BASTION -> 5
         StructureType.RUINED_PORTAL -> 16
         // One can start in any chunk.
-        StructureType.MINESHAFT, StructureType.DUNGEON -> 1
+        StructureType.MINESHAFT, StructureType.DUNGEON, StructureType.BURIED_TREASURE -> 1
         StructureType.END_CITY -> 12
         StructureType.END_GATEWAY -> 4
     }
@@ -386,6 +432,12 @@ object Specs {
         StructureType.DESERT_TEMPLE -> 24      // 21
         StructureType.JUNGLE_TEMPLE -> 20      // 15
         StructureType.WITCH_HUT -> 12          // 9
+        StructureType.IGLOO -> 10              // its dome is 8
+        // A big ruin with the small ones the game lays round it, up to 16 blocks off each side.
+        StructureType.OCEAN_RUIN -> 56
+        // Its tent, campsite and trees, two pieces from the tent (the game's jigsaw size 2).
+        StructureType.ABANDONED_CAMP -> 48
+        StructureType.BURIED_TREASURE -> 1
         StructureType.END_GATEWAY -> 8
     }
 
@@ -418,6 +470,10 @@ object Specs {
         StructureType.MANSION -> MANSION
         StructureType.STRONGHOLD -> STRONGHOLD
         StructureType.WITCH_HUT -> WITCH_HUT
+        StructureType.IGLOO -> IGLOO
+        StructureType.ABANDONED_CAMP -> ABANDONED_CAMP
+        StructureType.OCEAN_RUIN -> OCEAN_RUIN
+        StructureType.BURIED_TREASURE -> BURIED_TREASURE
         StructureType.JUNGLE_TEMPLE -> JUNGLE_TEMPLE
         StructureType.DESERT_TEMPLE -> DESERT_TEMPLE
         StructureType.TRAIL_RUINS -> TRAIL_RUINS

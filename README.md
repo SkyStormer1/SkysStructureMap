@@ -23,7 +23,7 @@ copy of Minecraft:
 - **Ocean monuments** are always the same building on the same grid, so their exact box is known, and their
   prismarine has to lay out that building: sea lanterns and prismarine in a player's build by the sea do not.
 - **Villages, pillager outposts, shipwrecks, trail ruins, end cities, bastion remnants, ancient cities, woodland
-  mansions and ruined portals** are matched against the game's own designs, block by block. A village is found by its town centre or by
+  mansions, ruined portals, igloos, ocean ruins and abandoned camps** are matched against the game's own designs, block by block. A village is found by its town centre or by
   one of its houses, each found by its door or job block, so it still counts when the bell and the workstations have
   been taken. A farm never counts by itself: it only backs up a worn house, and only where both stand on a street
   as the game lays them.
@@ -33,9 +33,10 @@ copy of Minecraft:
   is terracotta all through, and holds a cross anywhere); **jungle temples** their lever wall and trap; **witch huts** their exact
   size and fittings; **mineshafts** the fence and plank supports along their corridors, with a rail or cobweb by one of them, and
   only their own fences, not those of a mineshaft crossing them; **dungeons** the mossy
-  cobblestone floor around their spawner.
+  cobblestone floor around their spawner; **buried treasure** its chest in the one column of its chunk the game
+  buries it in, sat on the stone or sandstone it dug down to and walled in.
 - Where what is seen tells which chunk a structure starts in (a village's town centre, a wreck, a temple, an
-  outpost, a monument), it must be a chunk the game can start that kind in, and only one may start in each of the
+  outpost, a monument, an igloo, a camp's tent), it must be a chunk the game can start that kind in, and only one may start in each of the
   squares the game spreads them over, so a copy built near a real one is not taken for a second.
 - A **ruined portal** must still have some of its obsidian, or the magma the game mixes into its netherrack, so a
   player's netherrack build never counts.
@@ -112,7 +113,7 @@ copy of Minecraft:
 
 | Overworld | Nether | End |
 |---|---|---|
-| Villages, pillager outposts, woodland mansions, strongholds, witch huts, jungle temples, desert temples, trail ruins, ancient cities, trial chambers, ocean monuments, shipwrecks, ruined portals, mineshafts, dungeons | Nether fortresses, bastion remnants | End cities, end gateways |
+| Villages, pillager outposts, woodland mansions, strongholds, witch huts, igloos, abandoned camps, jungle temples, desert temples, trail ruins, ancient cities, trial chambers, ocean monuments, shipwrecks, ocean ruins, buried treasure, ruined portals, mineshafts, dungeons | Nether fortresses, bastion remnants | End cities, end gateways |
 
 ## Installing
 
