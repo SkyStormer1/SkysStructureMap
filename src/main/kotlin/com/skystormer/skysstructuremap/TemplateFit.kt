@@ -71,6 +71,8 @@ open class TemplateFit(
      * bigger than the rest, as a giant ruined portal is, it outvotes and outmatches the right small one.
      */
     private val closest: Boolean = false,
+    /** How many of its blocks must be seen before it is worth trying ([MIN_BLOCKS] unless a design is that small). */
+    val minBlocks: Int = MIN_BLOCKS,
 ) {
 
     /**
@@ -123,6 +125,23 @@ open class TemplateFit(
 
         /** How many placements one anchored search may check block for block. */
         private const val CHECK_BUDGET = 2000
+
+        /** At least this much of a design must be seen as it is, whatever anti-xray hides. */
+        private const val MIN_SEEN_SHARE = 0.25
+
+        /**
+         * What Paper's anti-xray shows in place of blocks nobody has uncovered (its default hidden
+         * blocks, which it also scatters over buried stone): a template spot showing one of these, and
+         * not the block the design has there, says nothing either way. In Bobby's cache of SiteB the
+         * buried half of every ocean ruin is copper, iron, gold, lapis, redstone and diamond ore.
+         */
+        private val DISGUISES = setOf(
+            Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE, Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE, Blocks.COPPER_ORE,
+            Blocks.DEEPSLATE_COPPER_ORE, Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE,
+            Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE, Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE, Blocks.DIAMOND_ORE,
+            Blocks.DEEPSLATE_DIAMOND_ORE, Blocks.RAW_IRON_BLOCK, Blocks.RAW_COPPER_BLOCK, Blocks.RAW_GOLD_BLOCK,
+            Blocks.NETHER_GOLD_ORE, Blocks.NETHER_QUARTZ_ORE, Blocks.ANCIENT_DEBRIS, Blocks.CHEST, Blocks.ENDER_CHEST,
+        )
 
         /** Of a design smaller than that, this share of it is enough. */
         private const val MIN_MATCHED_SHARE = 0.5
@@ -246,7 +265,7 @@ open class TemplateFit(
     }
 
     fun fit(detection: Detection, level: BlockSource, votes: (Long) -> Boolean = { true }, accept: (Match) -> String? = { null }): Match? {
-        if (templates.isEmpty() || detection.blocks.size < MIN_BLOCKS) {
+        if (templates.isEmpty() || detection.blocks.size < minBlocks) {
             lastReport = "${detection.blocks.size} blocks, too few"
             return null
         }
@@ -254,7 +273,7 @@ open class TemplateFit(
         val keys = detection.blocks.keys.toLongArray()
             .filter { votes(it) && (votingKinds.isEmpty() || detection.blocks.get(it) in votingKinds) }
             .toLongArray().also { it.sort() }
-        if (keys.size < MIN_BLOCKS) {
+        if (keys.size < minBlocks) {
             lastReport = "${keys.size} blocks that may vote, too few"
             return null
         }
@@ -333,6 +352,7 @@ open class TemplateFit(
         val oz = BlockPos.getZ(origin)
         var known = 0
         var matched = 0
+        var disguised = 0
         var knownFirm = 0
         var matchedFirm = 0
         val cursor = BlockPos.MutableBlockPos()
@@ -340,19 +360,28 @@ open class TemplateFit(
             val turned = pos.rotate(rotation)
             cursor.set(ox + turned.x, oy + turned.y, oz + turned.z)
             if (!level.hasChunk(cursor.x shr 4, cursor.z shr 4)) continue
+            val seen = level.getBlockState(cursor).block
+            val hit = family(seen) == block
+            // Not seen at all: a server's anti-xray sends one of these in place of a block nobody has uncovered.
+            if (!hit && seen in DISGUISES) {
+                disguised++
+                continue
+            }
             known++
-            val hit = family(level.getBlockState(cursor).block) == block
             if (hit) matched++
             if (block !in loose) {
                 knownFirm++
                 if (hit) matchedFirm++
             }
         }
-        lastCheck = "$matched/$known of ${template.blocks.size} match" + if (loose.isNotEmpty()) " ($matchedFirm/$knownFirm without ${loose.joinToString()})" else ""
+        lastCheck = "$matched/$known of ${template.blocks.size} match" + (if (disguised > 0) ", $disguised hidden by anti-xray" else "") +
+            if (loose.isNotEmpty()) " ($matchedFirm/$knownFirm without ${loose.joinToString()})" else ""
         // Enough blocks to mean something, but never more than most of the design: a taiga village's
         // meeting point is only 72 blocks, and asking for 60 matched threw away a real one at 49.
-        val enough = minOf(MIN_MATCHED_BLOCKS, (template.blocks.size * MIN_MATCHED_SHARE).toInt())
-        if (known < template.blocks.size * 0.6 || matched < known * minMatch || matched < enough) return null
+        // Of what anti-xray let be seen: an ocean ruin half buried in the sea floor shows only its top.
+        val enough = minOf(MIN_MATCHED_BLOCKS, (template.blocks.size * MIN_MATCHED_SHARE).toInt()) * known / maxOf(1, known + disguised)
+        if (known + disguised < template.blocks.size * 0.6 || known < template.blocks.size * MIN_SEEN_SHARE ||
+            matched < known * minMatch || matched < enough) return null
         if (loose.isNotEmpty() && matchedFirm < knownFirm * MIN_MATCH) return null
         val a = BlockPos.ZERO.rotate(rotation)
         val b = BlockPos(template.sizeX - 1, template.sizeY - 1, template.sizeZ - 1).rotate(rotation)

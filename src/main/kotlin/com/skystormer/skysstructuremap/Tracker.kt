@@ -146,7 +146,7 @@ object Tracker {
      * Tried at most every other second per group, and only once enough of it is in the right biome.
      */
     private fun matchDesign(detection: Detection, level: BlockSource, fitter: TemplateFit, now: Boolean) {
-        if (detection.blocks.size < TemplateFit.MIN_BLOCKS || (!now && ticks - detection.lastFitTick < FIT_EVERY)) return
+        if (detection.blocks.size < fitter.minBlocks || (!now && ticks - detection.lastFitTick < FIT_EVERY)) return
         if (Specs.of(detection.type).biomeAsWhole && detection.inBiome < BIOME_BLOCKS) {
             if (detection.blocks.size >= LOG_FROM && !detection.biomeLogged) {
                 detection.biomeLogged = true

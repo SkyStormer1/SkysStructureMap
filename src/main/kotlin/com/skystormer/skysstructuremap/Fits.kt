@@ -508,6 +508,8 @@ object IglooFit : TemplateFit(
         Blocks.CARPET.white(), Blocks.CARPET.lightGray(), Blocks.REDSTONE_TORCH, Blocks.FURNACE, Blocks.CRAFTING_TABLE,
         Blocks.OAK_TRAPDOOR, Blocks.BED.red(),
     ),
+    // Its furnishings are only 18 blocks, and players take the carpet; the dome is checked anyway.
+    minBlocks = 8,
 ) {
     fun refusal(match: Match): String? {
         val (x, z) = OFFSETS.getValue(match.rotation)
