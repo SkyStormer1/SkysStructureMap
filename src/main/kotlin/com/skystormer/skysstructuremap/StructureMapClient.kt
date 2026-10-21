@@ -38,7 +38,7 @@ object StructureMapClient : ClientModInitializer {
         watchChat()
         ClientChunkEvents.CHUNK_LOAD.register { level, chunk ->
             ChunkScanner.scan(level, chunk)
-            BobbyCoverage.chunkLoaded(level.dimension().identifier().toString(), chunk.pos.x, chunk.pos.z)
+            BobbyCoverage.chunkLoaded(dimensionId(level), chunk.pos.x, chunk.pos.z)
         }
         addLegendToTheMap()
         ClientTickEvents.END_CLIENT_TICK.register { client -> tick(client) }
@@ -54,6 +54,8 @@ object StructureMapClient : ClientModInitializer {
                 StructureStore.close()
                 StructureShare.clear()
                 Tracker.clear()
+                // Whatever was being saved is written before the game can close.
+                Saves.flush()
             }
         }
     }

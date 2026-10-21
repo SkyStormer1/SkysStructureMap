@@ -33,14 +33,14 @@ class BobbyCoverageTest {
                     saved.add(rx * 32 + x to rz * 32 + z)
                 }
             }
-            regions[BobbyCoverage.key(rx, rz)] = times
+            regions[cellKey(rx, rz)] = times
         }
         assertEquals(saved, covered(regions))
     }
 
     @Test
     fun aWholeRegionIsOneRectangle() {
-        val regions = mapOf(BobbyCoverage.key(1, -1) to IntArray(1024) { 5 })
+        val regions = mapOf(cellKey(1, -1) to IntArray(1024) { 5 })
         assertEquals(listOf(32, -32, 32, 32), BobbyCoverage.rectanglesOf(regions).toList())
     }
 }

@@ -38,7 +38,7 @@ object Tracker {
         Markers.outlinedNearby.clear()
     }
 
-    fun addBlocks(type: StructureType, dimension: String, found: List<ChunkScanner.Found>) {
+    fun addBlocks(type: StructureType, dimension: String, found: List<ChunkScanner.SignatureBlock>) {
         if (dimension != this.dimension) {
             startOver()
             this.dimension = dimension
@@ -50,9 +50,11 @@ object Tracker {
     fun keepsBlocks(type: StructureType): Boolean = fitterFor(type) != null
 
     fun tick(minecraft: Minecraft) {
+        // Until what is saved has been read, nothing seen can be told from what is saved already.
+        if (StructureStore.loading) return
         val player = minecraft.player ?: return
         val level = minecraft.level ?: return
-        val here = level.dimension().identifier().toString()
+        val here = dimensionId(level)
         if (here != dimension) {
             if (detections.isNotEmpty()) Log.info("Changed dimension to {}; starting over on {} group(s)", here, detections.size)
             startOver()

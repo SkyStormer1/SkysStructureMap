@@ -35,7 +35,7 @@ class Groups(private var nextId: Int = 1) {
         byType.clear()
     }
 
-    fun add(type: StructureType, dimension: String, found: List<ChunkScanner.Found>, keepBlocks: Boolean) {
+    fun add(type: StructureType, dimension: String, found: List<ChunkScanner.SignatureBlock>, keepBlocks: Boolean) {
         val ofType = byType.getOrPut(type) { ArrayList() }
         val reach = Specs.of(type).merge
         for (group in found.groupBy { Detection.cellKey(it.x, it.y, it.z) }.values) {

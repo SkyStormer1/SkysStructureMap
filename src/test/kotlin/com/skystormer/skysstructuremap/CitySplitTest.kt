@@ -23,7 +23,7 @@ class CitySplitTest {
 
     /** A slab of deepslate bricks over x [x0]..[x1], z [z0]..[z1], every other block. */
     private fun slab(x0: Int, x1: Int, z0: Int, z1: Int) =
-        (x0..x1 step 2).flatMap { x -> (z0..z1 step 2).map { z -> ChunkScanner.Found(x, -40, z, Blocks.DEEPSLATE_BRICKS) } }
+        (x0..x1 step 2).flatMap { x -> (z0..z1 step 2).map { z -> ChunkScanner.SignatureBlock(x, -40, z, Blocks.DEEPSLATE_BRICKS) } }
 
     @Test
     fun theNextCityLeavesAGroupAndStaysApart() {

@@ -3,6 +3,7 @@ package com.skystormer.skysstructuremap.gui
 import com.skystormer.skysstructuremap.Config
 import com.skystormer.skysstructuremap.Icons
 import com.skystormer.skysstructuremap.Markers
+import com.skystormer.skysstructuremap.Structure
 import com.skystormer.skysstructuremap.StructureStore
 import com.skystormer.skysstructuremap.StructureType
 import net.fabricmc.fabric.api.client.screen.v1.Screens
@@ -179,12 +180,28 @@ object Legend {
                 graphics.blit(RenderPipelines.GUI_TEXTURED, Icons.id(type), 2, top + 1, 0f, 0f, 9, 9, 16, 16, 16, 16,
                     if (shown) -1 else 0x60FFFFFF)
                 graphics.text(font, type.plural, 13, top + 2, if (shown) 0xFFFFFFFF.toInt() else OFF, false)
-                val count = StructureStore.all.count { it.type == type }.toString()
+                val count = (foundCounts.of(StructureStore.all)[type] ?: 0).toString()
                 graphics.text(font, count, baseWidth - 3 - DockPanel.BAR - 3 - font.width(count), top + 2, if (shown) 0xFFD0D0D0.toInt() else OFF, false)
                 if (over) tooltip(graphics, "${if (shown) "Hide" else "Show"} ${type.plural.lowercase()} on the map", mouseX, mouseY)
             }
 
         }
+
+        /** How many of each kind are saved, counted once per list rather than through all 25,000 for each line every frame. */
+        private class Counts {
+            private var from: List<Structure>? = null
+            private var counts: Map<StructureType, Int> = emptyMap()
+
+            fun of(list: List<Structure>): Map<StructureType, Int> {
+                if (list !== from) {
+                    counts = list.groupingBy { it.type }.eachCount()
+                    from = list
+                }
+                return counts
+            }
+        }
+
+        private val foundCounts = Counts()
 
         private fun hideTip(types: List<StructureType>): String {
             val remembered = types.count { it in Config.hiddenByHide }

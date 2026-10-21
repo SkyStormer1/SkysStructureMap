@@ -5,6 +5,7 @@ import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.level.chunk.LevelChunk
 import net.minecraft.world.level.chunk.LevelChunkSection
+import java.util.IdentityHashMap
 
 /**
  * Looks through each chunk the server sends for the blocks that give a structure away ([Specs]).
@@ -42,7 +43,7 @@ object ChunkScanner {
 
     fun scan(level: ClientLevel, chunk: LevelChunk) {
         try {
-            val dimension = level.dimension().identifier().toString()
+            val dimension = dimensionId(level)
             val minSectionY = chunk.getSectionYFromSectionIndex(0)
             for ((type, found) in find(chunk.sections, minSectionY, chunk.pos.minBlockX, chunk.pos.minBlockZ, dimension)) {
                 Tracker.addBlocks(type, dimension, found)
@@ -61,47 +62,64 @@ object ChunkScanner {
      * the one starting at [baseX], [baseZ]. Used for the chunks the server sends and for those
      * Bobby saved ([BobbyScan]), from its own thread: nothing here is changed.
      */
-    fun find(sections: Array<out LevelChunkSection?>, minSectionY: Int, baseX: Int, baseZ: Int, dimension: String): Map<StructureType, List<Found>> {
-        val all = LinkedHashMap<StructureType, List<Found>>()
-        for (type in StructureType.entries) {
-            if (type.dimension != dimension) continue
-            val found = find(sections, minSectionY, baseX, baseZ, type)
-            if (found.isNotEmpty()) all[type] = found
+    /**
+     * Every section is read once for all the kinds: a block is looked up in what each state
+     * stands for ([kindsOf]), rather than the section read again for each of some 30 kinds, which
+     * read sections of planks or bricks block by block several times over.
+     */
+    fun find(sections: Array<out LevelChunkSection?>, minSectionY: Int, baseX: Int, baseZ: Int, dimension: String): Map<StructureType, List<SignatureBlock>> {
+        val types = StructureType.entries.filter { type ->
+            type.dimension == dimension && Specs.of(type).let { it.blocks.isNotEmpty() || it.tags.isNotEmpty() }
         }
-        return all
-    }
-
-    private fun find(sections: Array<out LevelChunkSection?>, minSectionY: Int, baseX: Int, baseZ: Int, type: StructureType): List<Found> {
-        val spec = Specs.of(type)
-        if (spec.blocks.isEmpty() && spec.tags.isEmpty()) return emptyList()
-        val test = { state: BlockState -> spec.matches(state) }
-        val found = ArrayList<Found>()
-        // Per section, whether it holds one of the kind's biomes; worked out only when asked.
-        val nearby = arrayOfNulls<Boolean>(sections.size)
+        if (types.isEmpty()) return emptyMap()
+        val specs = types.map(Specs::of)
+        val found = Array(types.size) { ArrayList<SignatureBlock>() }
+        // Which kinds each block state is a signature of, by their place in [types]; a chunk holds
+        // a few dozen states, each worked out once.
+        val kinds = IdentityHashMap<BlockState, IntArray>()
+        fun kindsOf(state: BlockState): IntArray = kinds.getOrPut(state) {
+            specs.indices.filter { specs[it].matches(state) }.toIntArray()
+        }
+        // Per kind, per section, whether it holds one of the kind's biomes; worked out only when asked.
+        val nearby = arrayOfNulls<Array<Boolean?>>(types.size)
         for (index in sections.indices) {
             val section = sections[index] ?: continue
             val baseY = (minSectionY + index) shl 4
-            if (baseY + 15 < spec.minY || baseY > spec.maxY) continue
-            if (section.hasOnlyAir() || !section.maybeHas(test)) continue
+            if (section.hasOnlyAir() || !section.maybeHas { state -> kindsOf(state).any { baseY + 15 >= specs[it].minY && baseY <= specs[it].maxY } }) continue
+            // The biome of each 4×4×4 cell, asked only of cells holding a block that needs it.
+            val biomes = arrayOfNulls<String>(64)
             for (y in 0 until 16) {
                 val worldY = baseY + y
-                if (worldY < spec.minY || worldY > spec.maxY) continue
                 for (z in 0 until 16) {
                     for (x in 0 until 16) {
                         val state = section.getBlockState(x, y, z)
-                        if (!spec.matches(state)) continue
-                        spec.highest[state.block]?.let { if (worldY > it) continue }
-                        // Wood is everywhere on land, bricks under the sea, and so on: where a
-                        // block is can matter as much as what it is.
-                        val allowed = !spec.biomeFiltered || spec.biomeAllowed(biomeAt(section, x, y, z)) ||
-                            (spec.biomeNearby && holdsBiome(sections, index, spec, nearby))
-                        if (!allowed && !spec.biomeAsWhole) continue
-                        found.add(Found(baseX + x, worldY, baseZ + z, state.block, allowed))
+                        val of = kindsOf(state)
+                        if (of.isEmpty()) continue
+                        for (k in of) {
+                            val spec = specs[k]
+                            if (worldY < spec.minY || worldY > spec.maxY) continue
+                            spec.highest[state.block]?.let { if (worldY > it) continue }
+                            // Wood is everywhere on land, bricks under the sea, and so on: where a
+                            // block is can matter as much as what it is.
+                            val allowed = !spec.biomeFiltered ||
+                                spec.biomeAllowed(biomes.cell(x, y, z) { biomeAt(section, x, y, z) }) ||
+                                (spec.biomeNearby && holdsBiome(sections, index, spec, nearby[k] ?: arrayOfNulls<Boolean>(sections.size).also { nearby[k] = it }))
+                            if (!allowed && !spec.biomeAsWhole) continue
+                            found[k].add(SignatureBlock(baseX + x, worldY, baseZ + z, state.block, allowed))
+                        }
                     }
                 }
             }
         }
-        return found
+        val all = LinkedHashMap<StructureType, List<SignatureBlock>>()
+        for (k in types.indices) if (found[k].isNotEmpty()) all[types[k]] = found[k]
+        return all
+    }
+
+    /** The biome cached for the 4×4×4 cell holding [x], [y], [z], or [biome] the first time. */
+    private inline fun Array<String?>.cell(x: Int, y: Int, z: Int, biome: () -> String): String {
+        val i = (x shr 2) or ((z shr 2) shl 2) or ((y shr 2) shl 4)
+        return this[i] ?: biome().also { this[i] = it }
     }
 
     /** Whether section [index], or the one above or below it, holds a biome [spec] allows ([Spec.biomeNearby]). */
@@ -123,5 +141,5 @@ object ChunkScanner {
         section.getNoiseBiome(x shr 2, y shr 2, z shr 2).unwrapKey().map { it.identifier().path }.orElse("")
 
     /** A block found, and whether it stands in a biome its structure can be in. */
-    class Found(val x: Int, val y: Int, val z: Int, val block: Block, val inBiome: Boolean = true)
+    class SignatureBlock(val x: Int, val y: Int, val z: Int, val block: Block, val inBiome: Boolean = true)
 }

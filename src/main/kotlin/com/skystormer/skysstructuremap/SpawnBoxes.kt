@@ -41,6 +41,12 @@ object SpawnBoxes {
 
     private var failed = false
 
+    /** The markers with spawns within reach of chunk [nearX], [nearZ], from the list [nearFrom]. */
+    private var near: List<Marker> = emptyList()
+    private var nearFrom: List<Marker>? = null
+    private var nearX = 0
+    private var nearZ = 0
+
     /**
      * Called every client tick: the boxes near you, for the game to draw over the next tick. The
      * game draws whatever is added to its per-tick shapes, debug screen or not.
@@ -50,14 +56,25 @@ object SpawnBoxes {
         val player = minecraft.player ?: return
         val level = minecraft.level ?: return
         try {
-            val dimension = level.dimension().identifier().toString()
-            val near = Markers.visibleIn(dimension).filter {
-                hasSpawns(it.type) && it.box.horizontalDistance(player.x, player.z) <= RANGE
+            val dimension = dimensionId(level)
+            // Those within reach of the chunk you are in, looked for again only when you cross
+            // into another or the markers change, rather than among all 25,000 every tick.
+            val chunkX = player.blockX shr 4
+            val chunkZ = player.blockZ shr 4
+            val markers = Markers.visibleIn(dimension)
+            if (markers !== nearFrom || chunkX != nearX || chunkZ != nearZ) {
+                val middleX = chunkX * 16 + 8.0
+                val middleZ = chunkZ * 16 + 8.0
+                near = markers.filter { hasSpawns(it.type) && it.box.horizontalDistance(middleX, middleZ) <= RANGE + CHUNK_REACH }
+                nearFrom = markers
+                nearX = chunkX
+                nearZ = chunkZ
             }
-            if (near.isEmpty()) return
+            val within = near.filter { it.box.horizontalDistance(player.x, player.z) <= RANGE }
+            if (within.isEmpty()) return
             minecraft.collectPerTickGizmos().use {
-                for (marker in near) {
-                    for (drawn in boxesOf(marker)) {
+                for (marker in within) {
+                    for (drawn in marker.boxes) {
                         val b = drawn.box
                         Gizmos.cuboid(
                             AABB(b.minX.toDouble(), b.minY.toDouble(), b.minZ.toDouble(), b.maxX + 1.0, b.maxY + 1.0, b.maxZ + 1.0),
@@ -75,4 +92,6 @@ object SpawnBoxes {
     }
 
     private const val LINE_WIDTH = 2f
+    /** How far a point of a chunk can be from its middle, sideways. */
+    private const val CHUNK_REACH = 12.0
 }

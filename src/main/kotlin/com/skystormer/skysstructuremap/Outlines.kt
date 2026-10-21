@@ -1,6 +1,7 @@
 package com.skystormer.skysstructuremap
 
 import com.mojang.blaze3d.vertex.VertexConsumer
+import net.minecraft.client.Minecraft
 import org.joml.Matrix4f
 import org.joml.Vector3f
 import xaero.lib.XaeroLib
@@ -15,6 +16,7 @@ object Outlines {
 
     private var hookRan = false
     private var failed = false
+    private val onScreen = OnScreen()
 
     @JvmStatic
     fun drawWorldMap(mapProcessor: MapProcessor, matrix: Matrix4f, originX: Int, originZ: Int) {
@@ -23,25 +25,36 @@ object Outlines {
             Log.info("World map outline hook working")
         }
         try {
-            val dimension = mapProcessor.mapWorld?.currentDimension?.dimId?.identifier()?.toString() ?: return
+            val dimension = mapProcessor.mapWorld?.currentDimension?.dimId?.let { dimensionId(it) } ?: return
+            val blocksPerUnit = Matrix4f(matrix).invert().transformDirection(Vector3f(1f, 0f, 0f)).length().coerceAtLeast(1e-4f)
+            // What is on screen, the map being centred on the origin, with room for an icon (which
+            // Xaero may draw bigger still) past each edge; the icons on the map are kept to it too.
+            val window = Minecraft.getInstance().window
+            val margin = (Markers.size() * 2 + LINE_WIDTH) * blocksPerUnit + 16.0
+            val area = Area.around(originX.toDouble(), originZ.toDouble(),
+                window.guiScaledWidth * 0.5 * blocksPerUnit + margin, window.guiScaledHeight * 0.5 * blocksPerUnit + margin)
+            Markers.mapArea = dimension to area
+            Markers.mapAreaAt = System.nanoTime()
             // Every structure's box when outlines are on (or just this one's); spawn boxes, a
             // fortress's pieces included, whenever those are on.
-            val markers = Markers.visibleIn(dimension).filter {
+            val markers = onScreen.of(Markers.visibleIn(dimension), area).filter {
                 Config.outlines || it.outlined || (Config.spawnBoxesOnMap && SpawnBoxes.hasSpawns(it.type))
             }
             if (markers.isEmpty() && !BobbyCoverage.shown) return
             val buffer = XaeroLib.INSTANCE.client.bufferProvider.getBuffer(CustomRenderTypes.MAP_COLOR_OVERLAY)
             BobbyCoverage.drawWorldMap(dimension, buffer, matrix, originX, originZ)
             if (markers.isEmpty()) return
-            val blocksPerUnit = Matrix4f(matrix).invert().transformDirection(Vector3f(1f, 0f, 0f)).length().coerceAtLeast(1e-4f)
             val half = (LINE_WIDTH * blocksPerUnit / 2).toDouble()
             for (marker in markers) {
                 val alpha = if (marker.discovered) 1f else 0.45f
-                val boxes = if (Config.spawnBoxesOnMap && SpawnBoxes.hasSpawns(marker.type)) SpawnBoxes.boxesOf(marker)
-                else listOf(SpawnBoxes.Drawn(marker.box, marker.type.colour))
-                for (drawn in boxes) {
-                    val b = drawn.box
-                    rectangle(buffer, matrix, b.minX.toDouble(), b.minZ.toDouble(), b.maxX + 1.0, b.maxZ + 1.0, half, originX, originZ, drawn.colour, alpha)
+                if (Config.spawnBoxesOnMap && SpawnBoxes.hasSpawns(marker.type)) {
+                    for (drawn in marker.boxes) {
+                        val b = drawn.box
+                        rectangle(buffer, matrix, b.minX.toDouble(), b.minZ.toDouble(), b.maxX + 1.0, b.maxZ + 1.0, half, originX, originZ, drawn.colour, alpha)
+                    }
+                } else {
+                    val b = marker.box
+                    rectangle(buffer, matrix, b.minX.toDouble(), b.minZ.toDouble(), b.maxX + 1.0, b.maxZ + 1.0, half, originX, originZ, marker.type.colour, alpha)
                 }
             }
         } catch (e: Throwable) {

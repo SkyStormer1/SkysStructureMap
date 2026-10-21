@@ -301,7 +301,7 @@ object BobbyCache {
         }
 
         private fun chunk(chunkX: Int, chunkZ: Int): Chunk? {
-            val key = (chunkX.toLong() shl 32) or (chunkZ.toLong() and 0xFFFFFFFFL)
+            val key = cellKey(chunkX, chunkZ)
             if (chunks.containsKey(key)) return chunks[key]
             val chunk = files[Math.floorDiv(chunkX, 32) to Math.floorDiv(chunkZ, 32)].orEmpty().firstNotNullOfOrNull { file ->
                 try {

@@ -528,14 +528,6 @@ abstract class DockPanel(protected val screen: Screen, private val id: String, t
         top["top"] = minOf(top.int("y"), (screen.height - stackHeight()).toInt()).coerceAtLeast(0)
     }
 
-    /**
-     * Takes this panel out of the share, for one that goes away while the screen stays open. Any
-     * panel docked under it stays where it is, on its own.
-     */
-    fun leave() {
-        root().remove("panel:$id")
-    }
-
     override fun updateWidgetNarration(output: NarrationElementOutput) {
         defaultButtonNarrationText(output)
     }

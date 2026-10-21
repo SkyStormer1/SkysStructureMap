@@ -101,6 +101,17 @@ object StructureStore {
 
     val isOpen: Boolean get() = file != null
 
+    /**
+     * Joined a world whose file is still being read ([open]). Nothing is matched against what is
+     * saved meanwhile ([Tracker] waits), or a structure already saved would be saved again.
+     */
+    @Volatile
+    var loading = false
+        private set
+
+    /** Raised on each [open] and [close], so a file read for a world since left is let go of. */
+    private var opened = 0
+
     fun open(minecraft: Minecraft) {
         val world = worldOf(minecraft)
         if (world == null) {
@@ -108,14 +119,31 @@ object StructureStore {
             return close()
         }
         val (name, key) = world
-        openAt(FabricLoader.getInstance().configDir.resolve("skysstructuremap").resolve("$key.json"), name)
+        val path = FabricLoader.getInstance().configDir.resolve("skysstructuremap").resolve("$key.json")
+        // Read and checked for duplicates off the game's thread: 70 to 120 ms for 25,000 structures.
+        val run = ++opened
+        loading = true
+        val reading = Saves.read { read(path)?.let { it to joinDuplicates(it.structures) } }
+        Thread({
+            val read = try { reading.get() } catch (e: Exception) { null }
+            minecraft.execute {
+                if (run != opened) return@execute
+                loading = false
+                openWith(path, name, read?.first, read?.second)
+            }
+        }, "Sky's Structure Map open").apply { isDaemon = true }.start()
     }
 
-    /** Opens the structures file at [path] for the world called [name]: [open] does, and a scan of Bobby's cache run outside the game. */
+    /** Opens the structures file at [path] for the world called [name], here and now: a scan of Bobby's cache run outside the game does. */
     fun openAt(path: Path, name: String) {
+        val loaded = read(path)
+        openWith(path, name, loaded, loaded?.let { joinDuplicates(it.structures) })
+    }
+
+    /** Takes in the file at [path], as [loaded] (null: it could not be read), its structures with duplicates [joined]. */
+    private fun openWith(path: Path, name: String, loaded: Contents?, joined: Pair<List<Structure>, Int>?) {
         worldName = name
         file = path
-        val loaded = read(file!!)
         if (loaded == null) {
             all = emptyList()
             deleted = emptyList()
@@ -130,12 +158,15 @@ object StructureStore {
         all = loaded.structures
         deleted = loaded.deleted
         unread = Contents(unreadStructures = loaded.unreadStructures, unreadDeleted = loaded.unreadDeleted)
-        mergeDuplicates()
+        mergeDuplicates(joined ?: joinDuplicates(all))
         Log.info("Loaded {} structure(s) for {} from {}", all.size, name, file)
     }
 
     fun close() {
+        opened++
+        loading = false
         saveNow()
+        Saves.flush()
         file = null
         worldName = null
         all = emptyList()
@@ -144,14 +175,65 @@ object StructureStore {
         locked = false
     }
 
-    fun byId(id: String): Structure? = all.firstOrNull { it.id == id }
+    fun byId(id: String): Structure? {
+        val now = all
+        return ids(now)[id]?.let(now::get)
+    }
 
-    fun inDimension(dimension: String): List<Structure> = all.filter { it.dimension == dimension }
+    /**
+     * Where each id is in [all], for the list [idsFrom]: [put] and [byId] are asked each time a box
+     * nearby is seen better, and looking through 25,000 ids each time added up. Main thread only.
+     */
+    private var ids = HashMap<String, Int>()
+    private var idsFrom: List<Structure>? = null
 
-    /** Adds [structure], or replaces the one with its id. Saved within a few seconds. */
+    private fun ids(now: List<Structure>): HashMap<String, Int> {
+        if (idsFrom !== now) {
+            // The first of an id wins, as a search from the start would find.
+            ids = HashMap<String, Int>(now.size * 2).also { map -> now.forEachIndexed { i, s -> map.putIfAbsent(s.id, i) } }
+            idsFrom = now
+        }
+        return ids
+    }
+
+    /** [all] by dimension, remade when [all] is replaced: asked every frame and every tick, too often to filter each time. */
+    private class ByDimension(val from: List<Structure>, val lists: Map<String, List<Structure>>)
+
+    @Volatile private var byDimension = ByDimension(emptyList(), emptyMap())
+
+    fun inDimension(dimension: String): List<Structure> {
+        val now = all
+        val known = byDimension.takeIf { it.from === now } ?: ByDimension(now, now.groupBy { it.dimension }).also { byDimension = it }
+        return known.lists[dimension].orEmpty()
+    }
+
+    /**
+     * Adds [structure], or replaces the one with its id. Saved within a few seconds. The lists are
+     * new ones (the render thread reads the old), but the id index and the by-dimension lists are
+     * brought along rather than made again from all 25,000.
+     */
     fun put(structure: Structure) {
-        val index = all.indexOfFirst { it.id == structure.id }
-        all = if (index < 0) all + structure else all.toMutableList().also { it[index] = structure }
+        val now = all
+        val ids = ids(now)
+        val index = ids[structure.id]
+        val old = index?.let(now::get)
+        val next = ArrayList<Structure>(now.size + 1).apply { addAll(now) }
+        if (index == null) {
+            ids[structure.id] = next.size
+            next.add(structure)
+        } else {
+            next[index] = structure
+        }
+        idsFrom = next
+        val known = byDimension
+        if (known.from === now && (old == null || old.dimension == structure.dimension)) {
+            val list = known.lists[structure.dimension].orEmpty()
+            val at = if (old == null) -1 else list.indexOfFirst { it === old }
+            val changed = ArrayList<Structure>(list.size + 1).apply { addAll(list) }
+            if (at < 0) changed.add(structure) else changed[at] = structure
+            byDimension = ByDimension(next, known.lists + (structure.dimension to changed))
+        }
+        all = next
         dirty = true
     }
 
@@ -187,15 +269,16 @@ object StructureStore {
         if (dirty) saveNow()
     }
 
+    /**
+     * Writes the file as it is now, on [Saves]' thread: the lists are replaced on each change, never
+     * changed in place, so the ones taken here stay as they are while being written.
+     */
     private fun saveNow() {
         dirty = false
         val path = file ?: return
         if (locked) return
-        try {
-            SafeFiles.writeString(path, write(Contents(all, deleted, unread.unreadStructures, unread.unreadDeleted)))
-        } catch (e: Exception) {
-            Log.error("Could not save $path", e)
-        }
+        val contents = Contents(all, deleted, unread.unreadStructures, unread.unreadDeleted)
+        Saves.later(path.toString()) { SafeFiles.writeString(path, write(contents)) }
     }
 
     /** What a structures file holds: what was read, and the entries that could not be, as they were. */
@@ -260,6 +343,7 @@ object StructureStore {
     fun backup(label: String): Path {
         val path = file ?: error("Not in a world")
         saveNow()
+        Saves.flush()
         if (!Files.exists(path)) error("Could not save $path")
         val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"))
         val name = path.fileName.toString().removeSuffix(".json")
@@ -288,13 +372,28 @@ object StructureStore {
      * apart, one seen half on one visit and half on the next could be saved as two. The earliest
      * discovery is kept, with both boxes and all pieces.
      */
-    private fun mergeDuplicates() {
+    private fun mergeDuplicates(result: Pair<List<Structure>, Int>) {
+        val (kept, joined) = result
+        if (joined > 0) {
+            Log.info("Joined {} structure(s) that had been saved twice", joined)
+            all = kept
+            dirty = true
+        }
+    }
+
+    /** [mergeDuplicates] without the file: the structures left, and how many were joined into others. */
+    fun joinDuplicates(structures: List<Structure>): Pair<List<Structure>, Int> {
         val kept = ArrayList<Structure>()
+        // Only one of the same kind in the same dimension can be the same: each is looked for among
+        // those (where each sits in [kept]) rather than among all kept so far.
+        val alike = HashMap<Pair<StructureType, String>, ArrayList<Int>>()
         var joined = 0
-        for (s in all.sortedBy { it.discovered }) {
-            val index = kept.indexOfFirst { it.type == s.type && it.dimension == s.dimension && Specs.sameStructure(s.type, it.box, s.box) &&
-                !twoFortresses(it, s) && !twoCentres(it.centre, s.centre) && !twoMineshafts(it, s) }
+        for (s in structures.sortedBy { it.discovered }) {
+            val same = alike.getOrPut(s.type to s.dimension) { ArrayList() }
+            val index = same.firstOrNull { i -> val it = kept[i]; Specs.sameStructure(s.type, it.box, s.box) &&
+                !twoFortresses(it, s) && !twoCentres(it.centre, s.centre) && !twoMineshafts(it, s) } ?: -1
             if (index < 0) {
+                same.add(kept.size)
                 kept.add(s)
                 continue
             }
@@ -305,11 +404,7 @@ object StructureStore {
                 pieces = k.pieces + s.pieces.filter { p -> k.pieces.none { it.box == p.box } })
             joined++
         }
-        if (joined > 0) {
-            Log.info("Joined {} structure(s) that had been saved twice", joined)
-            all = kept
-            dirty = true
-        }
+        return kept to joined
     }
 
     /**

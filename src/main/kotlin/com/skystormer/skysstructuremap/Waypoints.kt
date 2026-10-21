@@ -28,7 +28,7 @@ object Waypoints {
     private fun add(marker: Marker): String {
         if (!available()) return "Making waypoints needs Xaero's Minimap"
         val minecraft = Minecraft.getInstance()
-        if (minecraft.level?.dimension()?.identifier()?.toString() != marker.dimension) {
+        if (minecraft.level?.let { dimensionId(it) } != marker.dimension) {
             return "Go to the ${dimensionName(marker.dimension)} first: waypoints are saved to the dimension you are in"
         }
         val session = BuiltInHudModules.MINIMAP.currentSession ?: return "Xaero's Minimap is not running"

@@ -2,6 +2,7 @@ package com.skystormer.skysstructuremap.gui
 
 import com.skystormer.skysstructuremap.BobbyCoverage
 import com.skystormer.skysstructuremap.BobbyScan
+import com.skystormer.skysstructuremap.dimensionId
 import com.skystormer.skysstructuremap.ChunkScanner
 import com.skystormer.skysstructuremap.Config
 import com.skystormer.skysstructuremap.Menus
@@ -144,7 +145,7 @@ class SettingsScreen(private val parent: Screen?) : FramedScreen(Component.liter
         val here = player.blockPosition()
         // Anything deleted around here gets another chance, or looking again could not find it.
         val forgotten = StructureStore.forgetDeletedNear(
-            level.dimension().identifier().toString(), here.x, here.z, LOOK_AGAIN_CHUNKS * 16.0,
+            dimensionId(level), here.x, here.z, LOOK_AGAIN_CHUNKS * 16.0,
         )
         val chunks = ChunkScanner.lookAgain(level, here, LOOK_AGAIN_CHUNKS)
         Menus.tell(
