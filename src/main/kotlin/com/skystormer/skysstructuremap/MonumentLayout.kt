@@ -51,9 +51,25 @@ object MonumentLayout {
      * players' builds of prismarine and sea lanterns by the sea, 1% at most. False too while under
      * half of the layout's chunks are there to look at: it is asked again as more arrive.
      */
-    fun matches(box: Box, level: BlockSource): Boolean {
+    fun matches(box: Box, level: BlockSource): Boolean = share(box, level) >= MIN_MATCH
+
+    /**
+     * Where the monument whose box was worked out as [box] stands: there, or a chunk over any way,
+     * wherever the layout fits best. The box is placed from the prismarine seen, and a player's
+     * prismarine just past one's edge put it a chunk off, where only its own half matched; null when
+     * none of them holds a monument.
+     */
+    fun place(box: Box, level: BlockSource): Box? {
+        if (matches(box, level)) return box
+        return (-1..1).flatMap { dx -> (-1..1).map { dz -> Box(box.minX + dx * 16, box.minY, box.minZ + dz * 16, box.maxX + dx * 16, box.maxY, box.maxZ + dz * 16) } }
+            .map { it to share(it, level) }.filter { it.second >= MIN_MATCH }.maxByOrNull { it.second }?.first
+    }
+
+    /** The most of the layout [box] holds, whichever way it faces; nothing while under half of it is there to look at. */
+    private fun share(box: Box, level: BlockSource): Double {
         val layout = layout
-        if (layout.cells.isEmpty()) return true
+        if (layout.cells.isEmpty()) return 1.0
+        var best = -1.0
         val last = Recognise.MONUMENT_SIZE - 1
         val cursor = BlockPos.MutableBlockPos()
         // The eight ways a square can be turned or mirrored: swap x and z or not, then flip either.
@@ -75,9 +91,9 @@ object MonumentLayout {
                 known++
                 if (level.getBlockState(cursor.set(x, box.minY + ly, z)).block == layout.blocks[i]) matched++
             }
-            if (known * 2 >= layout.cells.size && matched >= MIN_MATCH * known) return true
+            if (known * 2 >= layout.cells.size) best = maxOf(best, matched.toDouble() / known)
         }
-        return false
+        return best
     }
 
     /** How much of the layout a monument must still have. */

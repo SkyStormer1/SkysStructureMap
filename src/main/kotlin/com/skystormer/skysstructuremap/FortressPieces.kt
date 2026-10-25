@@ -41,6 +41,13 @@ object FortressPieces {
     /** The most blocks a fortress is labelled over at once (400 × 128 × 400). */
     private const val MAX_CELLS = 400L * 128 * 400
 
+    /**
+     * A bigger group is labelled in windows this wide each way, overlapping by [OVERLAP]: more than
+     * twice the widest piece, so each piece lies whole in the window whose middle part holds its middle.
+     */
+    private const val WINDOW = 384
+    private const val OVERLAP = 64
+
     private const val UNKNOWN: Byte = -1
     private const val AIR = 4
 
@@ -164,7 +171,7 @@ object FortressPieces {
         val sx = around.maxX - around.minX + 5
         val sy = around.maxY - around.minY + 5
         val sz = around.maxZ - around.minZ + 5
-        if (sx.toLong() * sy * sz > MAX_CELLS) {
+        if (cells(around) > MAX_CELLS) {
             Log.warn("Fortress area {} is too big to label at once", around)
             return null
         }
@@ -198,6 +205,37 @@ object FortressPieces {
      * main thread, or on a scan's own.
      */
     fun label(level: BlockSource, bricks: Box): List<Piece> {
+        if (cells(bricks) <= MAX_CELLS) return labelWithin(level, bricks)
+        // Fortresses side by side are one group of bricks, too big to read at once: four in a row
+        // in Bobby's cache of SiteB, 550 by 620 blocks, were lost for it. Each window is labelled
+        // alone, and each piece kept from the one window whose middle part its middle is in.
+        val found = ArrayList<Piece>()
+        for (x in windows(bricks.minX, bricks.maxX)) for (z in windows(bricks.minZ, bricks.maxZ)) {
+            for (piece in labelWithin(level, Box(x[0], bricks.minY, z[0], x[1], bricks.maxY, z[1]))) {
+                val mx = (piece.box.minX + piece.box.maxX) shr 1
+                val mz = (piece.box.minZ + piece.box.maxZ) shr 1
+                if (mx in x[2]..x[3] && mz in z[2]..z[3]) found.add(piece)
+            }
+        }
+        return found
+    }
+
+    /** How many blocks [read] would read round [bricks]. */
+    private fun cells(bricks: Box): Long = (bricks.maxX - bricks.minX + 5).toLong() * (bricks.maxY - bricks.minY + 5) * (bricks.maxZ - bricks.minZ + 5)
+
+    /** Windows [WINDOW] long over [min]..[max], each as its first and last, then those of its middle part. */
+    private fun windows(min: Int, max: Int): List<IntArray> {
+        val out = ArrayList<IntArray>()
+        var from = min
+        while (true) {
+            val to = minOf(from + WINDOW - 1, max)
+            out.add(intArrayOf(from, to, if (from == min) min else from + OVERLAP / 2, if (to == max) max else to - OVERLAP / 2))
+            if (to == max) return out
+            from = to - OVERLAP + 1
+        }
+    }
+
+    private fun labelWithin(level: BlockSource, bricks: Box): List<Piece> {
         val area = read(level, bricks) ?: return emptyList()
         val candidates = ArrayList<Candidate>()
         val endFillers = ArrayList<Candidate>()
@@ -410,6 +448,33 @@ object FortressPieces {
     fun isFortress(pieces: List<Piece>): Boolean = pieces.any { it.kind == CROSSROADS } || pieces.size >= 4
 
     /**
+     * Whether [piece] is a fortress's first: the crossroads the game lays from 2, 2 of its start
+     * chunk (`NetherFortressStructure`), as all 540 the game laid on SiteB are.
+     */
+    fun isStart(piece: Piece): Boolean =
+        piece.kind == CROSSROADS && Math.floorMod(piece.box.minX, 16) == START_IN_CHUNK && Math.floorMod(piece.box.minZ, 16) == START_IN_CHUNK
+
+    private const val START_IN_CHUNK = 2
+
+    /**
+     * Among [pieces], each fortress's start ([isStart]), as one list for each square of the game's
+     * nether complexes ([Placement.square]): the game starts one fortress or bastion to a square,
+     * and another crossroads of a fortress stands at 2, 2 of its chunk by chance, in line with the
+     * start one time in sixteen (72 fortresses of 551 in Bobby's cache of SiteB were split for it).
+     * Which of a square's is the start cannot be told, and it does not matter: they are one fortress.
+     */
+    private fun startsOf(pieces: List<Piece>): List<List<Piece>> = pieces.filter(::isStart)
+        .filter { Placement.allows(StructureType.FORTRESS, it.box.minX shr 4, it.box.minZ shr 4) }
+        .groupBy { Placement.square(StructureType.FORTRESS, it.box.minX shr 4, it.box.minZ shr 4) }.values.toList()
+
+    /** Whether the game joins [a] and [b] as they stand: touching, as its own fortresses' pieces do ([joins]). */
+    fun joined(a: Piece, b: Piece): Boolean {
+        if (a.box.gap(b.box) > 1) return false
+        fun key(p: Piece, q: Piece) = "${joinId(p.kind)} ${joinId(q.kind)} ${q.box.minX - p.box.minX} ${q.box.minY - p.box.minY} ${q.box.minZ - p.box.minZ}"
+        return key(a, b) in joins || key(b, a) in joins
+    }
+
+    /**
      * The most crossroads one fortress has: its start is one, and the game places at most four
      * more.
      */
@@ -424,16 +489,21 @@ object FortressPieces {
 
     /**
      * The fortresses among one group's pieces. Fortresses close together or on top of each other
-     * are seen as one group of bricks, and nothing in their bricks tells them apart; only more
-     * crossroads than one fortress has ([MOST_CROSSROADS]) proves there are two or more, so
-     * without that the pieces stay one fortress: wrongly joined is better than wrongly split.
+     * are seen as one group of bricks. With two or more starts seen ([isStart]), each fortress is
+     * what the game joined to its start ([JoinedPieces], [joined]): of the fortresses on SiteB
+     * that touch, pooled and split again, 2501 pieces of 2516 went to their own, where
+     * telling them apart by crossroads (below) gave 346 to the other.
      *
-     * When proved: pieces that touch are joined first (a fortress's pieces join face to face, so
-     * every one touches another of its own), then each part, smallest first, joins the nearest it
-     * can, never making one with more crossroads than a fortress has. What is left apart holds a
-     * crossroads each. Where two touch, a few pieces can end up on the wrong one.
+     * With fewer starts seen, only more crossroads than one fortress has ([MOST_CROSSROADS]) proves
+     * there are two or more, so without that the pieces stay one fortress: wrongly joined is better
+     * than wrongly split. When proved: pieces that touch are joined first (a fortress's pieces join
+     * face to face, so every one touches another of its own), then each part, smallest first, joins
+     * the nearest it can, never making one with more crossroads than a fortress has. What is left
+     * apart holds a crossroads each. Where two touch, a few pieces can end up on the wrong one.
      */
     fun split(pieces: List<Piece>): List<List<Piece>> {
+        val starts = startsOf(pieces)
+        if (starts.size >= 2) return JoinedPieces.byStarts(pieces, starts, ::joined)
         if (crossroads(pieces) <= MOST_CROSSROADS) return listOf(pieces)
         val parts = pieces.map { mutableListOf(it) }.toMutableList()
         fun fits(a: List<Piece>, b: List<Piece>) = crossroads(a) + crossroads(b) <= MOST_CROSSROADS

@@ -7,6 +7,7 @@ package com.skystormer.skysstructuremap
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.world.level.block.Blocks
+import net.minecraft.world.level.material.Fluids
 
 /** The game's 20 shipwreck designs, each in eight woods. */
 object ShipwreckFit : TemplateFit(
@@ -411,7 +412,7 @@ object VillageStreets {
     }
 
     /** A block of street: path, or the planks the game lays in its place over water. */
-    private fun isStreet(level: BlockSource, pos: BlockPos): Boolean {
+    fun isStreet(level: BlockSource, pos: BlockPos): Boolean {
         val block = level.getBlockState(pos).block
         if (block in STREET) return true
         if (block !in BRIDGE) return false
@@ -465,8 +466,13 @@ object RuinedPortalFit : TemplateFit(
     /**
      * Why a fit is not a ruined portal after all, or null when it is. Netherrack is what a player's
      * nether build is made of, and those matched on it alone, so some of the design's obsidian must
-     * be there too, or else the magma the game turns netherrack into: players mine the obsidian out
-     * of the ones they find, and real ones were found with none left. The game never lights one.
+     * be there too, or else the magma the game turns its netherrack into, or else the netherrack it
+     * splashes round it ([splashed]): players mine the obsidian out of the ones they find, and two
+     * in Bobby's cache of SiteB had none left, nor any magma. The game never lights one.
+     *
+     * Obsidian and magma count only where the design has them (magma in its netherrack's place):
+     * deep underground lava meets water, and the magma in a cave there let a player's netherrack
+     * build 20 blocks down pass for one with none of its obsidian.
      */
     fun refusal(level: BlockSource): (Match) -> String? = { match ->
         var obsidian = 0
@@ -475,22 +481,131 @@ object RuinedPortalFit : TemplateFit(
         val box = match.box
         val cursor = BlockPos.MutableBlockPos()
         for (x in box.minX..box.maxX) for (y in box.minY..box.maxY) for (z in box.minZ..box.maxZ) {
-            if (!level.hasChunk(x shr 4, z shr 4)) continue
-            when (level.getBlockState(cursor.set(x, y, z)).block) {
-                Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN -> obsidian++
-                Blocks.MAGMA_BLOCK -> magma++
-                Blocks.NETHER_PORTAL -> lit = true
+            if (level.hasChunk(x shr 4, z shr 4) && level.getBlockState(cursor.set(x, y, z)).block == Blocks.NETHER_PORTAL) lit = true
+        }
+        val ox = BlockPos.getX(match.origin)
+        val oy = BlockPos.getY(match.origin)
+        val oz = BlockPos.getZ(match.origin)
+        for ((pos, family) in match.template.blocks) {
+            if (family != "obsidian" && family != "netherrack") continue
+            val turned = pos.rotate(match.rotation)
+            cursor.set(ox + turned.x, oy + turned.y, oz + turned.z)
+            if (!level.hasChunk(cursor.x shr 4, cursor.z shr 4)) continue
+            when (level.getBlockState(cursor).block) {
+                Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN -> if (family == "obsidian") obsidian++
+                Blocks.MAGMA_BLOCK -> if (family == "netherrack") magma++
+                else -> {}
             }
         }
         val frame = match.template.byFamily["obsidian"]?.size ?: 0
         when {
             lit -> "lit, so a player's"
-            obsidian * 4 < frame && magma < MIN_MAGMA -> "$obsidian obsidian of $frame and $magma magma"
+            obsidian * 4 >= frame || magma >= MIN_MAGMA -> null
+            !splashed(box, level) -> "$obsidian obsidian of $frame, $magma magma, and no netherrack splashed round it"
+            stonework(match, level).let { (seen, of) -> seen * STONEWORK_SHARE >= of } -> null
+            splashedRightRound(box, level) < RIGHT_ROUND -> "nothing of it but netherrack, and the ground right round it not all splashed"
             else -> null
         }
     }
 
+    /**
+     * How much of [match]'s stonework (all but its netherrack, obsidian, gold and lava: stone bricks,
+     * stairs, slabs, iron bars) is where the design has it, of how much could be seen. Players take
+     * the obsidian and gold; of the 502 ruined portals in Bobby's cache of SiteB, those that kept
+     * under a quarter of their obsidian and under two magma kept a tenth or more of this, or else had
+     * most of the ground right round them splashed ([splashedRightRound]).
+     */
+    fun stonework(match: Match, level: BlockSource): Pair<Int, Int> {
+        val ox = BlockPos.getX(match.origin)
+        val oy = BlockPos.getY(match.origin)
+        val oz = BlockPos.getZ(match.origin)
+        val cursor = BlockPos.MutableBlockPos()
+        var seen = 0
+        var of = 0
+        for ((pos, family) in match.template.blocks) {
+            if (family in NOT_STONEWORK) continue
+            val turned = pos.rotate(match.rotation)
+            cursor.set(ox + turned.x, oy + turned.y, oz + turned.z)
+            if (!level.hasChunk(cursor.x shr 4, cursor.z shr 4)) continue
+            of++
+            if (family(level.getBlockState(cursor).block) == family) seen++
+        }
+        return seen to of
+    }
+
+    private val NOT_STONEWORK = setOf("netherrack", "obsidian", "gold_block", "lava")
+    private const val STONEWORK_SHARE = 10
+
+    /**
+     * How much of the ground just round [box] (the columns within [RIGHT_ROUND_REACH] of it) is
+     * netherrack or magma at its base, of the columns with ground there: the game splashes it all
+     * (`RuinedPortalPiece.spreadNetherrack`), though some is gone again in most.
+     * A player's cube of netherrack round a dungeon in Bobby's cache of SiteB, 20 blocks down, fitted
+     * a small design on its netherrack alone, and had the stone just round it as it was.
+     */
+    fun splashedRightRound(box: Box, level: BlockSource): Double {
+        var ground = 0
+        var hit = 0
+        val cursor = BlockPos.MutableBlockPos()
+        for (x in box.minX - RIGHT_ROUND_REACH..box.maxX + RIGHT_ROUND_REACH) for (z in box.minZ - RIGHT_ROUND_REACH..box.maxZ + RIGHT_ROUND_REACH) {
+            if ((x in box.minX..box.maxX && z in box.minZ..box.maxZ) || !level.hasChunk(x shr 4, z shr 4)) continue
+            var solid = false
+            var splash = false
+            for (y in box.minY - SPLASH_DEPTH..box.minY + SPLASH_DEPTH) {
+                val state = level.getBlockState(cursor.set(x, y, z))
+                if (state.block == Blocks.NETHERRACK || state.block == Blocks.MAGMA_BLOCK) splash = true
+                if (!state.isAir && state.block != Blocks.WATER) solid = true
+            }
+            if (solid) ground++
+            if (splash) hit++
+        }
+        return if (ground == 0) 1.0 else hit.toDouble() / ground
+    }
+
+    /**
+     * How far round its box, and how much of the ground there must be splashed. Of the ruined portals
+     * in Bobby's cache of SiteB that had nothing left but netherrack, the least splashed just round
+     * them were 0.66 and 0.70; the player's cube round a dungeon, 0.40.
+     */
+    private const val RIGHT_ROUND_REACH = 2
+    private const val RIGHT_ROUND = 0.5
+
     private const val MIN_MAGMA = 2
+
+    /**
+     * Whether netherrack lies round [box] as the game splashes it (`RuinedPortalPiece.spreadNetherrack`):
+     * on the ground within 3 of its base, all round its middle and thinning out, and never 17 or
+     * more blocks from it, counted along x and z. Round every ruined portal in Bobby's cache of SiteB
+     * a third or more of the ground near it was netherrack and none of it that far out, where a
+     * player's netherrack build or floor goes on.
+     */
+    fun splashed(box: Box, level: BlockSource): Boolean {
+        val cx = (box.minX + box.maxX) shr 1
+        val cz = (box.minZ + box.maxZ) shr 1
+        var near = 0
+        var nearHit = 0
+        var far = 0
+        var farHit = 0
+        val cursor = BlockPos.MutableBlockPos()
+        for (x in cx - SPLASH_FAR_TO..cx + SPLASH_FAR_TO) for (z in cz - SPLASH_FAR_TO..cz + SPLASH_FAR_TO) {
+            val d = Math.abs(x - cx) + Math.abs(z - cz)
+            val inNear = d <= SPLASH_NEAR && !(x in box.minX..box.maxX && z in box.minZ..box.maxZ)
+            val inFar = d in SPLASH_FAR_FROM..SPLASH_FAR_TO
+            if (!inNear && !inFar || !level.hasChunk(x shr 4, z shr 4)) continue
+            val hit = (box.minY - SPLASH_DEPTH..box.minY + SPLASH_DEPTH).any { y ->
+                level.getBlockState(cursor.set(x, y, z)).block.let { it == Blocks.NETHERRACK || it == Blocks.MAGMA_BLOCK }
+            }
+            if (inNear) { near++; if (hit) nearHit++ } else { far++; if (hit) farHit++ }
+        }
+        return near >= MIN_SPLASH_COLUMNS && nearHit * 3 >= near && farHit * 50 <= far
+    }
+
+    /** How far from its middle the ground is all splashed, near enough, and from where never. */
+    private const val SPLASH_NEAR = 8
+    private const val SPLASH_FAR_FROM = 18
+    private const val SPLASH_FAR_TO = 24
+    private const val SPLASH_DEPTH = 3
+    private const val MIN_SPLASH_COLUMNS = 8
 }
 
 /**
@@ -510,7 +625,19 @@ object IglooFit : TemplateFit(
     ),
     // Its furnishings are only 18 blocks, and players take the carpet; the dome is checked anyway.
     minBlocks = 8,
+    open = { state, _ -> state.isAir },
 ) {
+    /**
+     * The same design found by its dome's snow alone, for an igloo emptied of its furnishings: the
+     * snow blocks with air under them ([Spec.overAir]) vote, and the dome must be hollow and on the
+     * igloo's spot of its chunk ([refusal]) like any other.
+     */
+    val dome = TemplateFit(
+        "igloo", listOf("top"), anyWood = false, votingKinds = setOf(Blocks.SNOW_BLOCK),
+        // Snow overhanging a slope beside it votes too, and the dome is checked block for block anyway.
+        agreement = 0.6, minBlocks = 10, open = { state, _ -> state.isAir },
+    )
+
     fun refusal(match: Match): String? {
         val (x, z) = OFFSETS.getValue(match.rotation)
         return if (match.inChunk == Math.floorMod(x, 16) to Math.floorMod(z, 16)) null
@@ -536,7 +663,7 @@ object IglooFit : TemplateFit(
  * An ocean ruin's 48 designs: stone brick ones (plain, cracked or mossy) in cold seas, cut sandstone
  * ones in warm. The game leaves out a block in five of small ones and one in ten of big ones as it
  * places them, and makes some of their gravel and sand suspicious, which count as what they replace.
- * Gravel and sand are the sea floor anyway, so the rest of a design must match by itself as well.
+ * Gravel, sand and sandstone are the sea floor anyway, so the rest of a design must match by itself as well.
  * A big ruin has small ones round it, which [Specs] keeps in its box.
  */
 object OceanRuinFit : TemplateFit(
@@ -547,8 +674,17 @@ object OceanRuinFit : TemplateFit(
     anyWood = false,
     agreement = 0.3,
     samples = 120,
-    aliases = mapOf("suspicious_gravel" to "gravel", "suspicious_sand" to "sand"),
-    loose = setOf("gravel", "sand"),
+    // The game mixes plain, cracked and mossy stone bricks through a cold ruin whichever design it
+    // is (a cracked one in Bobby's cache of SiteB was 27 mossy, 17 cracked and 4 plain where its
+    // design has cracked), so they are one block here; each such ruin matched under half otherwise.
+    aliases = mapOf(
+        "suspicious_gravel" to "gravel", "suspicious_sand" to "sand",
+        "cracked_stone_bricks" to "stone_bricks", "mossy_stone_bricks" to "stone_bricks",
+        "mossy_stone_brick_stairs" to "stone_brick_stairs", "mossy_stone_brick_slab" to "stone_brick_slab",
+    ),
+    // The sandstone under a warm sea's sand is the floor too: in the open space of two big warm ruins
+    // in Bobby's cache of SiteB it counted as their own blocks standing there, and both were refused.
+    loose = setOf("gravel", "sand", "sandstone"),
     minVotes = 15,
     // Only its stonework votes: the sea floor's gravel and sand are everywhere.
     votingKinds = setOf(
@@ -556,7 +692,31 @@ object OceanRuinFit : TemplateFit(
         Blocks.MOSSY_COBBLESTONE, Blocks.CUT_SANDSTONE, Blocks.CHISELED_SANDSTONE, Blocks.POLISHED_GRANITE,
     ),
     closest = true,
-)
+    // The smallest design (warm_7) has only 9 blocks that vote, 6 cut sandstone and 3 polished
+    // granite; 27 such ruins in Bobby's cache of SiteB kept 5 to 8 of them, and were never tried.
+    minBlocks = 5,
+    // It stands on the sea floor, with the sea over it, and the sky where it reaches the surface.
+    open = { state, y -> state.fluidState.type.isSame(Fluids.WATER) || y >= SEA_LEVEL && state.isAir }, openTopOnly = true,
+    sea = { state -> state.fluidState.type.isSame(Fluids.WATER) },
+    outOfSea = { origin, level -> OceanRuinFit.startsHere(origin, level) },
+) {
+    /**
+     * Whether a ruin laid with its corner at [origin] is where the game starts one: on its chunk's
+     * corner, the middle of that chunk an ocean. The game lays a ruin there on the floor however high
+     * that is, so one can stand on land, out of the sea; three in Bobby's cache of SiteB stood at 62
+     * to 71, each so. One that only happens to fit on land is almost never on a chunk's corner as
+     * well, nor in an ocean.
+     */
+    fun startsHere(origin: Long, level: BlockSource): Boolean {
+        val x = BlockPos.getX(origin)
+        val z = BlockPos.getZ(origin)
+        if (Math.floorMod(x, 16) != 0 || Math.floorMod(z, 16) != 0) return false
+        return level.biome(BlockPos(x + 8, BlockPos.getY(origin), z + 8)) in Biomes.OCEAN
+    }
+}
+
+/** The sea's surface: the highest water of every ocean is a block under it. */
+private const val SEA_LEVEL = 63
 
 /**
  * An abandoned camp's tent, one of 180 designs over 18 biomes: white wool stairs over straw beds,

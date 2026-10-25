@@ -207,7 +207,14 @@ object BobbyScan {
             val detection = all[index++]
             try {
                 Tracker.recognise(detection, blocks, now = true)
-                Tracker.splitOffNext(groups, detection)?.let(all::add)
+                // A group too wide to match gives up one stretch at a time, and what it keeps is matched again.
+                var rest = Tracker.splitOffNext(groups, detection)
+                while (rest != null) {
+                    all.add(rest)
+                    if (detection.box != null) break
+                    Tracker.recognise(detection, blocks, now = true)
+                    rest = Tracker.splitOffNext(groups, detection)
+                }
             } catch (e: Exception) {
                 Log.error("Could not match ${detection.type.id} #${detection.id} from Bobby's cache", e)
             }

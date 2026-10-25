@@ -27,11 +27,15 @@ class Spec(
     val notBiomes: List<String> = emptyList(),
     /**
      * The biome is asked of the group as a whole rather than of each block: blocks anywhere are
-     * kept, and it counts once [Tracker.BIOME_BLOCKS] of them stand in an allowed biome. The game
+     * kept, and it counts once [biomeBlocks] of them stand in an allowed biome. The game
      * asks only where the structure starts, so an outpost's tower can stand in a strip of beach or
      * stony shore beside the plains it belongs to; checking each block lost that tower in testing.
      */
     val biomeAsWhole: Boolean = false,
+    /** How many of a group's blocks must stand in an allowed biome, when the biome is asked of the whole group. */
+    val biomeBlocks: Int = Tracker.BIOME_BLOCKS,
+    /** Or else how near the group sideways one of its biomes must be, when the biome is asked of the whole group; 0 for not at all. */
+    val biomeReach: Int = 0,
     /**
      * A block also counts as in its biomes when its section of the chunk (16 blocks each way), or
      * the one above or below, holds one of them. The game asks a wreck's biome only where it starts:
@@ -55,6 +59,11 @@ class Spec(
     val waypointAtTop: Boolean = false,
     /** Blocks that alone prove it, which its box is kept near ([Detection.anchors]). */
     val anchors: Set<Block> = emptySet(),
+    /**
+     * Signature blocks that count only with air right under them, as a roof: an igloo's snow
+     * blocks, which are also the ground of every snowy slope, where they lie on more snow or stone.
+     */
+    val overAir: Set<Block> = emptySet(),
 ) {
     class Reach(val sideways: Int, val down: Int, val up: Int)
 
@@ -112,6 +121,9 @@ object Specs {
             Blocks.POLISHED_BLACKSTONE_BRICK_SLAB, Blocks.CHISELED_POLISHED_BLACKSTONE, Blocks.GILDED_BLACKSTONE,
         ),
         biomes = setOf("crimson_forest", "nether_wastes", "soul_sand_valley", "warped_forest"), merge = 24,
+        // The game asks the biome only where it starts, and the rest runs on into basalt deltas: five
+        // bastions in Bobby's cache of SiteB had most of their blocks there and were never matched.
+        biomeAsWhole = true,
         // Set once one of its ramparts, walls or bridge matches (see [BastionFit]). Counting blocks
         // and the share of them cracked was not enough: a player's blackstone build passed both.
         recognise = { d -> d.box },
@@ -193,29 +205,39 @@ object Specs {
         recognise = { d -> boundsIf(d, has(d, Blocks.END_PORTAL_FRAME)) },
     )
 
-    /** Spruce planks and stairs on oak stilts, with the cauldron: nothing else in a swamp is spruce. */
+    /**
+     * Spruce planks and stairs on oak stilts, with the cauldron: nothing else in a swamp is spruce.
+     * Proved by its furniture and size ([witchHutByItsRule]) or, looted or damaged, by its shape
+     * ([CodeLayout.WITCH_HUT]).
+     */
     private val WITCH_HUT = Spec(
         setOf(Blocks.SPRUCE_PLANKS, Blocks.SPRUCE_STAIRS, Blocks.OAK_FENCE, Blocks.CAULDRON, Blocks.POTTED_RED_MUSHROOM, Blocks.CRAFTING_TABLE),
         biomes = setOf("swamp"), merge = 6,
-        // The game builds it one size, 7 by 9 and a few blocks high: a spruce hut of another size is a player's.
-        recognise = { d ->
-            val b = d.bounds
-            val size = if (b == null) emptyList() else listOf(b.sizeX, b.sizeZ).sorted()
-            // The game furnishes every hut the same: the cauldron, the crafting table and the
-            // potted red mushroom. Two of the three, so one taken does not lose the hut.
-            val furniture = listOf(Blocks.CAULDRON, Blocks.CRAFTING_TABLE, Blocks.POTTED_RED_MUSHROOM).count { has(d, it) }
-            if (b != null && d.count >= 25 && furniture >= 2 && size == listOf(7, 9) && b.sizeY <= 6) Recognise.witchHutBox(b) else null
-        },
+        recognise = { d -> boundsIf(d, d.count >= 25) },
         reach = null, waypointAtTop = true,
     )
 
     /**
-     * An igloo's furnishings: its carpet, bed, furnace, crafting table, redstone torch and trapdoor.
-     * Not its snow blocks, which are the ground of every snowy slope; the match checks those. Set
-     * once its dome matches ([IglooFit]).
+     * A witch hut's box, when what was seen is one by the rule: the game builds it one size, 7 by 9
+     * and a few blocks high (a spruce hut of another size is a player's), and furnishes every one
+     * the same, with the cauldron, the crafting table and the potted red mushroom; two of the
+     * three, so one taken does not lose the hut.
+     */
+    fun witchHutByItsRule(d: Detection): Box? {
+        val b = d.bounds ?: return null
+        val size = listOf(b.sizeX, b.sizeZ).sorted()
+        val furniture = listOf(Blocks.CAULDRON, Blocks.CRAFTING_TABLE, Blocks.POTTED_RED_MUSHROOM).count { has(d, it) }
+        return if (d.count >= 25 && furniture >= 2 && size == listOf(7, 9) && b.sizeY <= 6) Recognise.witchHutBox(b) else null
+    }
+
+    /**
+     * An igloo's furnishings: its carpet, bed, furnace, crafting table, redstone torch and trapdoor;
+     * and its dome's snow blocks that have air under them, so one emptied of its furnishings is
+     * found too. Not the rest of its snow, which is the ground of every snowy slope; the match
+     * checks that. Set once its dome matches ([IglooFit]).
      */
     private val IGLOO = Spec(
-        IglooFit.votingKinds,
+        IglooFit.votingKinds + Blocks.SNOW_BLOCK, overAir = setOf(Blocks.SNOW_BLOCK),
         biomes = setOf("snowy_taiga", "snowy_plains", "snowy_slopes"), biomeNearby = true, merge = 6,
         recognise = { d -> d.box },
         reach = null, waypointAtTop = true,
@@ -232,13 +254,29 @@ object Specs {
     )
 
     /**
+     * The highest an ocean ruin's blocks are looked for: the game lays one on the floor where it
+     * starts however high that is, and three in Bobby's cache of SiteB stood on land at 62 to 71, the
+     * biggest 16 high. Out of the sea, only where a ruin starts counts ([OceanRuinFit.startsHere]):
+     * looked for this high without that, small warm ruins were fitted on dry land, one in a desert village.
+     */
+    private const val OCEAN_RUIN_TOP = 90
+
+    /**
      * An ocean ruin's stonework, and the suspicious gravel and sand the game hides its finds in, on
      * the sea floor. Set once one of its designs matches ([OceanRuinFit]); its box is then what is
      * seen round it, which takes in the small ruins round a big one.
+     *
+     * The game asks the biome only where a ruin starts, on the floor of an ocean: of the ruins Bobby's
+     * cache of SiteB missed, most stood on a coast, their blocks in the beach, stony shore, river or
+     * jungle beside the ocean. So its blocks are kept whatever the biome, and a group is matched once
+     * one of them is in an ocean (or by one, [Spec.biomeNearby]), or an ocean is within 16 blocks of
+     * it, where the chunk it starts in has its middle: one inland, a desert village's or a
+     * stronghold's, is not. One small warm ruin there stood all in jungle and beach, its start in the
+     * ocean next to it.
      */
     private val OCEAN_RUIN = Spec(
         OceanRuinFit.votingKinds + setOf(Blocks.SUSPICIOUS_GRAVEL, Blocks.SUSPICIOUS_SAND),
-        maxY = 62, biomes = Biomes.OCEAN, biomeNearby = true, merge = 16,
+        maxY = OCEAN_RUIN_TOP, biomes = Biomes.OCEAN, biomeNearby = true, biomeAsWhole = true, biomeBlocks = 1, biomeReach = 16, merge = 16,
         recognise = { d -> d.box },
         reach = Spec.Reach(2, 2, 4),
     )
@@ -254,7 +292,11 @@ object Specs {
         reach = null,
     )
 
-    /** Cobblestone and mossy cobblestone above ground in a jungle (dungeons are below), with its chiselled stone bricks. */
+    /**
+     * Cobblestone and mossy cobblestone above ground in a jungle (dungeons are below). Its chiselled
+     * stone bricks may be counted with another kind, and are hidden underground where a server runs
+     * anti-xray, so they are not asked for here: it is proved by its trap or its shape ([Tracker]).
+     */
     private val JUNGLE_TEMPLE = Spec(
         setOf(
             Blocks.COBBLESTONE, Blocks.MOSSY_COBBLESTONE, Blocks.COBBLESTONE_STAIRS, Blocks.CHISELED_STONE_BRICKS,
@@ -262,11 +304,14 @@ object Specs {
         ),
         minY = 50, biomes = setOf("jungle", "bamboo_jungle"), merge = 8,
         // Its footprint once proved ([TemplePieces.jungleBox]).
-        recognise = { d -> if (d.count >= 150 && has(d, Blocks.CHISELED_STONE_BRICKS)) TemplePieces.jungleBox(d) else null },
+        recognise = { d -> if (d.count >= 150) TemplePieces.jungleBox(d) else null },
         reach = null, waypointAtTop = true,
     )
 
-    /** Cut and chiselled sandstone with the orange and blue terracotta floor, which desert villages never have. */
+    /**
+     * Cut and chiselled sandstone with the orange and blue terracotta floor, which desert villages
+     * never have. Proved by the floor's cross or, where that was dug up, by its shape ([Tracker]).
+     */
     private val DESERT_TEMPLE = Spec(
         setOf(
             Blocks.CUT_SANDSTONE, Blocks.CHISELED_SANDSTONE, Blocks.SANDSTONE_STAIRS, Blocks.SANDSTONE_SLAB,
@@ -274,7 +319,7 @@ object Specs {
         ),
         biomes = setOf("desert"), merge = 8,
         // Until its floor cross is found; then the box is measured from that ([TemplePieces.desertBox]).
-        recognise = { d -> boundsIf(d, d.count >= 40 && has(d, Blocks.DYED_TERRACOTTA.blue()) && has(d, Blocks.DYED_TERRACOTTA.orange())) },
+        recognise = { d -> boundsIf(d, d.count >= 40) },
         reach = null, waypointAtTop = true,
     )
 

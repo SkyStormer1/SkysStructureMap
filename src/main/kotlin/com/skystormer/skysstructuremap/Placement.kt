@@ -8,7 +8,7 @@ import net.minecraft.world.level.levelgen.structure.StructureSet
 import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement
 
 /**
- * Which chunks the game lets a kind start in, without knowing the seed. Most kinds are spread out
+ * Which chunks the game lets a kind start in, by its placement rules alone. Most kinds are spread out
  * over squares of `spacing` chunks, one start in each, and only in the first `spacing −
  * separation` chunks of its square each way: villages (34, 8) never start in the last 8 of every
  * 34 chunks, two chunks in five. So a structure whose start chunk can be told from what was seen
@@ -34,6 +34,9 @@ object Placement {
         StructureType.MONUMENT to BuiltinStructureSets.OCEAN_MONUMENTS,
         StructureType.ABANDONED_CAMP to BuiltinStructureSets.ABANDONED_CAMP,
         StructureType.IGLOO to BuiltinStructureSets.IGLOOS,
+        // One set for both: a square holds a fortress or a bastion, not both.
+        StructureType.FORTRESS to BuiltinStructureSets.NETHER_COMPLEXES,
+        StructureType.BASTION to BuiltinStructureSets.NETHER_COMPLEXES,
     )
 
     private val spreads: Map<StructureType, Spread> by lazy {

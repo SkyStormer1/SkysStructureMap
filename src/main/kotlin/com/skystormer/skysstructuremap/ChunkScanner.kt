@@ -99,6 +99,7 @@ object ChunkScanner {
                             val spec = specs[k]
                             if (worldY < spec.minY || worldY > spec.maxY) continue
                             spec.highest[state.block]?.let { if (worldY > it) continue }
+                            if (state.block in spec.overAir && !airUnder(sections, index, x, y, z)) continue
                             // Wood is everywhere on land, bricks under the sea, and so on: where a
                             // block is can matter as much as what it is.
                             val allowed = !spec.biomeFiltered ||
@@ -135,6 +136,11 @@ object ChunkScanner {
                 holds
             }
         }
+
+    /** Whether the block under [x], [y], [z] of section [index] is air; a section not there is all air. */
+    private fun airUnder(sections: Array<out LevelChunkSection?>, index: Int, x: Int, y: Int, z: Int): Boolean =
+        if (y > 0) sections[index]!!.getBlockState(x, y - 1, z).isAir
+        else sections.getOrNull(index - 1)?.getBlockState(x, 15, z)?.isAir ?: true
 
     /** The biome at a block of a section, as its id without `minecraft:`; biomes are kept per 4×4×4. */
     private fun biomeAt(section: LevelChunkSection, x: Int, y: Int, z: Int): String =

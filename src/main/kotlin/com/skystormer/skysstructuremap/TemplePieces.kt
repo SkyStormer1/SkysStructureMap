@@ -14,7 +14,9 @@ object TemplePieces {
     /**
      * The orange and blue terracotta the game lays into a desert pyramid's floor: a diamond three
      * across, in the middle of the temple, over the hidden chamber. Thirteen blocks, of which ten
-     * must still be there, so a looted temple with part of its floor dug out still counts.
+     * must still be there, or be air where they were dug out, so a looted temple with part of its
+     * floor dug out still counts: one in Bobby's cache of SiteB had nine left and four dug. At least
+     * [CROSS_LEFT] must still be terracotta, and a cell holding anything else counts against it.
      *
      * (`DesertPyramidPiece` in the game places them at 10,0,7 through 10,0,13 of its own 21 × 21
      * footprint; these are the same spots as offsets from the middle one.)
@@ -24,6 +26,7 @@ object TemplePieces {
     )
 
     private const val CROSS_NEEDED = 10
+    private const val CROSS_LEFT = 7
 
     /**
      * The four blocks beside the middle, which the game leaves sandstone: never terracotta. A
@@ -50,13 +53,16 @@ object TemplePieces {
             // tried as the middle in turn, and the rest of the diamond looked for around it.
             for ((ox, oz) in CROSS) {
                 var found = 0
+                var dug = 0
                 for ((dx, dz) in CROSS) {
-                    if (isTerracotta(level, cursor.set(x - ox + dx, y, z - oz + dz))) found++
+                    cursor.set(x - ox + dx, y, z - oz + dz)
+                    if (isTerracotta(level, cursor)) found++
+                    else if (level.hasChunk(cursor.x shr 4, cursor.z shr 4) && level.getBlockState(cursor).isAir) dug++
                 }
                 // The game lays a pyramid from its chunk's corner, so its cross is 10 in from one;
                 // the lower one under it, 4 down and a few blocks over, is not.
                 if (Math.floorMod(x - ox - DESERT_HALF, 16) != 0 || Math.floorMod(z - oz - DESERT_HALF, 16) != 0) continue
-                if (found >= CROSS_NEEDED && GAPS.none { (dx, dz) -> isTerracotta(level, cursor.set(x - ox + dx, y, z - oz + dz)) }) {
+                if (found >= CROSS_LEFT && found + dug >= CROSS_NEEDED && GAPS.none { (dx, dz) -> isTerracotta(level, cursor.set(x - ox + dx, y, z - oz + dz)) }) {
                     return BlockPos(x - ox, y, z - oz)
                 }
             }

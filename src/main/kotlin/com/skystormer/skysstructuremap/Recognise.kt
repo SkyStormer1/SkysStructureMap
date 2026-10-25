@@ -19,17 +19,16 @@ object Recognise {
     /**
      * An ocean monument is always the same building: 58 × 23 × 58 blocks from y 39 to 61, with
      * its west and north edges 29 blocks before the start of a chunk. So its box is known exactly
-     * once only one chunk line fits what has been seen. Until then it is not recognised: guessing
-     * from part of one picked the wrong chunk line in testing. By the time you are inside the box
-     * the whole building has loaded, so this never holds up a discovery. Prismarine spread wider
-     * than any monument (a player's build beside one) is given the monument's place that holds the
-     * most of it ([blocksIn] counts the blocks seen in a box). Whether a monument really stands
-     * there is then [MonumentLayout]'s to say.
+     * once only one chunk line fits what has been seen. Where more than one does (one half
+     * dismantled, 27 blocks of it left across in Bobby's cache of SiteB) and where prismarine spreads
+     * wider than any monument (a player's build beside one), it is given the place that holds the
+     * most of what was seen ([blocksIn] counts the blocks seen in a box). Whether a monument really
+     * stands there, or a chunk over, is then [MonumentLayout]'s to say, and it waits for half of it
+     * to have loaded, so a guess from the first chunks of one is never taken.
      */
     fun monumentBox(seen: Box, blocksIn: (Box) -> Int): Box? {
         var xs = monumentEdges(seen.minX, seen.maxX)
         var zs = monumentEdges(seen.minZ, seen.maxZ)
-        if (xs.size > 1 || zs.size > 1) return null
         if (xs.isEmpty()) xs = edgesAcross(seen.minX, seen.maxX)
         if (zs.isEmpty()) zs = edgesAcross(seen.minZ, seen.maxZ)
         val places = xs.flatMap { x -> zs.map { z -> monumentAt(x, z) } }

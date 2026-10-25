@@ -63,6 +63,9 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
      */
     var centre: Box? = null
 
+    /** A village's box drawn from its own pieces and streets, once one has fitted ([VillagePieces.draw]). */
+    var drawn: Box? = null
+
     /** Groups split from this one, or it from them: never joined again, and never saved as the same structure. */
     val apart: MutableSet<Detection> = HashSet()
 

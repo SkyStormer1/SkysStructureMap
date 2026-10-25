@@ -7,7 +7,7 @@ import net.minecraft.world.phys.AABB
 
 /**
  * The boxes that structures with mobs of their own spawn them in, like MiniHUD's structure
- * boxes but worked out from what you have seen rather than from the seed.
+ * boxes but worked out from what you have seen.
  *
  * The game gives four structures their own spawns: fortresses (blazes, wither skeletons, skeletons,
  * magma cubes, zombified piglins) inside each of their pieces, and ocean monuments (guardians),

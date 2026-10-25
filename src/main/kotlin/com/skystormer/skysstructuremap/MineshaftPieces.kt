@@ -1,6 +1,7 @@
 package com.skystormer.skysstructuremap
 
 import net.minecraft.core.BlockPos
+import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.world.level.ChunkPos
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
@@ -160,7 +161,10 @@ object MineshaftPieces {
      * floor whatever ground was there. Its corridors leave from its sides, so it is looked for in
      * the chunks the fences are in and those beside them, at the fences' heights.
      */
-    fun startRoom(detection: Detection, level: BlockSource): Box? {
+    fun startRoom(detection: Detection, level: BlockSource): Box? = startRooms(detection, level, first = true).firstOrNull()
+
+    /** Every start room among [detection]'s fences ([startRoom]), or only the first found when [first]. */
+    fun startRooms(detection: Detection, level: BlockSource, first: Boolean = false): List<Box> {
         // Each chunk to try, with the lowest and highest fence near it.
         val heights = HashMap<Long, IntArray>()
         val iterator = detection.positions.iterator()
@@ -176,46 +180,150 @@ object MineshaftPieces {
             }
         }
         val cursor = BlockPos.MutableBlockPos()
+        val rooms = ArrayList<Box>()
         for ((chunk, range) in heights) {
             val x = ChunkPos.getX(chunk) * 16 + 2
             val z = ChunkPos.getZ(chunk) * 16 + 2
             if (!level.hasChunk(x shr 4, z shr 4)) continue
             for (y in range[0] - ROOM_BELOW..range[1] + ROOM_ABOVE) {
-                if (isRoom(level, cursor, x, y, z)) return Box(x, y, z, x + ROOM - 1, y + ROOM_HIGH, z + ROOM - 1)
+                if (!isRoom(level, cursor, x, y, z)) continue
+                rooms.add(Box(x, y, z, x + ROOM - 1, y + ROOM_HIGH, z + ROOM - 1))
+                if (first) return rooms
+                // One room to a chunk: the game starts one mineshaft in it at most.
+                break
             }
         }
-        return null
+        return rooms
     }
 
     /**
-     * A start room's floor at [y], from [x], [z]: mostly solid, with air three blocks high over all
-     * of its 7 x 7 and a wall standing just outside it on the west and north. Checked against every
-     * start room in a test world: none missed, none found where there was none.
+     * The corridors among [detection]'s fences, as the game lays them (`MineShaftCorridor`): a
+     * support in each 5 blocks of one, 2 into it, so a run of supports 5 apart along one line is one
+     * corridor, from 2 before its first support to 2 past its last, 3 across between its posts and
+     * 3 high from their feet. Where a support was dug out or caved in, the run is two corridors,
+     * which [joined] joins again across the gap.
+     */
+    fun corridors(detection: Detection, level: BlockSource): List<Piece> {
+        val cursor = BlockPos.MutableBlockPos()
+        // Supports by the line they stand on (which way it runs, and where across and up), each at its place along it.
+        val lines = HashMap<Triple<Boolean, Int, Int>, MutableList<Int>>()
+        val iterator = detection.positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            val x = BlockPos.getX(key)
+            val y = BlockPos.getY(key)
+            val z = BlockPos.getZ(key)
+            if (!post(level, cursor, x, y, z)) continue
+            // A partner 2 east: the corridor runs north and south, along z; 2 south, along x.
+            if (support(level, cursor, x, y, z, 1, 0)) lines.getOrPut(Triple(true, x, y)) { ArrayList() }.add(z)
+            if (support(level, cursor, x, y, z, 0, 1)) lines.getOrPut(Triple(false, z, y)) { ArrayList() }.add(x)
+        }
+        val corridors = ArrayList<Piece>()
+        for ((line, at) in lines) {
+            val (alongZ, across, y) = line
+            at.sort()
+            var from = 0
+            for (i in at.indices) {
+                if (i + 1 < at.size && at[i + 1] - at[i] == SECTION) continue
+                val start = at[from] - SUPPORT_IN
+                val end = at[i] + SUPPORT_IN
+                corridors.add(Piece(CORRIDOR_KIND, if (alongZ) Box(across, y, start, across + 2, y + 2, end) else Box(start, y, across, end, y + 2, across + 2)))
+                from = i + 1
+            }
+        }
+        return corridors
+    }
+
+    /**
+     * Whether the game joins [a] and [b], each a corridor ([corridors]) or a start room: touching
+     * face to face (its pieces never overlap, where another mineshaft's corridor crossing through
+     * one does), or across the gap a crossing or stairs fills, lined up so one could; a corridor
+     * leaves a start room from its walls, which stand up to [ROOM_EXTRA] past the part of it
+     * [startRoom] finds. On the game's own mineshafts, with only their rooms and corridors to go by,
+     * 97.4% of corridors went to their own room so (91.5% by the nearest room).
+     */
+    fun joined(a: Piece, b: Piece): Boolean {
+        val gap = a.box.gap(b.box)
+        if (a.kind == ROOM_KIND || b.kind == ROOM_KIND) return gap in 1..ROOM_EXTRA + 1
+        if (gap == 1) return faceToFace(a.box, b.box)
+        return gap in 2..CONNECTOR && Math.abs(a.box.minY - b.box.minY) <= CONNECTOR_RISE &&
+            (minOf(a.box.maxX, b.box.maxX) - maxOf(a.box.minX, b.box.minX) >= -2 || minOf(a.box.maxZ, b.box.maxZ) - maxOf(a.box.minZ, b.box.minZ) >= -2)
+    }
+
+    /** Whether two boxes that touch do so across a face, not only at an edge or corner. */
+    private fun faceToFace(a: Box, b: Box): Boolean =
+        listOf(minOf(a.maxX, b.maxX) >= maxOf(a.minX, b.minX), minOf(a.maxY, b.maxY) >= maxOf(a.minY, b.minY), minOf(a.maxZ, b.maxZ) >= maxOf(a.minZ, b.minZ)).count { it } == 2
+
+    /**
+     * The mineshafts among one group's corridors and start rooms: with two or more rooms, what the
+     * game joined to each ([JoinedPieces], [joined]); else one.
+     */
+    fun split(pieces: List<Piece>): List<List<Piece>> {
+        val rooms = pieces.filter { it.kind == ROOM_KIND }
+        return if (rooms.size >= 2) JoinedPieces.byStarts(pieces, rooms.map(::listOf), ::joined) else listOf(pieces)
+    }
+
+    /** What corridors and start rooms are called among pieces. */
+    const val CORRIDOR_KIND = "mscorridor"
+    const val ROOM_KIND = "msroom"
+
+    private const val SECTION = 5
+    private const val SUPPORT_IN = 2
+
+    /** How much bigger a start room can be than the 7 x 7 found of it: the game makes one 7 to 12 across. */
+    private const val ROOM_EXTRA = 6
+
+    /** The widest gap a crossing or stairs fills, and how far stairs climb. */
+    private const val CONNECTOR = 6
+    private const val CONNECTOR_RISE = 8
+
+    /**
+     * A start room's floor at [y], from [x], [z]: mostly solid, open three blocks high over all of
+     * its 7 x 7 and a wall standing just outside it on the west and north. Checked against every
+     * start room in a test world: none missed, none found where there was none. Open is air or the
+     * water an aquifer floods one with, and a few other blocks may stand in it ([ROOM_CLUTTER]): the
+     * dripstone the game grows in caves after laying mineshafts, a player's torch. In Bobby's cache
+     * of SiteB a torch or a few dripstones lost rooms, and corridors leaving by two doorways in one
+     * wall left 24 of its 42 blocks standing. Its floor is the ground it was cut into, never one
+     * laid of wood ([ROOM_WOOD]), as a player's room with a plank floor beside a mineshaft was.
      */
     private fun isRoom(level: BlockSource, cursor: BlockPos.MutableBlockPos, x: Int, y: Int, z: Int): Boolean {
-        if (isAir(level, cursor.set(x, y, z)) || !isAir(level, cursor.set(x, y + 1, z))) return false
+        if (isOpen(level, cursor.set(x, y, z)) || !isOpen(level, cursor.set(x, y + 1, z))) return false
         var floor = 0
+        var wood = 0
+        var clutter = 0
         for (dx in 0 until ROOM) for (dz in 0 until ROOM) {
-            if (!isAir(level, cursor.set(x + dx, y, z + dz))) floor++
-            for (dy in 1..ROOM_HIGH) if (!isAir(level, cursor.set(x + dx, y + dy, z + dz))) return false
+            if (!isOpen(level, cursor.set(x + dx, y, z + dz))) floor++
+            if (isWood(level, cursor)) wood++
+            for (dy in 1..ROOM_HIGH) if (!isOpen(level, cursor.set(x + dx, y + dy, z + dz)) && ++clutter > ROOM_CLUTTER) return false
         }
-        if (floor < ROOM_FLOOR) return false
+        if (floor < ROOM_FLOOR || wood > ROOM * ROOM * ROOM_WOOD) return false
         var wall = 0
         for (dy in 1..ROOM_HIGH) for (along in 0 until ROOM) {
-            if (!isAir(level, cursor.set(x - 1, y + dy, z + along))) wall++
-            if (!isAir(level, cursor.set(x + along, y + dy, z - 1))) wall++
+            if (!isOpen(level, cursor.set(x - 1, y + dy, z + along))) wall++
+            if (!isOpen(level, cursor.set(x + along, y + dy, z - 1))) wall++
         }
         return wall >= ROOM_HIGH * ROOM * 2 * ROOM_WALL
     }
 
+    /** Planks, logs, wood and carpet: what a floor is laid of, not ground. */
+    private fun isWood(level: BlockSource, pos: BlockPos): Boolean =
+        BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).block).path.let { p -> WOOD_ENDS.any { p.endsWith(it) } }
+
+    private val WOOD_ENDS = listOf("_planks", "_log", "_wood", "_carpet")
+
+    private fun isOpen(level: BlockSource, pos: BlockPos): Boolean = level.getBlockState(pos).let { it.isAir || it.block == Blocks.WATER }
+
     private const val ROOM = 7
     private const val ROOM_HIGH = 3
     private const val ROOM_FLOOR = 30
-    private const val ROOM_WALL = 0.6
+    private const val ROOM_WALL = 0.55
+    private const val ROOM_CLUTTER = 15
+
+    /** The most of a start room's floor that may be wood. */
+    private const val ROOM_WOOD = 0.25
     private const val ROOM_BELOW = 10
     private const val ROOM_ABOVE = 2
-
-    private fun isAir(level: BlockSource, pos: BlockPos): Boolean = level.getBlockState(pos).isAir
 
     private fun isFence(level: BlockSource, pos: BlockPos): Boolean =
         level.hasChunk(pos.x shr 4, pos.z shr 4) && level.getBlockState(pos).block in FENCES

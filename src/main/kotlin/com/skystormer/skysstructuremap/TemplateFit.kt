@@ -12,6 +12,7 @@ import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.DoorBlock
 import net.minecraft.world.level.block.Rotation
+import net.minecraft.world.level.block.state.BlockState
 
 /**
  * Recognises a structure by matching the blocks seen against the game's own designs for it (its
@@ -73,6 +74,32 @@ open class TemplateFit(
     private val closest: Boolean = false,
     /** How many of its blocks must be seen before it is worth trying ([MIN_BLOCKS] unless a design is that small). */
     val minBlocks: Int = MIN_BLOCKS,
+    /**
+     * What most of a design's open space (the air it holds) must be in the world, at a height, for
+     * designs whose open space says what they are: an igloo's inside is air, and an ocean ruin
+     * stands in the sea, with the sky over it where it reaches the surface. Otherwise only its
+     * blocks are checked, and a solid drift of snow matched an igloo's, and stretches of a
+     * stronghold's corridors deep under the sea floor a small ruin's.
+     */
+    private val open: ((BlockState, Int) -> Boolean)? = null,
+    /**
+     * Only the top of each column of its open space need be [open], or the first block over it
+     * that is: an ocean ruin's open space is the sea down to the floor and the ground the game left
+     * below that, and ones buried in the floor in Bobby's cache of SiteB had sand or gravel over
+     * them, or the ores anti-xray shows for what is buried, and the sea a few blocks up; or else
+     * some of the column below it, where the design stands under a ledge.
+     */
+    private val openTopOnly: Boolean = false,
+    /**
+     * What a design stands in, when it is always laid there: for an ocean ruin, the sea. A quarter of
+     * its open space at least must be that, at the block or over a column's top ([openTopOnly]), not
+     * only [open]: a small warm ruin is a dozen blocks of cut sandstone and granite over sand, which
+     * counts as the floor and so either way, and laid on dry land above the sea, where air is open
+     * too, two passed on 18 of their 71 blocks, one in a desert village.
+     */
+    private val sea: ((BlockState) -> Boolean)? = null,
+    /** Where a design laid with its corner at the given spot may stand out of [sea] all the same. */
+    private val outOfSea: ((Long, BlockSource) -> Boolean)? = null,
 ) {
 
     /**
@@ -87,6 +114,8 @@ open class TemplateFit(
          * it faces, towards the street. Empty for designs that are not village houses.
          */
         val entrances: List<Pair<BlockPos, Direction>> = emptyList(),
+        /** Where the design holds air: its open space, for the designs that say what that must be ([open]). */
+        val air: List<BlockPos> = emptyList(),
     ) {
         val byFamily: Map<String, List<BlockPos>> = blocks.groupBy({ it.second }, { it.first })
     }
@@ -143,6 +172,19 @@ open class TemplateFit(
             Blocks.NETHER_GOLD_ORE, Blocks.NETHER_QUARTZ_ORE, Blocks.ANCIENT_DEBRIS, Blocks.CHEST, Blocks.ENDER_CHEST,
         )
 
+        /** How far over the top of an open column, through what settled or anti-xray put over it, it may be open instead ([openTopOnly]). */
+        private const val OPEN_ABOVE = 8
+
+        /**
+         * Its own blocks in its open space may be no more than one for this many that matched: small
+         * ruins in a cluster in Bobby's cache of SiteB had up to one for every two from the ruin
+         * beside them, and a player's wall twice as many as matched.
+         */
+        private const val OWN_IN_OPEN = 2
+
+        /** At least one in this many of a design's open space must be [sea], for designs laid in it. */
+        private const val IN_SEA = 4
+
         /** Of a design smaller than that, this share of it is enough. */
         private const val MIN_MATCHED_SHARE = 0.5
         const val MIN_AGREEMENT = 0.8
@@ -152,8 +194,9 @@ open class TemplateFit(
         /** Fits this much apart in share are as close as each other (see [closest]). */
         private const val CLOSE = 0.05
 
-        /** How many of the best-voted starts for each design and turn are checked. */
+        /** How many of the best-voted starts for each design and turn are checked, and the most when more tie with the last. */
         private const val TOP_STARTS = 3
+        private const val MAX_TIED = 8
 
         private const val BUILDING_ENTRANCE = "minecraft:building_entrance"
 
@@ -222,33 +265,14 @@ open class TemplateFit(
             if (seen.isEmpty()) continue
             val step = maxOf(1, seen.size / ANCHORS_TRIED)
             val anchors = seen.indices.step(step).map { seen[it] }
-            val work = templates.mapNotNull { template ->
-                val all = template.byFamily[family(kind)].orEmpty()
-                val spots = if (tall) all.filter { it.below() !in all } else all
-                if (spots.isEmpty() || spots.size > MAX_SPOTS) null else template to spots
-            }.sortedBy { it.second.size }
             var best: Match? = null
             // Each anchor through every design before the next, so a real one is tried in full
             // even when the budget runs out.
             for (anchor in anchors) {
-                val x = BlockPos.getX(anchor)
-                val y = BlockPos.getY(anchor)
-                val z = BlockPos.getZ(anchor)
-                for ((template, spots) in work) {
-                    for (spot in spots) {
-                        for (rotation in Rotation.entries) {
-                            if (budget-- <= 0) break
-                            val turned = spot.rotate(rotation)
-                            val match = check(template, rotation, BlockPos.asLong(x - turned.x, y - turned.y, z - turned.z), level, minMatch)
-                                ?: continue
-                            val refused = accept(match)
-                            report.add(Triple("${template.name} $rotation" + (refused?.let { " ($it)" } ?: ""), match.matched, match.known))
-                            // The closest fit, not the most blocks: a big design half fitting over
-                            // a small house beside it is not the house.
-                            if (refused == null && (best == null || match.share > best.share)) best = match
-                        }
-                    }
-                }
+                if (budget <= 0) break
+                val left = intArrayOf(budget)
+                fitAt(anchor, kind, level, minMatch, accept, left, report)?.let { if (best == null || it.share > best.share) best = it }
+                budget = left[0]
             }
             if (best != null) {
                 lastReport = "anchored on ${BuiltInRegistries.BLOCK.getKey(kind).path}; " +
@@ -263,6 +287,52 @@ open class TemplateFit(
         }
         return null
     }
+
+    /**
+     * The design that fits closest with a block of [kind] standing at [anchor], every design and turn
+     * that has one in few enough places ([maxSpots]) tried ([fitAnchored]), or null; only placements
+     * whose corner [origins] allows, [budget] of them at most, what is left put back.
+     */
+    fun fitAt(
+        anchor: Long, kind: Block, level: BlockSource, minMatch: Double = MIN_MATCH, accept: (Match) -> String? = { null },
+        budget: IntArray = intArrayOf(Int.MAX_VALUE), report: MutableList<Triple<String, Int, Int>>? = null,
+        origins: (Template, Rotation, Long) -> Boolean = { _, _, _ -> true }, maxSpots: Int = MAX_SPOTS,
+    ): Match? {
+        val x = BlockPos.getX(anchor)
+        val y = BlockPos.getY(anchor)
+        val z = BlockPos.getZ(anchor)
+        var best: Match? = null
+        for ((template, spots) in anchorSpots(kind)) {
+            if (spots.size > maxSpots) continue
+            for (spot in spots) {
+                for (rotation in Rotation.entries) {
+                    val turned = spot.rotate(rotation)
+                    val origin = BlockPos.asLong(x - turned.x, y - turned.y, z - turned.z)
+                    if (!origins(template, rotation, origin)) continue
+                    if (budget[0]-- <= 0) return best
+                    val match = check(template, rotation, origin, level, minMatch) ?: continue
+                    val refused = accept(match)
+                    report?.add(Triple("${template.name} $rotation" + (refused?.let { " ($it)" } ?: ""), match.matched, match.known))
+                    // The closest fit, not the most blocks: a big design half fitting over
+                    // a small house beside it is not the house.
+                    if (refused == null && (best == null || match.share > best.share)) best = match
+                }
+            }
+        }
+        return best
+    }
+
+    /** Where each design has [kind], the designs with fewest such spots first. A door's bottom half only. */
+    private fun anchorSpots(kind: Block): List<Pair<Template, List<BlockPos>>> = anchorSpots.getOrPut(kind) {
+        val tall = kind is DoorBlock
+        templates.mapNotNull { template ->
+            val all = template.byFamily[family(kind)].orEmpty()
+            val spots = if (tall) all.filter { it.below() !in all } else all
+            if (spots.isEmpty()) null else template to spots
+        }.sortedBy { it.second.size }
+    }
+
+    private val anchorSpots = java.util.concurrent.ConcurrentHashMap<Block, List<Pair<Template, List<BlockPos>>>>()
 
     fun fit(detection: Detection, level: BlockSource, votes: (Long) -> Boolean = { true }, accept: (Match) -> String? = { null }): Match? {
         if (templates.isEmpty() || detection.blocks.size < minBlocks) {
@@ -282,9 +352,11 @@ open class TemplateFit(
 
         class Candidate(val template: Template, val rotation: Rotation, val origin: Long, val votes: Int)
         val candidates = ArrayList<Candidate>()
+        // One tally, emptied for each design and turn: made anew, it grew from nothing each time.
+        val votes = Long2IntOpenHashMap()
         for (template in templates) {
             for (rotation in Rotation.entries) {
-                val votes = Long2IntOpenHashMap()
+                votes.clear()
                 for (key in samples) {
                     val block = detection.blocks.get(key) ?: continue
                     val local = template.byFamily[family(block)] ?: continue
@@ -297,19 +369,29 @@ open class TemplateFit(
                     }
                 }
                 // The few best-voted starts, not just the best: other blocks nearby (a village's
-                // streets) can put the true one second or third.
-                val top = ArrayList<Pair<Long, Int>>(TOP_STARTS + 1)
+                // streets) can put the true one second or third. Those as well voted as the last of
+                // them too, so which go on to be checked never rests on the order the tally keeps.
+                val enough = minOf(samples.size * agreement, minVotes.toDouble())
+                val best = IntArray(TOP_STARTS)
+                val counts = votes.values.iterator()
+                while (counts.hasNext()) {
+                    val count = counts.nextInt()
+                    if (count < enough || count <= best[TOP_STARTS - 1]) continue
+                    var i = TOP_STARTS - 1
+                    while (i > 0 && best[i - 1] < count) { best[i] = best[i - 1]; i-- }
+                    best[i] = count
+                }
+                val last = maxOf(best[TOP_STARTS - 1], 1)
+                val top = ArrayList<Pair<Long, Int>>()
                 val iterator = votes.long2IntEntrySet().fastIterator()
                 while (iterator.hasNext()) {
                     val entry = iterator.next()
-                    if (entry.intValue < minOf(samples.size * agreement, minVotes.toDouble())) continue
-                    if (top.size < TOP_STARTS || entry.intValue > top.last().second) {
-                        top.add(entry.longKey to entry.intValue)
-                        top.sortByDescending { it.second }
-                        if (top.size > TOP_STARTS) top.removeAt(top.size - 1)
-                    }
+                    if (entry.intValue >= enough && entry.intValue >= last) top.add(entry.longKey to entry.intValue)
                 }
-                for ((origin, count) in top) candidates.add(Candidate(template, rotation, origin, count))
+                top.sortWith(compareByDescending<Pair<Long, Int>> { it.second }.thenBy { it.first })
+                for ((origin, count) in top.take(MAX_TIED)) {
+                    candidates.add(Candidate(template, rotation, origin, count))
+                }
             }
         }
         val bestVotes = candidates.maxOfOrNull { it.votes } ?: 0
@@ -346,6 +428,20 @@ open class TemplateFit(
 
     private var lastCheck = ""
 
+    /** Why the design [name], turned [rotation] at [origin], fits or does not, as the log says it: for the tools that check fits. */
+    fun explain(name: String, rotation: Rotation, origin: Long, level: BlockSource): String {
+        val template = templates.firstOrNull { it.name == name } ?: return "no design $name"
+        val match = check(template, rotation, origin, level)
+        return (if (match != null) "fits " else "does not fit: ") + lastCheck
+    }
+
+    /** How much of the design [name] the world still has where the game laid it, turned [rotation] at [origin]: matched and checked, or null for none of these designs. */
+    fun remaining(name: String, rotation: Rotation, origin: Long, level: BlockSource): Pair<Int, Int>? {
+        val template = templates.firstOrNull { it.name == name } ?: return null
+        check(template, rotation, origin, level, minMatch = 0.0)?.let { return it.matched to it.known }
+        return Regex("""(\d+)/(\d+)""").find(lastCheck)?.groupValues?.let { it[1].toInt() to it[2].toInt() }
+    }
+
     private fun check(template: Template, rotation: Rotation, origin: Long, level: BlockSource, minMatch: Double = MIN_MATCH): Match? {
         val ox = BlockPos.getX(origin)
         val oy = BlockPos.getY(origin)
@@ -355,8 +451,10 @@ open class TemplateFit(
         var disguised = 0
         var knownFirm = 0
         var matchedFirm = 0
+        var firmSize = 0
         val cursor = BlockPos.MutableBlockPos()
         for ((pos, block) in template.blocks) {
+            if (block !in loose) firmSize++
             val turned = pos.rotate(rotation)
             cursor.set(ox + turned.x, oy + turned.y, oz + turned.z)
             if (!level.hasChunk(cursor.x shr 4, cursor.z shr 4)) continue
@@ -379,10 +477,17 @@ open class TemplateFit(
         // Enough blocks to mean something, but never more than most of the design: a taiga village's
         // meeting point is only 72 blocks, and asking for 60 matched threw away a real one at 49.
         // Of what anti-xray let be seen: an ocean ruin half buried in the sea floor shows only its top.
-        val enough = minOf(MIN_MATCHED_BLOCKS, (template.blocks.size * MIN_MATCHED_SHARE).toInt()) * known / maxOf(1, known + disguised)
+        // Where some kinds could be there anyway ([loose]), the rest is what must match, in share and
+        // in number, not the whole: those are as often gone in the world, an ocean ruin's sea-floor
+        // sand and gravel water, trail ruins' gravel dug out and a ruined portal's gold taken, and
+        // ocean ruins whose stonework fitted nine blocks in ten were thrown away for it.
+        val enough = minOf(MIN_MATCHED_BLOCKS, (firmSize * MIN_MATCHED_SHARE).toInt()) * known / maxOf(1, known + disguised)
         if (known + disguised < template.blocks.size * 0.6 || known < template.blocks.size * MIN_SEEN_SHARE ||
-            matched < known * minMatch || matched < enough) return null
-        if (loose.isNotEmpty() && matchedFirm < knownFirm * MIN_MATCH) return null
+            matchedFirm < knownFirm * minMatch || matchedFirm < enough) return null
+        if (open != null) openRefusal(template, rotation, ox, oy, oz, level, open, matchedFirm)?.let {
+            lastCheck += ", but $it"
+            return null
+        }
         val a = BlockPos.ZERO.rotate(rotation)
         val b = BlockPos(template.sizeX - 1, template.sizeY - 1, template.sizeZ - 1).rotate(rotation)
         val box = Box(
@@ -391,6 +496,86 @@ open class TemplateFit(
         )
         return Match(template, box, matched, known, rotation, origin)
     }
+
+    /**
+     * Why [template]'s open space, placed at [ox], [oy], [oz] turned by [rotation], is not as the game
+     * leaves it, or null when it is: most of it what [open] says, and little of it the design's own
+     * blocks, which the game never lays there. A player's wall of stone bricks under the sea covered
+     * half a small ruin's bricks, with three times as many standing in its open water.
+     */
+    private fun openRefusal(
+        template: Template, rotation: Rotation, ox: Int, oy: Int, oz: Int, level: BlockSource, open: (BlockState, Int) -> Boolean, matched: Int,
+    ): String? {
+        var known = 0
+        var opened = 0
+        var own = 0
+        val tops = if (openTopOnly) openTops.getOrPut(template) { topsOf(template.air) } else null
+        // Of [openTopOnly] columns, those with some of it seen, and those open: at the top, over it,
+        // or below it, where the sea fills a design that stands under a ledge. Ruins on the floor of
+        // an underwater cliff in Bobby's cache of SiteB had stone over most of their tops, and the
+        // sea inside them.
+        val columnsSeen = HashSet<Long>()
+        val columnsOpen = HashSet<Long>()
+        val columnsSea = HashSet<Long>()
+        var inSea = 0
+        val inSeaOpen: (BlockState, Int) -> Boolean = { state, _ -> sea?.invoke(state) == true }
+        val cursor = BlockPos.MutableBlockPos()
+        val over = BlockPos.MutableBlockPos()
+        for (pos in template.air) {
+            val turned = pos.rotate(rotation)
+            cursor.set(ox + turned.x, oy + turned.y, oz + turned.z)
+            if (!level.hasChunk(cursor.x shr 4, cursor.z shr 4)) continue
+            val state = level.getBlockState(cursor)
+            val isOpen = open(state, cursor.y)
+            val isSea = sea?.invoke(state) == true
+            // What anti-xray shows in place of a block nobody has seen says nothing either way: a
+            // ruin half in the face of a cliff there had ore in all of its open space inside it.
+            val hidden = !isOpen && state.block in DISGUISES
+            if (tops == null) {
+                if (hidden) continue
+                known++
+                if (isOpen) opened++
+                if (isSea) inSea++
+            } else {
+                val column = BlockPos.asLong(pos.x, 0, pos.z)
+                if (isOpen || (pos in tops && openOver(cursor, level, open, over))) columnsOpen.add(column)
+                if (sea != null && (isSea || (pos in tops && openOver(cursor, level, inSeaOpen, over)))) columnsSea.add(column)
+                if (!hidden) columnsSeen.add(column)
+            }
+            if (!isOpen && !hidden) family(state.block).let { if (it !in loose && it in template.byFamily) own++ }
+        }
+        if (tops != null) {
+            opened = columnsOpen.size
+            known = (columnsSeen + columnsOpen).size
+            inSea = columnsSea.size
+        }
+        return when {
+            known == 0 || opened < known * MIN_MATCH -> "its open space is not: $opened/$known"
+            sea != null && inSea * IN_SEA < known && outOfSea?.invoke(BlockPos.asLong(ox, oy, oz), level) != true ->
+                "it is not in the sea: $inSea/$known"
+            own * OWN_IN_OPEN > matched -> "$own of its own blocks stand in its open space"
+            else -> null
+        }
+    }
+
+    /**
+     * Whether the column over [top] is [open] once past what can lie over a buried design: the sand
+     * and gravel that settled ([loose]) and the ores anti-xray shows; rock first says it is not.
+     */
+    private fun openOver(top: BlockPos, level: BlockSource, open: (BlockState, Int) -> Boolean, over: BlockPos.MutableBlockPos): Boolean {
+        for (up in 1..OPEN_ABOVE) {
+            val state = level.getBlockState(over.set(top.x, top.y + up, top.z))
+            if (open(state, top.y + up)) return true
+            if (state.block !in DISGUISES && family(state.block) !in loose) return false
+        }
+        return false
+    }
+
+    /** Each design's highest open cell in each of its columns ([openTopOnly]). */
+    private val openTops = java.util.concurrent.ConcurrentHashMap<Template, Set<BlockPos>>()
+
+    private fun topsOf(air: List<BlockPos>): Set<BlockPos> =
+        air.groupBy { it.x to it.z }.values.mapTo(HashSet()) { column -> column.maxBy { it.y } }
 
     private fun load(): List<Template> {
         val loaded = names.mapNotNull { name ->
@@ -416,6 +601,7 @@ open class TemplateFit(
         template.entrances.map { (pos, facing) ->
             BlockPos(template.sizeX - 1 - pos.x, pos.y, pos.z) to if (facing.axis == Direction.Axis.X) facing.opposite else facing
         },
+        template.air.map { BlockPos(template.sizeX - 1 - it.x, it.y, it.z) },
     )
 
     private fun parse(name: String, tag: CompoundTag): Template {
@@ -437,6 +623,7 @@ open class TemplateFit(
         val blocksTag = tag.getListOrEmpty("blocks")
         val blocks = ArrayList<Pair<BlockPos, String>>()
         val entrances = ArrayList<Pair<BlockPos, Direction>>()
+        val air = ArrayList<BlockPos>()
         for (i in 0 until blocksTag.size) {
             val entry = blocksTag.getCompoundOrEmpty(i)
             val state = entry.getIntOr("state", -1)
@@ -450,10 +637,11 @@ open class TemplateFit(
                     .getStringOr("orientation", "").substringBefore('_')
                 Direction.entries.firstOrNull { it.serializedName == facing }?.let { entrances.add(at to it) }
             }
+            if (open != null && (block == Blocks.AIR || block == Blocks.CAVE_AIR)) air.add(at)
             if (block in IGNORED) continue
             blocks.add(at to family(block))
         }
         val woods = blockPalettes.flatten().filterTo(HashSet()) { it !in IGNORED }
-        return Template(name, size.getIntOr(0, 0), size.getIntOr(1, 0), size.getIntOr(2, 0), blocks, woods, entrances)
+        return Template(name, size.getIntOr(0, 0), size.getIntOr(1, 0), size.getIntOr(2, 0), blocks, woods, entrances, air)
     }
 }

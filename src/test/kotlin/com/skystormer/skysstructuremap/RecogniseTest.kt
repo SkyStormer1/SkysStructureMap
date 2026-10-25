@@ -1,7 +1,6 @@
 package com.skystormer.skysstructuremap
 
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -21,12 +20,14 @@ class RecogniseTest {
     }
 
     @Test
-    fun partOfAMonumentIsNotEnough() {
-        // A monument with its edge at z 147: seen only from 163 to 204 it could still
-        // be one chunk further south, which is what the old best-guess picked.
+    fun partOfAMonumentIsPlacedOnOneOfItsChunkLines() {
+        // A monument with its edge at z 147: seen only from 163 to 204 it could still be one chunk
+        // further south. Either is taken, and the layout moves it a chunk over where it fits better
+        // (MonumentLayout.place): half dismantled, one was never placed at all otherwise.
         val edges = Recognise.monumentEdges(163, 204)
         assertTrue(edges.size > 1 && realEdge(176) in edges)
-        assertNull(Recognise.monumentBox(Box(771, 40, 163, 828, 60, 204), full))
+        val box = Recognise.monumentBox(Box(771, 40, 163, 828, 60, 204), full)
+        assertTrue(box != null && box.minZ in edges, "$box")
     }
 
     @Test

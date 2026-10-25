@@ -12,8 +12,8 @@ again. It puts every structure you find on **Xaero's World Map and Minimap**, wi
 
 ## How it works
 
-As you explore, the mod recognises structures from the blocks your game has already loaded. It doesn't need the
-seed, a server plugin or any help from the server, and nothing in it works out or uses the world seed. When you
+As you explore, the mod recognises structures from the blocks your game has already loaded. It doesn't need a
+server plugin or any help from the server: everything comes from what your own game has loaded. When you
 come near a structure (32 blocks by default, set anywhere from inside it to the server's whole view distance), it's
 saved as discovered and shows up on your map.
 
@@ -50,7 +50,7 @@ copy of Minecraft:
 
 ## Features
 
-- **Spawn boxes**, like MiniHUD's but without the seed: the boxes that structures with mobs of their own spawn
+- **Spawn boxes**, like MiniHUD's but from what you've seen: the boxes that structures with mobs of their own spawn
   them in, drawn in the world around you and on the world map.
   - **Nether fortresses:** the whole fortress box, and the box of every piece you have seen (each room, crossroads,
     bridge and corridor: where wither skeletons and blazes spawn), both exact. Pieces players have dug into still
