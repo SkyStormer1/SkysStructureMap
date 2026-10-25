@@ -7,12 +7,6 @@ import java.util.concurrent.ConcurrentHashMap
 /** Two whole numbers as one long, for chunks, regions and grid cells as map keys: [a] high, [b] low. */
 fun cellKey(a: Int, b: Int): Long = (a.toLong() shl 32) or (b.toLong() and 0xFFFFFFFFL)
 
-/** The first number of a [cellKey]. */
-fun cellA(key: Long): Int = (key shr 32).toInt()
-
-/** The second number of a [cellKey]. */
-fun cellB(key: Long): Int = key.toInt()
-
 private val dimensionIds = ConcurrentHashMap<ResourceKey<Level>, String>()
 
 /**

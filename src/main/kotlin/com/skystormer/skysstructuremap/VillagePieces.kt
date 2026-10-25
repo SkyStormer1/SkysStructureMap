@@ -192,8 +192,8 @@ object VillagePieces {
 
     private const val TOWN_CENTRES = "/town_centers/"
 
-    /** How far a village reaches from the middle of its town centre (`Tracker`'s TOWN_REACH), and so across from any piece of it. */
-    private const val TOWN_REACH = 84
+    /** How far a village reaches from the middle of its town centre ([Tracker.TOWN_REACH]), and so across from any piece of it. */
+    private const val TOWN_REACH = Tracker.TOWN_REACH
     private const val ACROSS = 2 * TOWN_REACH
 
     /** How far above or below its town centre a village reaches: the game's 80 (`max_distance_from_center`) goes up and down too. */

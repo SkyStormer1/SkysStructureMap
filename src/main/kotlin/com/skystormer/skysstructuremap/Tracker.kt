@@ -835,7 +835,7 @@ object Tracker {
      * 80 blocks from there (`max_distance_from_center`), and every one of 497 in the test worlds kept
      * within 80.5; a little more for a house's eaves.
      */
-    private const val TOWN_REACH = 84
+    const val TOWN_REACH = 84
 
     /** How far an ancient city reaches from the middle of its centre piece: 116.5 at most in the test worlds. */
     private const val CITY_REACH = 120
