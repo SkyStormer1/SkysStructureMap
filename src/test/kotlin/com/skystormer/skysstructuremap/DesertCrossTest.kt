@@ -24,10 +24,10 @@ class DesertCrossTest {
             Bootstrap.bootStrap()
         }
 
-        /** The middle of the cross: 10 in from the corner of chunk -351, 145, as the one in a survival server's world. */
-        private const val X = -5606
+        /** The middle of the cross: 10 in from the corner of its chunk, as the game lays it. */
+        private const val X = 170
         private const val Y = 76
-        private const val Z = 2330
+        private const val Z = -70
 
         private val CROSS = listOf(
             0 to 0, 0 to -3, 0 to -2, -1 to -1, 1 to -1, -2 to 0, 2 to 0, -3 to 0, 3 to 0, -1 to 1, 1 to 1, 0 to 2, 0 to 3,

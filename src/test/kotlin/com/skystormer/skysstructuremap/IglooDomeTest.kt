@@ -28,10 +28,10 @@ class IglooDomeTest {
             Bootstrap.bootStrap()
         }
 
-        /** The corner of chunk -90, 204, where the game lays an igloo not turned. */
-        private const val X = -1440
+        /** The corner of a chunk, where the game lays an igloo not turned. */
+        private const val X = 160
         private const val Y = 96
-        private const val Z = 3264
+        private const val Z = -320
     }
 
     private class World(val blocks: Map<Long, BlockState>) : BlockSource {
@@ -75,7 +75,7 @@ class IglooDomeTest {
         val match = dome(blocks)
         assertNotNull(match, IglooFit.dome.lastReport)
         assertEquals(Box(X, Y, Z, X + 6, Y + 4, Z + 7), match!!.box)
-        assertEquals(-90 to 204, IglooFit.startChunk(match))
+        assertEquals(10 to -20, IglooFit.startChunk(match))
     }
 
     @Test

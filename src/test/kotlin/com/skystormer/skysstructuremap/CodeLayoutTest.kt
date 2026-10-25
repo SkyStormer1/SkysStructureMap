@@ -76,17 +76,17 @@ class CodeLayoutTest {
 
     @Test
     fun aWholeJungleTempleIsFoundAtItsChunksCorner() {
-        val blocks = laid("jungle_temple_layout.txt", 15, -159, -201, 60, cobble)
-        assertEquals(Box(-2544, 60, -3216, -2530, 73, -3205), CodeLayout.JUNGLE_TEMPLE.fit(seen(blocks), World(blocks)))
+        val blocks = laid("jungle_temple_layout.txt", 15, -9, -1, 60, cobble)
+        assertEquals(Box(-144, 60, -16, -130, 73, -5), CodeLayout.JUNGLE_TEMPLE.fit(seen(blocks), World(blocks)))
     }
 
     @Test
     fun oneDugOutBelowAndHiddenByAntiXrayIsFoundFromWhatIsLeft() {
         // Its lower half gone, and what was underground shown as ores, as a server with anti-xray does.
-        val blocks = HashMap(laid("jungle_temple_layout.txt", 15, 36, -397, 86, cobble) { y -> y >= 7 })
-        for (x in 576..590) for (z in -6352..-6341) for (y in 80..89) blocks[BlockPos.asLong(x, y, z)] = Blocks.DIAMOND_ORE.defaultBlockState()
+        val blocks = HashMap(laid("jungle_temple_layout.txt", 15, 6, 3, 86, cobble) { y -> y >= 7 })
+        for (x in 96..110) for (z in 48..59) for (y in 80..89) blocks[BlockPos.asLong(x, y, z)] = Blocks.DIAMOND_ORE.defaultBlockState()
         val top = blocks.filterValues { it.block != Blocks.DIAMOND_ORE }
-        assertEquals(Box(576, 86, -6352, 590, 99, -6341), CodeLayout.JUNGLE_TEMPLE.fit(seen(top), World(blocks)))
+        assertEquals(Box(96, 86, 48, 110, 99, 59), CodeLayout.JUNGLE_TEMPLE.fit(seen(top), World(blocks)))
     }
 
     @Test
@@ -109,9 +109,9 @@ class CodeLayoutTest {
     fun aDesertPyramidWithItsFloorDugUpIsFoundByItsShape() {
         // The floor (with its terracotta cross) dug out to get at the chests below.
         val sandstone = listOf(Blocks.SANDSTONE, Blocks.CUT_SANDSTONE, Blocks.SANDSTONE_STAIRS)
-        val blocks = laid("desert_temple_layout.txt", 21, -186, -141, 64, sandstone) { y -> y >= 1 }
+        val blocks = laid("desert_temple_layout.txt", 21, -6, 9, 64, sandstone) { y -> y >= 1 }
         // Its box reaches 14 down to the hidden chamber, as one measured from the cross does.
-        assertEquals(Box(-2976, 50, -2256, -2956, 78, -2236), CodeLayout.DESERT_TEMPLE.fit(seen(blocks), World(blocks)))
+        assertEquals(Box(-96, 50, 144, -76, 78, 164), CodeLayout.DESERT_TEMPLE.fit(seen(blocks), World(blocks)))
     }
 
     @Test
@@ -127,8 +127,8 @@ class CodeLayoutTest {
     fun aLootedWitchHutIsFoundByItsShape() {
         // Its cauldron, crafting table and flower pot all taken: no furniture left to go by.
         val wood = listOf(Blocks.SPRUCE_PLANKS, Blocks.SPRUCE_PLANKS, Blocks.SPRUCE_STAIRS)
-        val blocks = laid("witch_hut_layout.txt", 9, -220, -204, 63, wood)
-        assertEquals(Box(-3520, 63, -3264, -3512, 69, -3258), CodeLayout.WITCH_HUT.fit(seen(blocks), World(blocks)))
+        val blocks = laid("witch_hut_layout.txt", 9, -20, -4, 63, wood)
+        assertEquals(Box(-320, 63, -64, -312, 69, -58), CodeLayout.WITCH_HUT.fit(seen(blocks), World(blocks)))
     }
 
     @Test

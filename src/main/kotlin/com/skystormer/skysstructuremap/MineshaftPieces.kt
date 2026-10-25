@@ -282,8 +282,7 @@ object MineshaftPieces {
      * its 7 x 7 and a wall standing just outside it on the west and north. Checked against every
      * start room in a test world: none missed, none found where there was none. Open is air or the
      * water an aquifer floods one with, and a few other blocks may stand in it ([ROOM_CLUTTER]): the
-     * dripstone the game grows in caves after laying mineshafts, a player's torch. In a survival
-     * server's world a torch or a few dripstones lost rooms, and corridors leaving by two doorways in one
+     * dripstone the game grows in caves after laying mineshafts, a player's torch. In testing a torch or a few dripstones lost rooms, and corridors leaving by two doorways in one
      * wall left 24 of its 42 blocks standing. Its floor is the ground it was cut into, never one
      * laid of wood ([ROOM_WOOD]), as a player's room with a plank floor beside a mineshaft was.
      */

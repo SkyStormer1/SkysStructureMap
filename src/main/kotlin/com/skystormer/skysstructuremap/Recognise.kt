@@ -20,7 +20,7 @@ object Recognise {
      * An ocean monument is always the same building: 58 × 23 × 58 blocks from y 39 to 61, with
      * its west and north edges 29 blocks before the start of a chunk. So its box is known exactly
      * once only one chunk line fits what has been seen. Where more than one does (one half
-     * dismantled, 27 blocks of it left across in a survival server's world) and where prismarine spreads
+     * dismantled, 27 blocks of it left across in testing) and where prismarine spreads
      * wider than any monument (a player's build beside one), it is given the place that holds the
      * most of what was seen ([blocksIn] counts the blocks seen in a box). Whether a monument really
      * stands there, or a chunk over, is then [MonumentLayout]'s to say, and it waits for half of it

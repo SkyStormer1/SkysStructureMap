@@ -15,7 +15,7 @@ object TemplePieces {
      * The orange and blue terracotta the game lays into a desert pyramid's floor: a diamond three
      * across, in the middle of the temple, over the hidden chamber. Thirteen blocks, of which ten
      * must still be there, or be air where they were dug out, so a looted temple with part of its
-     * floor dug out still counts: one in a survival server's world had nine left and four dug. At least
+     * floor dug out still counts: one in testing had nine left and four dug. At least
      * [CROSS_LEFT] must still be terracotta, and a cell holding anything else counts against it.
      *
      * (`DesertPyramidPiece` in the game places them at 10,0,7 through 10,0,13 of its own 21 × 21

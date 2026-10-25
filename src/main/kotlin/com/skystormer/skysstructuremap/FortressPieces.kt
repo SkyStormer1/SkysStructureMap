@@ -207,7 +207,7 @@ object FortressPieces {
     fun label(level: BlockSource, bricks: Box): List<Piece> {
         if (cells(bricks) <= MAX_CELLS) return labelWithin(level, bricks)
         // Fortresses side by side are one group of bricks, too big to read at once: four in a row
-        // in a survival server's world, 550 by 620 blocks, were lost for it. Each window is labelled
+        // in testing, 550 by 620 blocks, were lost for it. Each window is labelled
         // alone, and each piece kept from the one window whose middle part its middle is in.
         val found = ArrayList<Piece>()
         for (x in windows(bricks.minX, bricks.maxX)) for (z in windows(bricks.minZ, bricks.maxZ)) {
@@ -449,7 +449,7 @@ object FortressPieces {
 
     /**
      * Whether [piece] is a fortress's first: the crossroads the game lays from 2, 2 of its start
-     * chunk (`NetherFortressStructure`), as all 540 the game laid on a survival server are.
+     * chunk (`NetherFortressStructure`), as all 540 the game laid in testing were.
      */
     fun isStart(piece: Piece): Boolean =
         piece.kind == CROSSROADS && Math.floorMod(piece.box.minX, 16) == START_IN_CHUNK && Math.floorMod(piece.box.minZ, 16) == START_IN_CHUNK
@@ -460,7 +460,7 @@ object FortressPieces {
      * Among [pieces], each fortress's start ([isStart]), as one list for each square of the game's
      * nether complexes ([Placement.square]): the game starts one fortress or bastion to a square,
      * and another crossroads of a fortress stands at 2, 2 of its chunk by chance, in line with the
-     * start one time in sixteen (72 fortresses of 551 in a survival server's world were split for it).
+     * start one time in sixteen (72 fortresses of 551 in testing were split for it).
      * Which of a square's is the start cannot be told, and it does not matter: they are one fortress.
      */
     private fun startsOf(pieces: List<Piece>): List<List<Piece>> = pieces.filter(::isStart)

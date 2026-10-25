@@ -122,7 +122,7 @@ object Specs {
         ),
         biomes = setOf("crimson_forest", "nether_wastes", "soul_sand_valley", "warped_forest"), merge = 24,
         // The game asks the biome only where it starts, and the rest runs on into basalt deltas: five
-        // bastions in a survival server's world had most of their blocks there and were never matched.
+        // bastions in testing had most of their blocks there and were never matched.
         biomeAsWhole = true,
         // Set once one of its ramparts, walls or bridge matches (see [BastionFit]). Counting blocks
         // and the share of them cracked was not enough: a player's blackstone build passed both.
@@ -255,7 +255,7 @@ object Specs {
 
     /**
      * The highest an ocean ruin's blocks are looked for: the game lays one on the floor where it
-     * starts however high that is, and three in a survival server's world stood on land at 62 to 71, the
+     * starts however high that is, and three in testing stood on land at 62 to 71, the
      * biggest 16 high. Out of the sea, only where a ruin starts counts ([OceanRuinFit.startsHere]):
      * looked for this high without that, small warm ruins were fitted on dry land, one in a desert village.
      */
