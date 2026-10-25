@@ -278,9 +278,10 @@ object MineshaftPieces {
     private const val CONNECTOR_RISE = 8
 
     /**
-     * A start room's floor at [y], from [x], [z]: mostly solid, open three blocks high over all of
-     * its 7 x 7 and a wall standing just outside it on the west and north. Checked against every
-     * start room in a test world: none missed, none found where there was none. Open is air or the
+     * A start room's floor at [y], from [x], [z]: mostly solid, open four blocks high over the 8 x 8
+     * every one is at least (the game cuts it 8 to 13 across and 5 to 10 high) and a wall standing
+     * just outside it on the west and north. Looked for over 7 x 7 and three high, caves passed for
+     * rooms, and fewer real ones were found. Open is air or the
      * water an aquifer floods one with, and a few other blocks may stand in it ([ROOM_CLUTTER]): the
      * dripstone the game grows in caves after laying mineshafts, a player's torch. In testing a torch or a few dripstones lost rooms, and corridors leaving by two doorways in one
      * wall left 24 of its 42 blocks standing. Its floor is the ground it was cut into, never one
@@ -302,8 +303,20 @@ object MineshaftPieces {
             if (!isOpen(level, cursor.set(x - 1, y + dy, z + along))) wall++
             if (!isOpen(level, cursor.set(x + along, y + dy, z - 1))) wall++
         }
-        return wall >= ROOM_HIGH * ROOM * 2 * ROOM_WALL
+        if (wall < ROOM_HIGH * ROOM * 2 * ROOM_WALL) return false
+        // A dungeon beside a mineshaft is a room of cobblestone with a mossy floor; a start room is
+        // cut into the ground and floored with whatever that was.
+        var cobble = 0
+        for (dx in 0 until ROOM) for (dz in 0 until ROOM) {
+            if (level.getBlockState(cursor.set(x + dx, y, z + dz)).block in DUNGEON_FLOOR) cobble++
+        }
+        return cobble * DUNGEON_SHARE <= ROOM * ROOM
     }
+
+    private val DUNGEON_FLOOR = setOf(Blocks.COBBLESTONE, Blocks.MOSSY_COBBLESTONE)
+
+    /** At most one in this many of a start room's floor may be a dungeon's. */
+    private const val DUNGEON_SHARE = 4
 
     /** Planks, logs, wood and carpet: what a floor is laid of, not ground. */
     private fun isWood(level: BlockSource, pos: BlockPos): Boolean =
@@ -313,11 +326,11 @@ object MineshaftPieces {
 
     private fun isOpen(level: BlockSource, pos: BlockPos): Boolean = level.getBlockState(pos).let { it.isAir || it.block == Blocks.WATER }
 
-    private const val ROOM = 7
-    private const val ROOM_HIGH = 3
-    private const val ROOM_FLOOR = 30
+    private const val ROOM = 8
+    private const val ROOM_HIGH = 4
+    private const val ROOM_FLOOR = 39
     private const val ROOM_WALL = 0.55
-    private const val ROOM_CLUTTER = 15
+    private const val ROOM_CLUTTER = 40
 
     /** The most of a start room's floor that may be wood. */
     private const val ROOM_WOOD = 0.25

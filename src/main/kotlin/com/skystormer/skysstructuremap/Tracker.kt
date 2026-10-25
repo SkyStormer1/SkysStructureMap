@@ -449,12 +449,11 @@ object Tracker {
      * of the rest, the one sharing most pieces with it, then the nearest.
      */
     private fun fortressFor(fortress: Detection, near: List<Structure>): Structure? {
-        val theirs = othersPieces(fortress)
         val taken = fortress.partOf?.parts.orEmpty().filter { it !== fortress }.mapNotNull { it.storedId }.toSet()
         val box = fortress.box ?: return null
         fun distance(saved: Structure) = Math.abs(saved.box.centreX - box.centreX).toLong() + Math.abs(saved.box.centreZ - box.centreZ)
         return near.filter { it.id !in taken }
-            .map { saved -> saved to saved.pieces.filterNot { old -> theirs.any { it.box.overlaps(old.box) } } }
+            .map { saved -> saved to ownPieces(fortress, saved) }
             .filterNot { (_, kept) -> FortressPieces.tooManyCrossroads(fortress.pieces, kept) }
             .maxWithOrNull(compareBy<Pair<Structure, List<Piece>>> { (_, kept) -> kept.count { old -> fortress.pieces.any { it.box == old.box } } }
                 .thenBy { (saved, _) -> -distance(saved) })
@@ -464,9 +463,12 @@ object Tracker {
     /** Grows a saved structure's box and pieces as more of it is seen. */
     private fun keepUpToDate(detection: Detection, stored: Structure, box: Box) {
         // More seen of a structure whose shape comes from what is seen makes its box bigger; an
-        // exact box (a monument) can only get more certain, and a wreck's matched box stays.
+        // exact box (a monument) can only get more certain. One that is a single design fitted (a
+        // wreck, a ruined portal, an outpost's tower, an igloo) stays as first saved: designs alike
+        // fit one about as well turned another way, or a giant portal's netherrack base over a small
+        // one's splash, and 54 saved portals changed design on one scan of the same chunks.
         val better = when {
-            detection.type == StructureType.SHIPWRECK -> stored.box
+            fitterFor(detection.type) != null && detection.type !in PROVED_THEN_SEEN -> stored.box
             Specs.of(detection.type).reach == null -> box
             // A fortress's bottom is worked out, not seen: the new one replaces any older guess.
             detection.type == StructureType.FORTRESS ->
@@ -487,8 +489,8 @@ object Tracker {
         // Pieces stay once saved, so they are still there after the structure is torn down or out of
         // sight; but one a piece found now overlaps gives way to it (saved before pieces could be
         // told apart, or a block off).
-        val kept = stored.pieces.filterNot { old -> detection.pieces.any { it.box != old.box && it.box.overlaps(old.box) } }
-            .filterNot { old -> othersPieces(detection).any { it.box.overlaps(old.box) } }
+        val own = if (detection.type == StructureType.FORTRESS) ownPieces(detection, stored) else stored.pieces
+        val kept = own.filterNot { old -> detection.pieces.any { it.box != old.box && it.box.overlaps(old.box) } }
         if (kept.size != stored.pieces.size) {
             Log.info("{}: {} saved pieces replaced by ones found now", stored.name, stored.pieces.size - kept.size)
         }
@@ -500,6 +502,20 @@ object Tracker {
             StructureStore.put(stored.copy(box = better, pieces = pieces, centre = centre, start = start))
     }
 
+    /**
+     * Of [saved]'s pieces, those that are [fortress]'s: all but the pieces of the other fortresses in
+     * its group; and when what is left holds more crossroads than one fortress has, it was saved with
+     * another fortress joined to it, seen as one group then and as two now, so only the pieces it
+     * shares with [fortress]. Two fortresses saved as one, 197 pieces with 9 crossroads, were found
+     * as two groups by a later scan, and each refused it for holding the other's crossroads.
+     */
+    private fun ownPieces(fortress: Detection, saved: Structure): List<Piece> {
+        val theirs = othersPieces(fortress)
+        val kept = saved.pieces.filterNot { old -> theirs.any { it.box.overlaps(old.box) } }
+        if (FortressPieces.crossroads(kept) <= FortressPieces.MOST_CROSSROADS) return kept
+        return kept.filter { old -> fortress.pieces.any { it.box.overlaps(old.box) } }
+    }
+
     /** The pieces of the other fortresses in [part]'s group. */
     private fun othersPieces(part: Detection): List<Piece> = part.partOf?.parts.orEmpty().filter { it !== part }.flatMap { it.pieces }
 
@@ -508,9 +524,8 @@ object Tracker {
      * group's other fortresses too (before they were told apart), only around the pieces it keeps.
      */
     private fun fortressBase(part: Detection, stored: Structure): Box {
-        val theirs = othersPieces(part)
-        if (stored.pieces.none { old -> theirs.any { it.box.overlaps(old.box) } }) return stored.box
-        val own = stored.pieces.filterNot { old -> theirs.any { it.box.overlaps(old.box) } }
+        val own = ownPieces(part, stored)
+        if (own.size == stored.pieces.size) return stored.box
         Log.info("{}: saved with {} piece(s) of another fortress, now told apart", stored.name, stored.pieces.size - own.size)
         return own.map { it.box }.fold(part.box ?: stored.box, Box::union)
     }
