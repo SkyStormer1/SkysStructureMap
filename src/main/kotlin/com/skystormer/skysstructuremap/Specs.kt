@@ -122,7 +122,7 @@ object Specs {
         ),
         biomes = setOf("crimson_forest", "nether_wastes", "soul_sand_valley", "warped_forest"), merge = 24,
         // The game asks the biome only where it starts, and the rest runs on into basalt deltas: five
-        // bastions in Bobby's cache of SiteB had most of their blocks there and were never matched.
+        // bastions in a survival server's world had most of their blocks there and were never matched.
         biomeAsWhole = true,
         // Set once one of its ramparts, walls or bridge matches (see [BastionFit]). Counting blocks
         // and the share of them cracked was not enough: a player's blackstone build passed both.
@@ -255,7 +255,7 @@ object Specs {
 
     /**
      * The highest an ocean ruin's blocks are looked for: the game lays one on the floor where it
-     * starts however high that is, and three in Bobby's cache of SiteB stood on land at 62 to 71, the
+     * starts however high that is, and three in a survival server's world stood on land at 62 to 71, the
      * biggest 16 high. Out of the sea, only where a ruin starts counts ([OceanRuinFit.startsHere]):
      * looked for this high without that, small warm ruins were fitted on dry land, one in a desert village.
      */
@@ -266,8 +266,8 @@ object Specs {
      * the sea floor. Set once one of its designs matches ([OceanRuinFit]); its box is then what is
      * seen round it, which takes in the small ruins round a big one.
      *
-     * The game asks the biome only where a ruin starts, on the floor of an ocean: of the ruins Bobby's
-     * cache of SiteB missed, most stood on a coast, their blocks in the beach, stony shore, river or
+     * The game asks the biome only where a ruin starts, on the floor of an ocean: of the ruins a
+     * survival server's world missed, most stood on a coast, their blocks in the beach, stony shore, river or
      * jungle beside the ocean. So its blocks are kept whatever the biome, and a group is matched once
      * one of them is in an ocean (or by one, [Spec.biomeNearby]), or an ocean is within 16 blocks of
      * it, where the chunk it starts in has its middle: one inland, a desert village's or a

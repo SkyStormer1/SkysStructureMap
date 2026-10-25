@@ -190,11 +190,11 @@ object Tracker {
         }
         // Failing that, its blocks outside its biomes too, for a design that then lines up nearly
         // block for block: the game asks the biome only where a structure starts, and a beached
-        // wreck in Bobby's cache of SiteB stood in what its chunks call desert, 360 of 385 in place.
+        // wreck in a survival server's world stood in what its chunks call desert, 360 of 385 in place.
         fun fitOrWidened(group: Detection) = fitOf(group)
             ?: widened(group, level)?.let { wide -> fitOf(wide)?.takeIf { it.share >= OVERRIDE_SHARE } }
         // A group wider than one of its kind ever is that matched nothing: its biggest parts, each
-        // of blocks that touch, by themselves. A wreck in Bobby's cache of SiteB had chained into
+        // of blocks that touch, by themselves. A wreck in a survival server's world had chained into
         // the wood of a mineshaft under the sea floor beside it, three times its own.
         val match = fitOrWidened(detection) ?: if (tooWide(detection)) {
             connectedParts(detection, fitter.minBlocks).firstNotNullOfOrNull(::fitOrWidened)
@@ -346,7 +346,7 @@ object Tracker {
      * For a village group that matched nothing and reaches further than two villages ever do: its
      * blocks beyond one stretch as wide as one, from its westmost block, split off to be matched by
      * themselves (and split again), and it to be matched again. Paths, doors, beds and job blocks
-     * round spawn in Bobby's cache of SiteB had chained into one village group 2,200 blocks across,
+     * round spawn in a survival server's world had chained into one village group 2,200 blocks across,
      * and its few doors tried never hit the four villages standing in it. Villages only: a village's
      * box is then drawn from its own pieces ([VillagePieces]), not the stretch; and a stretch of a
      * stronghold's stone bricks under the sea there matched a small ocean ruin's design.

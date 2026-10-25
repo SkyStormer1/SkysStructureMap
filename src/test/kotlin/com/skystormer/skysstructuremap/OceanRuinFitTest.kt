@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test
 /**
  * Ocean ruins as the game leaves them ([OceanRuinFit]): laid from its own designs, with their stone
  * bricks mixed plain, cracked and mossy whichever design it is, and their sea-floor sand and gravel
- * gone to water, as the ruins in Bobby's cache of SiteB are.
+ * gone to water, as the ruins in a survival server's world are.
  */
 class OceanRuinFitTest {
 

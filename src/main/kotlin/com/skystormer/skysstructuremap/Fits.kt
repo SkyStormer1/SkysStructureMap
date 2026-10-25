@@ -468,7 +468,7 @@ object RuinedPortalFit : TemplateFit(
      * nether build is made of, and those matched on it alone, so some of the design's obsidian must
      * be there too, or else the magma the game turns its netherrack into, or else the netherrack it
      * splashes round it ([splashed]): players mine the obsidian out of the ones they find, and two
-     * in Bobby's cache of SiteB had none left, nor any magma. The game never lights one.
+     * in a survival server's world had none left, nor any magma. The game never lights one.
      *
      * Obsidian and magma count only where the design has them (magma in its netherrack's place):
      * deep underground lava meets water, and the magma in a cave there let a player's netherrack
@@ -511,7 +511,7 @@ object RuinedPortalFit : TemplateFit(
     /**
      * How much of [match]'s stonework (all but its netherrack, obsidian, gold and lava: stone bricks,
      * stairs, slabs, iron bars) is where the design has it, of how much could be seen. Players take
-     * the obsidian and gold; of the 502 ruined portals in Bobby's cache of SiteB, those that kept
+     * the obsidian and gold; of the 502 ruined portals in a survival server's world, those that kept
      * under a quarter of their obsidian and under two magma kept a tenth or more of this, or else had
      * most of the ground right round them splashed ([splashedRightRound]).
      */
@@ -540,7 +540,7 @@ object RuinedPortalFit : TemplateFit(
      * How much of the ground just round [box] (the columns within [RIGHT_ROUND_REACH] of it) is
      * netherrack or magma at its base, of the columns with ground there: the game splashes it all
      * (`RuinedPortalPiece.spreadNetherrack`), though some is gone again in most.
-     * A player's cube of netherrack round a dungeon in Bobby's cache of SiteB, 20 blocks down, fitted
+     * A player's cube of netherrack round a dungeon in a survival server's world, 20 blocks down, fitted
      * a small design on its netherrack alone, and had the stone just round it as it was.
      */
     fun splashedRightRound(box: Box, level: BlockSource): Double {
@@ -564,7 +564,7 @@ object RuinedPortalFit : TemplateFit(
 
     /**
      * How far round its box, and how much of the ground there must be splashed. Of the ruined portals
-     * in Bobby's cache of SiteB that had nothing left but netherrack, the least splashed just round
+     * in a survival server's world that had nothing left but netherrack, the least splashed just round
      * them were 0.66 and 0.70; the player's cube round a dungeon, 0.40.
      */
     private const val RIGHT_ROUND_REACH = 2
@@ -575,7 +575,7 @@ object RuinedPortalFit : TemplateFit(
     /**
      * Whether netherrack lies round [box] as the game splashes it (`RuinedPortalPiece.spreadNetherrack`):
      * on the ground within 3 of its base, all round its middle and thinning out, and never 17 or
-     * more blocks from it, counted along x and z. Round every ruined portal in Bobby's cache of SiteB
+     * more blocks from it, counted along x and z. Round every ruined portal in a survival server's world
      * a third or more of the ground near it was netherrack and none of it that far out, where a
      * player's netherrack build or floor goes on.
      */
@@ -675,7 +675,7 @@ object OceanRuinFit : TemplateFit(
     agreement = 0.3,
     samples = 120,
     // The game mixes plain, cracked and mossy stone bricks through a cold ruin whichever design it
-    // is (a cracked one in Bobby's cache of SiteB was 27 mossy, 17 cracked and 4 plain where its
+    // is (a cracked one in a survival server's world was 27 mossy, 17 cracked and 4 plain where its
     // design has cracked), so they are one block here; each such ruin matched under half otherwise.
     aliases = mapOf(
         "suspicious_gravel" to "gravel", "suspicious_sand" to "sand",
@@ -683,7 +683,7 @@ object OceanRuinFit : TemplateFit(
         "mossy_stone_brick_stairs" to "stone_brick_stairs", "mossy_stone_brick_slab" to "stone_brick_slab",
     ),
     // The sandstone under a warm sea's sand is the floor too: in the open space of two big warm ruins
-    // in Bobby's cache of SiteB it counted as their own blocks standing there, and both were refused.
+    // in a survival server's world it counted as their own blocks standing there, and both were refused.
     loose = setOf("gravel", "sand", "sandstone"),
     minVotes = 15,
     // Only its stonework votes: the sea floor's gravel and sand are everywhere.
@@ -693,7 +693,7 @@ object OceanRuinFit : TemplateFit(
     ),
     closest = true,
     // The smallest design (warm_7) has only 9 blocks that vote, 6 cut sandstone and 3 polished
-    // granite; 27 such ruins in Bobby's cache of SiteB kept 5 to 8 of them, and were never tried.
+    // granite; 27 such ruins in a survival server's world kept 5 to 8 of them, and were never tried.
     minBlocks = 5,
     // It stands on the sea floor, with the sea over it, and the sky where it reaches the surface.
     open = { state, y -> state.fluidState.type.isSame(Fluids.WATER) || y >= SEA_LEVEL && state.isAir }, openTopOnly = true,
@@ -703,7 +703,7 @@ object OceanRuinFit : TemplateFit(
     /**
      * Whether a ruin laid with its corner at [origin] is where the game starts one: on its chunk's
      * corner, the middle of that chunk an ocean. The game lays a ruin there on the floor however high
-     * that is, so one can stand on land, out of the sea; three in Bobby's cache of SiteB stood at 62
+     * that is, so one can stand on land, out of the sea; three in a survival server's world stood at 62
      * to 71, each so. One that only happens to fit on land is almost never on a chunk's corner as
      * well, nor in an ocean.
      */

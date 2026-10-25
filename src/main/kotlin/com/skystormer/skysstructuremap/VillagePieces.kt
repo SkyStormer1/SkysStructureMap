@@ -14,7 +14,7 @@ import net.minecraft.world.level.block.DoorBlock
  * game's designs one by one, each found by a door, job block or composter, and then those near
  * them, until no more are found. Its box is those pieces, and the streets joined to them.
  *
- * Near, not along the streets: round spawn in Bobby's cache of SiteB players had dug up most of the
+ * Near, not along the streets: round spawn in a survival server's world players had dug up most of the
  * streets between the houses still standing. Players' paths, doors, beds and job blocks there took
  * villages' boxes, worked out from everything seen near a house, up to twice as wide as the village;
  * their builds fit none of the game's designs. Of the four villages there with most of their houses
@@ -45,7 +45,7 @@ object VillagePieces {
         var fresh = true
         while (fresh && rounds++ < MAX_ROUNDS && budget[0] > 0) {
             fresh = false
-            // As high and low as the village can reach: one in Bobby's cache of SiteB ran down a
+            // As high and low as the village can reach: one in a survival server's world ran down a
             // hillside from 133 to 63, its centre near the top.
             val near = built.grow(GAP).let { Box(it.minX, within.minY, it.minZ, it.maxX, within.maxY, it.maxZ) }.clampedTo(within)
             // What could tell a piece, in what has not been looked through yet, nearest the pieces first.
@@ -90,7 +90,7 @@ object VillagePieces {
      * corners on a chunk's corner are checked, so a field of path or fences costs little.
      *
      * A town centre stands on the ground, in the open, so anti-xray hides none of it: the five round
-     * spawn in Bobby's cache of SiteB were 86 to 100% seen. Half of a quarter seen matched a plains
+     * spawn in a survival server's world were 86 to 100% seen. Half of a quarter seen matched a plains
      * meeting point among the ores anti-xray showed 30 blocks underground there.
      */
     private fun findCentre(level: BlockSource, first: TemplateFit.Match, centreRefusal: (TemplateFit.Match) -> String?): TemplateFit.Match? {
@@ -134,7 +134,7 @@ object VillagePieces {
         val window = centre?.box?.let { reachOf(it, TOWN_REACH) } ?: built.grow(STREET_END, down = REACH_Y, up = REACH_Y)
         val cursor = BlockPos.MutableBlockPos()
         // Each column of the window with street in it, at the height of its top street: the planks
-        // by water in a mineshaft under a village in Bobby's cache of SiteB took its box down to -9.
+        // by water in a mineshaft under a village in a survival server's world took its box down to -9.
         val street = it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap()
         val low = window.minY
         val high = window.maxY

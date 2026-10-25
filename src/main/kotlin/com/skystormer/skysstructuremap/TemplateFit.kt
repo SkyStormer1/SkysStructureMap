@@ -85,7 +85,7 @@ open class TemplateFit(
     /**
      * Only the top of each column of its open space need be [open], or the first block over it
      * that is: an ocean ruin's open space is the sea down to the floor and the ground the game left
-     * below that, and ones buried in the floor in Bobby's cache of SiteB had sand or gravel over
+     * below that, and ones buried in the floor in a survival server's world had sand or gravel over
      * them, or the ores anti-xray shows for what is buried, and the sea a few blocks up; or else
      * some of the column below it, where the design stands under a ledge.
      */
@@ -161,7 +161,7 @@ open class TemplateFit(
         /**
          * What Paper's anti-xray shows in place of blocks nobody has uncovered (its default hidden
          * blocks, which it also scatters over buried stone): a template spot showing one of these, and
-         * not the block the design has there, says nothing either way. In Bobby's cache of SiteB the
+         * not the block the design has there, says nothing either way. In a survival server's world the
          * buried half of every ocean ruin is copper, iron, gold, lapis, redstone and diamond ore.
          */
         private val DISGUISES = setOf(
@@ -177,7 +177,7 @@ open class TemplateFit(
 
         /**
          * Its own blocks in its open space may be no more than one for this many that matched: small
-         * ruins in a cluster in Bobby's cache of SiteB had up to one for every two from the ruin
+         * ruins in a cluster in a survival server's world had up to one for every two from the ruin
          * beside them, and a player's wall twice as many as matched.
          */
         private const val OWN_IN_OPEN = 2
@@ -512,7 +512,7 @@ open class TemplateFit(
         val tops = if (openTopOnly) openTops.getOrPut(template) { topsOf(template.air) } else null
         // Of [openTopOnly] columns, those with some of it seen, and those open: at the top, over it,
         // or below it, where the sea fills a design that stands under a ledge. Ruins on the floor of
-        // an underwater cliff in Bobby's cache of SiteB had stone over most of their tops, and the
+        // an underwater cliff in a survival server's world had stone over most of their tops, and the
         // sea inside them.
         val columnsSeen = HashSet<Long>()
         val columnsOpen = HashSet<Long>()

@@ -24,7 +24,7 @@ class DesertCrossTest {
             Bootstrap.bootStrap()
         }
 
-        /** The middle of the cross: 10 in from the corner of chunk -351, 145, as the one in Bobby's cache of SiteB. */
+        /** The middle of the cross: 10 in from the corner of chunk -351, 145, as the one in a survival server's world. */
         private const val X = -5606
         private const val Y = 76
         private const val Z = 2330
