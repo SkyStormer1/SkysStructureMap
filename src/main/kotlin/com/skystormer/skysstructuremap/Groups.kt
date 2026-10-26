@@ -41,7 +41,9 @@ class Groups(private var nextId: Int = 1) {
         for (group in found.groupBy { Detection.cellKey(it.x, it.y, it.z) }.values) {
             var cell = Box.of(group[0].x, group[0].y, group[0].z)
             for (f in group) cell = cell.including(f.x, f.y, f.z)
-            val near = ofType.filter { it.bounds?.grow(reach)?.overlaps(cell) == true }
+            // Mineshafts by their own fences, not their outline: a group's box grows over the ground
+            // between the mineshafts it holds, and took in all round it, one 45,699 fences and 47 rooms.
+            val near = ofType.filter { it.bounds?.grow(reach)?.overlaps(cell) == true && (type != StructureType.MINESHAFT || it.nearCells(cell, reach)) }
             // The nearest takes the blocks; others near them join it, unless split from it.
             val target = near.minByOrNull { it.bounds!!.gap(cell) } ?: Detection(nextId++, type, dimension).also {
                 detections = detections + it
@@ -60,18 +62,21 @@ class Groups(private var nextId: Int = 1) {
     }
 
     /**
-     * Moves [detection]'s blocks outside [keep] into a group of their own, when there are at least
+     * Moves [detection]'s blocks outside all of [keep] into a group of their own, when there are at least
      * [least] of them, and keeps the two apart from then on: blocks of two structures that chain
      * into one group (two ancient cities side by side), once one is known, leave the other to be
      * matched by itself. Answers the new group.
      */
-    fun splitOff(detection: Detection, keep: Box, least: Int): Detection? {
+    fun splitOff(detection: Detection, keep: List<Box>, least: Int): Detection? {
         val outside = detection.countOutside(keep)
         // Every block outside: the new group would be this one again, split again for ever.
         if (outside < least || outside == detection.count) return null
         val other = Detection(nextId++, detection.type, detection.dimension)
         detection.moveOutside(keep, other)
         detection.apart.add(other)
+        // Apart from every group this one was split from too: a long chain is split again and again,
+        // and the last of it was otherwise free to be taken for a structure the first was told apart into.
+        other.apart.addAll(detection.apart)
         other.apart.add(detection)
         detections = detections + other
         byType.getOrPut(detection.type) { ArrayList() }.add(other)

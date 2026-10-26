@@ -152,6 +152,17 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         return true
     }
 
+    /** Whether one of its cells ([cells]) comes within [reach] of [box]. */
+    fun nearCells(box: Box, reach: Int): Boolean {
+        val grown = box.grow(reach)
+        for (cx in Math.floorDiv(grown.minX, CELL)..Math.floorDiv(grown.maxX, CELL))
+            for (cy in Math.floorDiv(grown.minY, CELL)..Math.floorDiv(grown.maxY, CELL))
+                for (cz in Math.floorDiv(grown.minZ, CELL)..Math.floorDiv(grown.maxZ, CELL)) {
+                    if (cells.get(BlockPos.asLong(cx, cy, cz))?.overlaps(grown) == true) return true
+                }
+        return false
+    }
+
     /** A part's own share of its group's cells ([parts]): its outline and [bounds]. */
     fun takeCells(own: Collection<Box>) {
         cells.clear()
@@ -159,19 +170,41 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         bounds = own.reduceOrNull(Box::union)
     }
 
+    /** Does [action] at each of its blocks, with its x, y and z. */
+    inline fun forEachPosition(action: (x: Int, y: Int, z: Int) -> Unit) {
+        val iterator = positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            action(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key))
+        }
+    }
+
     /** How many of its blocks are outside [box]. */
     fun countOutside(box: Box): Int = count - countIn(box)
 
+    /** How many of its blocks are outside every one of [keep]. */
+    fun countOutside(keep: List<Box>): Int {
+        if (keep.size == 1) return countOutside(keep[0])
+        var outside = 0
+        val iterator = positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            if (keep.none { it.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key)) }) outside++
+        }
+        return outside
+    }
+
     /**
-     * Moves every block outside [keep] into [into], and works out its own outline again from the
-     * blocks left. How many of them stood in their biome is shared out in proportion.
+     * Moves every block outside all of [keep] into [into], and works out its own outline again from
+     * the blocks left. How many of them stood in their biome is shared out in proportion.
      */
-    fun moveOutside(keep: Box, into: Detection) {
+    fun moveOutside(keep: List<Box>, into: Detection) {
+        fun kept(key: Long) = keep.any { it.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key)) }
         val out = LongArrayList()
         val iterator = positions.iterator()
         while (iterator.hasNext()) {
             val key = iterator.nextLong()
-            if (!keep.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key))) out.add(key)
+            if (!kept(key)) out.add(key)
         }
         if (out.isEmpty()) return
         val moved = (inBiome.toLong() * out.size / maxOf(1, count)).toInt()
@@ -189,7 +222,7 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         val stays = LongArrayList()
         for (i in 0 until furnished.size) {
             val key = furnished.getLong(i)
-            if (keep.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key))) stays.add(key) else into.furnished.add(key)
+            if (kept(key)) stays.add(key) else into.furnished.add(key)
         }
         furnished.clear()
         furnished.addAll(stays)

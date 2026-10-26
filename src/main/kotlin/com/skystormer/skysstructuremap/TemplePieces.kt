@@ -42,13 +42,8 @@ object TemplePieces {
      */
     fun desertCross(detection: Detection, level: BlockSource): BlockPos? {
         val cursor = BlockPos.MutableBlockPos()
-        val iterator = detection.positions.iterator()
-        while (iterator.hasNext()) {
-            val key = iterator.nextLong()
-            val x = BlockPos.getX(key)
-            val y = BlockPos.getY(key)
-            val z = BlockPos.getZ(key)
-            if (!isTerracotta(level, cursor.set(x, y, z))) continue
+        detection.forEachPosition { x, y, z ->
+            if (!isTerracotta(level, cursor.set(x, y, z))) return@forEachPosition
             // Every block of the cross is one of these, so any of them can be its middle: each is
             // tried as the middle in turn, and the rest of the diamond looked for around it.
             for ((ox, oz) in CROSS) {
@@ -121,18 +116,13 @@ object TemplePieces {
      */
     fun jungleTrap(detection: Detection, level: BlockSource): Boolean {
         val cursor = BlockPos.MutableBlockPos()
-        val iterator = detection.positions.iterator()
-        while (iterator.hasNext()) {
-            val key = iterator.nextLong()
-            val x = BlockPos.getX(key)
-            val y = BlockPos.getY(key)
-            val z = BlockPos.getZ(key)
-            if (!isBlock(level, cursor.set(x, y, z), Blocks.CHISELED_STONE_BRICKS)) continue
+        detection.forEachPosition { x, y, z ->
+            if (!isBlock(level, cursor.set(x, y, z), Blocks.CHISELED_STONE_BRICKS)) return@forEachPosition
             val inARow = (isBlock(level, cursor.set(x + 1, y, z), Blocks.CHISELED_STONE_BRICKS) &&
                 isBlock(level, cursor.set(x + 2, y, z), Blocks.CHISELED_STONE_BRICKS)) ||
                 (isBlock(level, cursor.set(x, y, z + 1), Blocks.CHISELED_STONE_BRICKS) &&
                     isBlock(level, cursor.set(x, y, z + 2), Blocks.CHISELED_STONE_BRICKS))
-            if (!inARow) continue
+            if (!inARow) return@forEachPosition
             if (pistonNear(level, cursor, x, y, z)) return true
         }
         return false

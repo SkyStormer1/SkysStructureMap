@@ -231,7 +231,17 @@ object BobbyScan {
      */
     fun saveFound(recognised: List<Detection>, taken: (Detection, Tracker.Taken) -> Unit = { _, _ -> }) {
         // A fortress group holding more than one fortress is saved as one for each.
-        for (detection in recognised.flatMap { it.parts.ifEmpty { listOf(it) } }) taken(detection, Tracker.takeIn(detection))
+        val all = recognised.flatMap { it.parts.ifEmpty { listOf(it) } }
+        Tracker.joining = false
+        try {
+            for (detection in all) taken(detection, Tracker.takeIn(detection))
+        } finally {
+            Tracker.joining = true
+        }
+        // Mineshafts saved in pieces joined once, now all are in ([StructureStore.joinedMineshafts]).
+        val into = StructureStore.joinMineshafts()
+        Tracker.followJoins(into)
+        for (detection in all) detection.storedId?.let { id -> into[id]?.let { detection.storedId = it } }
         Tracker.relinkUndiscovered()
         StructureStore.saveIfChanged()
     }

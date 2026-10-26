@@ -35,6 +35,10 @@ copy of Minecraft:
   only their own fences, not those of a mineshaft crossing them; **dungeons** the mossy
   cobblestone floor around their spawner; **buried treasure** its chest in the one column of its chunk the game
   buries it in, sat on the stone or sandstone it dug down to and walled in.
+- **Mineshafts are a work in progress.** They cross into each other and their fences chain together, so one is
+  told apart from its neighbours by its start room, found or worked out from where its corridors end. Where that
+  room cannot be seen (a cave opened over it, it is filled in or dug out, or anti-xray hides it), its corridors may
+  be shown as part of the mineshaft beside it, one box over both, or now and then as two pieces of one.
 - Where what is seen tells which chunk a structure starts in (a village's town centre, a wreck, a temple, an
   outpost, a monument, an igloo, a camp's tent), it must be a chunk the game can start that kind in, and only one may start in each of the
   squares the game spreads them over, so a copy built near a real one is not taken for a second.

@@ -428,20 +428,6 @@ open class TemplateFit(
 
     private var lastCheck = ""
 
-    /** Why the design [name], turned [rotation] at [origin], fits or does not, as the log says it: for the tools that check fits. */
-    fun explain(name: String, rotation: Rotation, origin: Long, level: BlockSource): String {
-        val template = templates.firstOrNull { it.name == name } ?: return "no design $name"
-        val match = check(template, rotation, origin, level)
-        return (if (match != null) "fits " else "does not fit: ") + lastCheck
-    }
-
-    /** How much of the design [name] the world still has where the game laid it, turned [rotation] at [origin]: matched and checked, or null for none of these designs. */
-    fun remaining(name: String, rotation: Rotation, origin: Long, level: BlockSource): Pair<Int, Int>? {
-        val template = templates.firstOrNull { it.name == name } ?: return null
-        check(template, rotation, origin, level, minMatch = 0.0)?.let { return it.matched to it.known }
-        return Regex("""(\d+)/(\d+)""").find(lastCheck)?.groupValues?.let { it[1].toInt() to it[2].toInt() }
-    }
-
     private fun check(template: Template, rotation: Rotation, origin: Long, level: BlockSource, minMatch: Double = MIN_MATCH): Match? {
         val ox = BlockPos.getX(origin)
         val oy = BlockPos.getY(origin)

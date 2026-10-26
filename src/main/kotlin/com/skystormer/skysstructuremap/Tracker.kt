@@ -276,12 +276,16 @@ object Tracker {
         if (detection.type in BOX_IS_PIECE && detection.box != null) detection.box = detection.piece
         if (detection.type == StructureType.JUNGLE_TEMPLE && detection.box != null) detection.piece?.let { detection.box = it }
         if (detection.type == StructureType.MINESHAFT && detection.box != null) {
-            // Its start rooms and corridors, every other second or at once in a scan: with two or
-            // more rooms, the mineshafts they are ([MineshaftPieces.split]).
+            // Its start rooms and corridors, every other second or at once in a scan, and the rooms
+            // its corridors leave where none was seen ([MineshaftPieces.guessRooms]): with two or
+            // more rooms, the mineshafts they are ([MineshaftPieces.split]); with one, its centre.
             if (tryNow(detection, now)) {
-                val rooms = MineshaftPieces.startRooms(detection, level)
-                detection.pieces = if (rooms.size < 2) emptyList()
-                else rooms.map { Piece(MineshaftPieces.ROOM_KIND, it) } + MineshaftPieces.corridors(detection, level)
+                val seen = MineshaftPieces.startRooms(detection, level)
+                val corridors = MineshaftPieces.corridors(detection, level)
+                val rooms = seen + MineshaftPieces.guessRooms(corridors, seen, { savedRoomsNear(detection) }, level)
+                // Kept with one room or none too: its box is built of them ([MineshaftPieces.boxOf]).
+                detection.pieces = rooms.map { Piece(MineshaftPieces.ROOM_KIND, it) } + corridors
+                if (rooms.size == 1 && (detection.centre == null || MineshaftPieces.isStretch(detection.centre!!))) detection.centre = rooms[0]
             }
             detection.box = mineshaftBox(detection, level)
             detection.parts = if (detection.box == null || detection.pieces.isEmpty()) emptyList()
@@ -304,11 +308,21 @@ object Tracker {
         }
     }
 
+    /** The start rooms of the mineshafts saved near [detection]'s fences: no room is guessed beside one. */
+    private fun savedRoomsNear(detection: Detection): List<Box> {
+        val bounds = detection.bounds ?: return emptyList()
+        val near = bounds.grow(MineshaftPieces.REACH)
+        return StructureStore.inDimension(detection.dimension).mapNotNull { saved ->
+            saved.centre?.takeIf { saved.type == StructureType.MINESHAFT && !MineshaftPieces.isStretch(it) && near.overlaps(it) }
+        }
+    }
+
     /**
-     * A mineshaft's box: what is seen of it, as far as the game reaches from its start room
-     * ([Detection.centre]). Mineshafts cross into each other, so their fences chain into one group
-     * for as far as they go: one was saved over a kilometre across. Without its room in sight, a
-     * group wider than any one mineshaft is cut to a stretch that wide ([MineshaftPieces.stretch]).
+     * A mineshaft's box: its room and corridors ([MineshaftPieces.boxOf]), as far as the game reaches
+     * from its start room ([Detection.centre]); what is seen of its fences before its corridors are
+     * read. Mineshafts cross into each other, so their fences chain into one group for as far as
+     * they go: one was saved over a kilometre across. Without its room in sight, a group wider than
+     * any one mineshaft is cut to a stretch that wide ([MineshaftPieces.stretch]).
      */
     private fun mineshaftBox(detection: Detection, level: BlockSource): Box? {
         val seen = detection.bounds ?: return null
@@ -320,8 +334,10 @@ object Tracker {
             detection.centre = MineshaftPieces.startRoom(detection, level)
                 ?: MineshaftPieces.stretch(seen, detection).takeIf { maxOf(seen.sizeX, seen.sizeZ) > 2 * MineshaftPieces.REACH }
         }
-        val centre = detection.centre ?: return seen
-        return seen.clampedTo(MineshaftPieces.reachOf(centre))
+        val centre = detection.centre ?: return MineshaftPieces.noHigherThanOne(detection, MineshaftPieces.boxOf(detection.pieces, null) ?: seen)
+        val reach = MineshaftPieces.reachOf(centre)
+        val box = MineshaftPieces.boxOf(detection.pieces, reach) ?: seen.clampedTo(reach)
+        return if (MineshaftPieces.isStretch(centre)) MineshaftPieces.noHigherThanOne(detection, box) else box
     }
 
     /**
@@ -336,8 +352,10 @@ object Tracker {
         val box = detection.box ?: return tileOff(groups, detection)
         val centre = detection.centre ?: return null
         return when (detection.type) {
-            StructureType.ANCIENT_CITY -> groups.splitOff(detection, box.grow(CITY_MARGIN), CITY_SPLIT_BLOCKS)
-            StructureType.MINESHAFT -> groups.splitOff(detection, roomsReach(detection) ?: MineshaftPieces.reachOf(centre), MineshaftPieces.SUPPORTS * 4)
+            StructureType.ANCIENT_CITY -> groups.splitOff(detection, listOf(box.grow(CITY_MARGIN)), CITY_SPLIT_BLOCKS)
+            // Beyond every one of its rooms' reach, not only beyond the box round them all: between
+            // rooms far apart, the fences of a mineshaft whose room is not in sight are none of theirs.
+            StructureType.MINESHAFT -> groups.splitOff(detection, roomReaches(detection) ?: listOf(MineshaftPieces.reachOf(centre)), MineshaftPieces.SUPPORTS * 4)
             else -> null
         }
     }
@@ -362,7 +380,7 @@ object Tracker {
         val x = BlockPos.getX(west)
         val z = BlockPos.getZ(west)
         val tile = Box(x, bounds.minY, z - span / 2, x + span - 1, bounds.maxY, z + span / 2)
-        val rest = groups.splitOff(detection, tile, TILE_LEAST) ?: return null
+        val rest = groups.splitOff(detection, listOf(tile), TILE_LEAST) ?: return null
         detection.changed = true
         detection.fitDirty = true
         detection.lastFitTick = -FIT_EVERY.toLong()
@@ -382,15 +400,18 @@ object Tracker {
      * As far as a mineshaft group's start rooms reach ([MineshaftPieces.reachOf]), when it holds two
      * or more ([Detection.pieces]); else null.
      */
-    private fun roomsReach(detection: Detection): Box? =
-        detection.pieces.filter { it.kind == MineshaftPieces.ROOM_KIND }.takeIf { it.size >= 2 }
-            ?.map { MineshaftPieces.reachOf(it.box) }?.reduce(Box::union)
+    private fun roomsReach(detection: Detection): Box? = roomReaches(detection)?.reduce(Box::union)
 
-    /** One mineshaft of a group's: what is seen of it, as far as its own start room reaches, which is its centre. */
+    /** How far each of a mineshaft group's start rooms reaches, when it holds two or more; else null. */
+    private fun roomReaches(detection: Detection): List<Box>? =
+        detection.pieces.filter { it.kind == MineshaftPieces.ROOM_KIND }.takeIf { it.size >= 2 }?.map { MineshaftPieces.reachOf(it.box) }
+
+    /** One mineshaft of a group's: its room and corridors ([MineshaftPieces.boxOf]), as far as its own start room reaches, which is its centre. */
     private fun mineshaftPartBox(part: Detection, pieces: List<Piece>): Box {
         val room = pieces.first { it.kind == MineshaftPieces.ROOM_KIND }.box
         part.centre = room
-        return (part.bounds ?: pieces.map { it.box }.reduce(Box::union)).clampedTo(MineshaftPieces.reachOf(room))
+        val reach = MineshaftPieces.reachOf(room)
+        return MineshaftPieces.boxOf(pieces, reach) ?: (part.bounds ?: room).clampedTo(reach)
     }
 
     /**
@@ -422,13 +443,18 @@ object Tracker {
         // Found again after rejoining, or seen from another side: it is the one already saved.
         val near = StructureStore.inDimension(detection.dimension)
             .filter { it.type == detection.type && Specs.sameStructure(it.type, it.box, box) }
-            // Never the one a group split from it is, nor one with another centre.
-            .filter { saved -> detection.apart.none { it.storedId == saved.id } && !StructureStore.twoCentres(saved.centre, detection.centre) }
+            // Never the one a group split from it is (nor one of the structures it was told apart
+            // into), nor another mineshaft its own group was told apart into (they cross into each
+            // other), nor one with another centre.
+            .filter { saved -> detection.apart.none { from -> from.storedId == saved.id || from.parts.any { it.storedId == saved.id } } && !StructureStore.twoCentres(saved.centre, detection.centre) }
+            .filter { saved -> detection.type != StructureType.MINESHAFT || detection.partOf?.parts.orEmpty().none { it !== detection && it.storedId == saved.id } }
             .sortedByDescending { saved -> saved.centre != null && saved.centre == detection.centre }
         val saved = when {
             detection.type == StructureType.FORTRESS && detection.pieces.isNotEmpty() -> fortressFor(detection, near)
             // Mineshafts cross each other: only one it overlaps, the one it overlaps most.
-            detection.type == StructureType.MINESHAFT -> near.filter { it.box.overlaps(box) }
+            // One whose room is not in sight is another's only when it lies within that one's room's
+            // reach: one beside it, taken for it, kept only what fell in that reach and was lost.
+            detection.type == StructureType.MINESHAFT -> near.filter { it.box.overlaps(box) && withinRoomOf(it, detection, box) }
                 .maxWithOrNull(compareBy<Structure> { it.centre != null && it.centre == detection.centre }.thenBy { it.box.overlapArea(box) })
             else -> near.firstOrNull()
         }
@@ -440,6 +466,19 @@ object Tracker {
             detection.storedId = Menus.DELETED
             Log.info("{} #{} is one you deleted; ignoring it", detection.type.id, detection.id)
         }
+    }
+
+    /**
+     * Whether [detection], seen at [box], may be the saved mineshaft [saved]: always when [detection]
+     * has a start room of its own (two rooms are told apart by [StructureStore.twoCentres]); else when
+     * at least half of [box] lies within the reach of [saved]'s room, or, [saved] having none, when
+     * the two together are no bigger than one mineshaft can be ([MineshaftPieces.fitsOne]). Else it
+     * is saved by itself, and joined to what it is a piece of after ([StructureStore.joinedMineshafts]).
+     */
+    private fun withinRoomOf(saved: Structure, detection: Detection, box: Box): Boolean {
+        if (detection.centre?.let { !MineshaftPieces.isStretch(it) } == true) return true
+        val room = saved.centre?.takeIf { !MineshaftPieces.isStretch(it) } ?: return MineshaftPieces.fitsOne(saved.box.union(box))
+        return box.overlapArea(MineshaftPieces.reachOf(room)) * 2 >= box.sizeX.toLong() * box.sizeZ
     }
 
     /**
@@ -478,8 +517,18 @@ object Tracker {
             // chained across the mineshafts beside it grew one to 484 blocks.
             // Only by its own fences: those in another saved one are that one's, where they cross.
             detection.type == StructureType.MINESHAFT -> {
-                val reach = MineshaftPieces.reachOf(stored.centre ?: detection.centre ?: MineshaftPieces.stretch(stored.box))
-                (ownFences(detection, reach, stored.id)?.let { stored.box.union(it.first) } ?: stored.box).clampedTo(reach)
+                val centre = stored.centre ?: detection.centre
+                val reach = MineshaftPieces.reachOf(centre ?: MineshaftPieces.stretch(stored.box))
+                // Grown by its room and corridors seen within reach ([mineshaftBox]), never cut: one
+                // joined from pieces ([StructureStore.joinedMineshafts]) keeps them.
+                val grown = if (reach.overlaps(box)) stored.box.union(box.clampedTo(reach)) else stored.box
+                when {
+                    centre != null && !MineshaftPieces.isStretch(centre) -> grown
+                    // With no room in sight, by all of what it was taken to be while the two are one
+                    // mineshaft's size ([withinRoomOf]), not cut to a stretch from its corner.
+                    MineshaftPieces.fitsOne(stored.box.union(box)) -> stored.box.union(box)
+                    else -> MineshaftPieces.noHigherThanOne(detection, grown)
+                }
             }
             else -> stored.box.union(box)
         }.let { grown ->
@@ -498,8 +547,10 @@ object Tracker {
         else kept + detection.pieces.filter { new -> kept.none { it.box == new.box } }
         val centre = stored.centre ?: detection.centre
         val start = stored.start ?: detection.start
-        if (better != stored.box || pieces != stored.pieces || centre != stored.centre || start != stored.start)
+        if (better != stored.box || pieces != stored.pieces || centre != stored.centre || start != stored.start) {
             StructureStore.put(stored.copy(box = better, pieces = pieces, centre = centre, start = start))
+            if (detection.type == StructureType.MINESHAFT) joinPieces(detection.dimension, better)
+        }
     }
 
     /**
@@ -528,6 +579,24 @@ object Tracker {
         if (own.size == stored.pieces.size) return stored.box
         Log.info("{}: saved with {} piece(s) of another fortress, now told apart", stored.name, stored.pieces.size - own.size)
         return own.map { it.box }.fold(part.box ?: stored.box, Box::union)
+    }
+
+    /**
+     * Joins the saved mineshafts around [box] that are pieces of one ([StructureStore.joinedMineshafts])
+     * and ties the groups that were tied to those joined to what they went into. Left to the end of
+     * a scan of Bobby's cache ([joining] off), which joins them all at once.
+     */
+    private fun joinPieces(dimension: String, box: Box) {
+        if (joining) followJoins(StructureStore.joinMineshafts(dimension, box.grow(MineshaftPieces.REACH)))
+    }
+
+    /** Whether each mineshaft saved joins its pieces at once ([joinPieces]): off while a scan of Bobby's cache saves. */
+    var joining = true
+
+    /** Ties every group tied to a saved structure joined into another ([into]: from its id to the other's) to the other. */
+    fun followJoins(into: Map<String, String>) {
+        if (into.isEmpty()) return
+        for (detection in groups.detections.flatMap { listOf(it) + it.parts }) detection.storedId?.let { id -> into[id]?.let { detection.storedId = it } }
     }
 
     /** What became of a group found in Bobby's cache ([takeIn]). */
@@ -575,13 +644,8 @@ object Tracker {
             .filter { it.type == StructureType.MINESHAFT && it.id != except && it.box.overlaps(within) }.map { it.box }
         var bounds: Box? = null
         var count = 0
-        val iterator = detection.positions.iterator()
-        while (iterator.hasNext()) {
-            val key = iterator.nextLong()
-            val x = BlockPos.getX(key)
-            val y = BlockPos.getY(key)
-            val z = BlockPos.getZ(key)
-            if (!within.contains(x, y, z) || others.any { it.contains(x, y, z) }) continue
+        detection.forEachPosition { x, y, z ->
+            if (!within.contains(x, y, z) || others.any { it.contains(x, y, z) }) return@forEachPosition
             bounds = bounds?.including(x, y, z) ?: Box.of(x, y, z)
             count++
         }
@@ -606,7 +670,7 @@ object Tracker {
         if (detection.type == StructureType.MINESHAFT && detection.centre?.let(MineshaftPieces::isStretch) == true) {
             val own = ownFences(detection, box, null)
             if (own == null || own.second < MineshaftPieces.SUPPORTS * 4 || !MineshaftPieces.furnishedIn(detection, own.first)) return
-            detection.box = own.first
+            detection.box = box.clampedTo(own.first)
         }
         val structure = Structure(
             id = UUID.randomUUID().toString(),
@@ -622,6 +686,7 @@ object Tracker {
         )
         StructureStore.put(structure)
         detection.storedId = structure.id
+        if (detection.type == StructureType.MINESHAFT) joinPieces(detection.dimension, structure.box)
         Log.info("Discovered {} #{} at {} {} {}, box {}", detection.type.id, detection.id, structure.box.centreX, structure.waypointY, structure.box.centreZ, structure.box)
         if (announce) {
             Minecraft.getInstance().player?.sendSystemMessage(

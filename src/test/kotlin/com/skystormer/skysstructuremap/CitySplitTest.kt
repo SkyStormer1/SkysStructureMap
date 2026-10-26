@@ -33,7 +33,7 @@ class CitySplitTest {
         groups.add(StructureType.ANCIENT_CITY, OVERWORLD, slab(120, 219, 0, 99), true)
         assertEquals(1, groups.detections.size, "one group to start with")
         val west = groups.detections.single()
-        val east = groups.splitOff(west, Box(-16, -64, -16, 115, 0, 115), 500)!!
+        val east = groups.splitOff(west, listOf(Box(-16, -64, -16, 115, 0, 115)), 500)!!
         assertEquals(Box(0, -40, 0, 98, -40, 98), west.bounds)
         assertEquals(Box(120, -40, 0, 218, -40, 98), east.bounds)
         assertEquals(west.count + east.count, slab(0, 99, 0, 99).size + slab(120, 219, 0, 99).size, "every block kept")
@@ -46,7 +46,7 @@ class CitySplitTest {
     fun aFewBlocksBeyondAreNotACity() {
         val groups = Groups()
         groups.add(StructureType.ANCIENT_CITY, OVERWORLD, slab(0, 99, 0, 99) + slab(110, 119, 0, 9), true)
-        assertEquals(null, groups.splitOff(groups.detections.single(), Box(-16, -64, -16, 115, 0, 115), 500))
+        assertEquals(null, groups.splitOff(groups.detections.single(), listOf(Box(-16, -64, -16, 115, 0, 115)), 500))
     }
 
     @Test

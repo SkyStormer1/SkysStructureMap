@@ -134,12 +134,6 @@ object StructureStore {
         }, "Sky's Structure Map open").apply { isDaemon = true }.start()
     }
 
-    /** Opens the structures file at [path] for the world called [name], here and now: a scan of Bobby's cache run outside the game does. */
-    fun openAt(path: Path, name: String) {
-        val loaded = read(path)
-        openWith(path, name, loaded, loaded?.let { joinDuplicates(it.structures) })
-    }
-
     /** Takes in the file at [path], as [loaded] (null: it could not be read), its structures with duplicates [joined]. */
     private fun openWith(path: Path, name: String, loaded: Contents?, joined: Pair<List<Structure>, Int>?) {
         worldName = name
@@ -159,6 +153,11 @@ object StructureStore {
         deleted = loaded.deleted
         unread = Contents(unreadStructures = loaded.unreadStructures, unreadDeleted = loaded.unreadDeleted)
         mergeDuplicates(joined ?: joinDuplicates(all))
+        // Mineshafts saved in pieces before they could be joined, joined now, the file kept as it was first.
+        if (joinedMineshafts(all, null, null).second.isNotEmpty()) {
+            try { backup("before-joining-mineshafts", saved = false) } catch (e: Exception) { Log.warn("Could not back up before joining mineshafts: {}", e.toString()) }
+            joinMineshafts()
+        }
         Log.info("Loaded {} structure(s) for {} from {}", all.size, name, file)
     }
 
@@ -338,12 +337,15 @@ object StructureStore {
     /**
      * Copies this world's structures file, as saved right now, into `backups/` beside it, named
      * after the world, the time and [label]; answers the copy. Done before a scan of Bobby's cache
-     * adds to it. Put back by hand: with the game closed, copy it over `<world>.json`.
+     * adds to it, and (as it was read, [saved] false) before loading joins mineshafts saved in
+     * pieces. Put back by hand: with the game closed, copy it over `<world>.json`.
      */
-    fun backup(label: String): Path {
+    fun backup(label: String, saved: Boolean = true): Path {
         val path = file ?: error("Not in a world")
-        saveNow()
-        Saves.flush()
+        if (saved) {
+            saveNow()
+            Saves.flush()
+        }
         if (!Files.exists(path)) error("Could not save $path")
         val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"))
         val name = path.fileName.toString().removeSuffix(".json")
@@ -406,6 +408,115 @@ object StructureStore {
         }
         return kept to joined
     }
+
+    /**
+     * Joins the saved mineshafts that are pieces of one ([joinedMineshafts]), in [dimension] (every
+     * one when null) and only those with no room of their own that overlap [near] (every one when
+     * null). Answers which ids went into which, for groups tied to those saved to follow.
+     */
+    fun joinMineshafts(dimension: String? = null, near: Box? = null): Map<String, String> {
+        val (kept, into) = joinedMineshafts(all, dimension, near)
+        if (into.isNotEmpty()) {
+            all = kept
+            dirty = true
+            Log.info("Joined {} mineshaft(s) seen in pieces into the mineshafts they are", into.size)
+        }
+        return into
+    }
+
+    /**
+     * [structures] with each mineshaft whose start room was never seen joined into the one it is a
+     * piece of: the one whose room reaches over [JOIN_SHARE] of it or more (the game lays every piece
+     * within that reach), else one also room-less within [JOIN_GAP] of it; while the two together are
+     * no bigger than a mineshaft's box can be: as wide and high as a room's reach ([MineshaftPieces.reachOf]),
+     * and no wider than [JOIN_ACROSS] without a room (in testing the widest was 198 and the highest
+     * 45). Neither is cut to fit: what is seen of either stays marked. Never two that each
+     * have a room. One mineshaft split in two is worse than two joined: in testing, this took those
+     * saved in two or more pieces from 139 to 41, and marked more of their corridors. Answers the structures left and which
+     * ids went into which.
+     */
+    fun joinedMineshafts(structures: List<Structure>, dimension: String?, near: Box?): Pair<List<Structure>, Map<String, String>> {
+        val list = structures.toMutableList<Structure?>()
+        fun hasRoom(s: Structure) = s.centre?.let { !MineshaftPieces.isStretch(it) } == true
+        fun volume(b: Box) = b.sizeX.toLong() * b.sizeY * b.sizeZ
+        fun shared(a: Box, b: Box): Long {
+            val x = minOf(a.maxX, b.maxX) - maxOf(a.minX, b.minX) + 1
+            val y = minOf(a.maxY, b.maxY) - maxOf(a.minY, b.minY) + 1
+            val z = minOf(a.maxZ, b.maxZ) - maxOf(a.minZ, b.minZ) + 1
+            return if (x <= 0 || y <= 0 || z <= 0) 0 else x.toLong() * y * z
+        }
+        fun fits(b: Box, across: Int) = maxOf(b.sizeX, b.sizeZ) <= across && b.sizeY <= MineshaftPieces.MOST_HIGH
+        val shafts = list.indices.filter { i -> list[i]!!.let { it.type == StructureType.MINESHAFT && (dimension == null || it.dimension == dimension) } }
+        val into = LinkedHashMap<String, String>()
+        val reachOut = JOIN_GAP + MineshaftPieces.REACH
+        var changed = true
+        while (changed) {
+            changed = false
+            // Where each stands, by cells of the grid, its box grown as far as it can join from.
+            val cells = HashMap<Long, MutableList<Int>>()
+            for (i in shafts) {
+                val b = list[i]?.box?.grow(reachOut) ?: continue
+                for (cx in (b.minX shr CELL)..(b.maxX shr CELL)) for (cz in (b.minZ shr CELL)..(b.maxZ shr CELL)) {
+                    cells.getOrPut(cellOf(cx, cz)) { ArrayList() }.add(i)
+                }
+            }
+            val guests = shafts.filter { i -> list[i]?.let { !hasRoom(it) && (near == null || it.box.overlaps(near)) } == true }
+                .sortedBy { volume(list[it]!!.box) }
+            for (g in guests) {
+                val guest = list[g] ?: continue
+                val b = guest.box
+                val around = HashSet<Int>()
+                for (cx in (b.minX shr CELL)..(b.maxX shr CELL)) for (cz in (b.minZ shr CELL)..(b.maxZ shr CELL)) cells[cellOf(cx, cz)]?.let(around::addAll)
+                var host = -1
+                var rank = 0
+                var score = Double.NEGATIVE_INFINITY
+                var joined: Box? = null
+                for (h in around) {
+                    val other = list[h] ?: continue
+                    if (h == g || other.dimension != guest.dimension) continue
+                    if (hasRoom(other)) {
+                        val reach = MineshaftPieces.reachOf(other.centre!!)
+                        val share = shared(b, reach).toDouble() / volume(b)
+                        val both = other.box.union(b)
+                        if (share < JOIN_SHARE || !fits(both, reach.sizeX) || rank > 2 || (rank == 2 && share <= score)) continue
+                        host = h
+                        rank = 2
+                        score = share
+                        joined = both
+                    } else {
+                        val gap = other.box.gap(b)
+                        val both = other.box.union(b)
+                        if (gap > JOIN_GAP || !fits(both, JOIN_ACROSS) || rank > 1 || (rank == 1 && -gap <= score)) continue
+                        host = h
+                        rank = 1
+                        score = -gap.toDouble()
+                        joined = both
+                    }
+                }
+                if (host < 0) continue
+                val kept = list[host]!!
+                list[host] = kept.copy(box = joined!!, completed = kept.completed || guest.completed, outlined = kept.outlined || guest.outlined,
+                    discovered = minOf(kept.discovered, guest.discovered))
+                list[g] = null
+                into[guest.id] = kept.id
+                changed = true
+            }
+        }
+        // One joined into another that was then joined on goes to the last.
+        for (id in into.keys.toList()) {
+            var to = into.getValue(id)
+            while (to in into) to = into.getValue(to)
+            into[id] = to
+        }
+        return list.filterNotNull() to into
+    }
+
+    private fun cellOf(x: Int, z: Int): Long = (x.toLong() shl 32) or (z.toLong() and 0xFFFFFFFFL)
+
+    private const val JOIN_GAP = 64
+    private const val JOIN_SHARE = 0.3
+    private const val JOIN_ACROSS = MineshaftPieces.MOST_WIDE
+    private const val CELL = 7
 
     /**
      * Whether two saved fortresses are certainly two: together they would hold more crossroads

@@ -25,10 +25,8 @@ object Dungeons {
 
     /** The room around [detection]'s spawner, or null when it has no dungeon floor. */
     fun room(detection: Detection, level: BlockSource): Box? {
-        val iterator = detection.positions.iterator()
-        while (iterator.hasNext()) {
-            val key = iterator.nextLong()
-            room(level, BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key))?.let { return it }
+        detection.forEachPosition { x, y, z ->
+            room(level, x, y, z)?.let { return it }
         }
         return null
     }
