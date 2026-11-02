@@ -3,7 +3,7 @@
   "id": "skysstructuremap",
   "version": "${version}",
   "name": "Sky's Structure Map",
-  "description": "Recognises ocean monuments, shipwrecks, nether fortresses and bastions from the blocks your client already sees, and puts every one you visit on Xaero's World Map: no seed needed.",
+  "description": "Recognises ocean monuments, shipwrecks, nether fortresses and bastions from the blocks your client already sees, and puts every one you visit on Xaero's World Map.",
   "authors": [
     "SkyStormer1"
   ],

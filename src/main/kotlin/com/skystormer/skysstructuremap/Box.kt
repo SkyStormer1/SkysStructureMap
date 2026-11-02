@@ -28,10 +28,23 @@ data class Box(val minX: Int, val minY: Int, val minZ: Int, val maxX: Int, val m
     fun grow(sideways: Int, down: Int = sideways, up: Int = sideways) =
         Box(minX - sideways, minY - down, minZ - sideways, maxX + sideways, maxY + up, maxZ + sideways)
 
+    /** This box cut down to what lies inside [within]. */
+    fun clampedTo(within: Box) = Box(
+        maxOf(minX, within.minX), maxOf(minY, within.minY), maxOf(minZ, within.minZ),
+        minOf(maxX, within.maxX), minOf(maxY, within.maxY), minOf(maxZ, within.maxZ),
+    )
+
     fun overlaps(other: Box): Boolean =
         minX <= other.maxX && maxX >= other.minX &&
             minY <= other.maxY && maxY >= other.minY &&
             minZ <= other.maxZ && maxZ >= other.minZ
+
+    /** How many columns (x by z) this box shares with [other]. */
+    fun overlapArea(other: Box): Long {
+        val x = minOf(maxX, other.maxX) - maxOf(minX, other.minX) + 1
+        val z = minOf(maxZ, other.maxZ) - maxOf(minZ, other.minZ) + 1
+        return if (x > 0 && z > 0) x.toLong() * z else 0L
+    }
 
     fun contains(x: Int, y: Int, z: Int): Boolean = x in minX..maxX && y in minY..maxY && z in minZ..maxZ
 

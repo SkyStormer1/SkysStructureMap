@@ -63,6 +63,9 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
      */
     var centre: Box? = null
 
+    /** A village's box drawn from its own pieces and streets, once one has fitted ([VillagePieces.draw]). */
+    var drawn: Box? = null
+
     /** Groups split from this one, or it from them: never joined again, and never saved as the same structure. */
     val apart: MutableSet<Detection> = HashSet()
 
@@ -77,6 +80,27 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
     var lastFitTick = -1000L
 
     val count: Int get() = positions.size
+
+    /**
+     * Around its blocks of the kinds that alone prove it ([Spec.anchors]): a trial chamber's
+     * spawners and vaults, which players cannot place.
+     */
+    var anchors: Box? = null
+        private set
+
+    /** [box] with its height cut to the blocks seen in it, or null when none are. */
+    fun boundsIn(box: Box): Box? {
+        var minY = Int.MAX_VALUE
+        var maxY = Int.MIN_VALUE
+        val iterator = positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            if (!box.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key))) continue
+            minY = minOf(minY, BlockPos.getY(key))
+            maxY = maxOf(maxY, BlockPos.getY(key))
+        }
+        return if (minY > maxY) null else box.copy(minY = minY, maxY = maxY)
+    }
 
     /** How many of its blocks are in [box]. */
     fun countIn(box: Box): Int {
@@ -96,8 +120,17 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
     /** Temples: the game's own layout has been found in it, so it stays recognised. */
     var proved = false
 
+    /** A mineshaft's supports with a rail or cobweb in their corridor, as block positions ([MineshaftPieces.proved]). */
+    val furnished = LongArrayList()
+
+    /** Whether [furnished] was worked out for the blocks it holds now: more blocks seen, it is worked out again. */
+    var furnishChecked = false
+
     /** Where the design that proved it stands, which the rest of its box is measured from. */
     var piece: Box? = null
+
+    /** The chunk it starts in, x to z, once what was seen tells ([Tracker.startOf]). */
+    var start: Pair<Int, Int>? = null
 
     /** Adds a block; false when it was already known. */
     fun add(x: Int, y: Int, z: Int, block: Block?, keepBlock: Boolean = true, inBiome: Boolean = true): Boolean {
@@ -107,6 +140,7 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         if (block != null) {
             if (keepBlock) blocks.put(key, block)
             kinds.merge(block, 1, Int::plus)
+            if (block in Specs.of(type).anchors) anchors = anchors?.including(x, y, z) ?: Box.of(x, y, z)
         }
         val cell = cellKey(x, y, z)
         val old = cells.get(cell)
@@ -114,7 +148,19 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         bounds = bounds?.including(x, y, z) ?: Box.of(x, y, z)
         fitDirty = true
         changed = true
+        furnishChecked = false
         return true
+    }
+
+    /** Whether one of its cells ([cells]) comes within [reach] of [box]. */
+    fun nearCells(box: Box, reach: Int): Boolean {
+        val grown = box.grow(reach)
+        for (cx in Math.floorDiv(grown.minX, CELL)..Math.floorDiv(grown.maxX, CELL))
+            for (cy in Math.floorDiv(grown.minY, CELL)..Math.floorDiv(grown.maxY, CELL))
+                for (cz in Math.floorDiv(grown.minZ, CELL)..Math.floorDiv(grown.maxZ, CELL)) {
+                    if (cells.get(BlockPos.asLong(cx, cy, cz))?.overlaps(grown) == true) return true
+                }
+        return false
     }
 
     /** A part's own share of its group's cells ([parts]): its outline and [bounds]. */
@@ -124,19 +170,41 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         bounds = own.reduceOrNull(Box::union)
     }
 
+    /** Does [action] at each of its blocks, with its x, y and z. */
+    inline fun forEachPosition(action: (x: Int, y: Int, z: Int) -> Unit) {
+        val iterator = positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            action(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key))
+        }
+    }
+
     /** How many of its blocks are outside [box]. */
     fun countOutside(box: Box): Int = count - countIn(box)
 
+    /** How many of its blocks are outside every one of [keep]. */
+    fun countOutside(keep: List<Box>): Int {
+        if (keep.size == 1) return countOutside(keep[0])
+        var outside = 0
+        val iterator = positions.iterator()
+        while (iterator.hasNext()) {
+            val key = iterator.nextLong()
+            if (keep.none { it.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key)) }) outside++
+        }
+        return outside
+    }
+
     /**
-     * Moves every block outside [keep] into [into], and works out its own outline again from the
-     * blocks left. How many of them stood in their biome is shared out in proportion.
+     * Moves every block outside all of [keep] into [into], and works out its own outline again from
+     * the blocks left. How many of them stood in their biome is shared out in proportion.
      */
-    fun moveOutside(keep: Box, into: Detection) {
+    fun moveOutside(keep: List<Box>, into: Detection) {
+        fun kept(key: Long) = keep.any { it.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key)) }
         val out = LongArrayList()
         val iterator = positions.iterator()
         while (iterator.hasNext()) {
             val key = iterator.nextLong()
-            if (!keep.contains(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key))) out.add(key)
+            if (!kept(key)) out.add(key)
         }
         if (out.isEmpty()) return
         val moved = (inBiome.toLong() * out.size / maxOf(1, count)).toInt()
@@ -149,8 +217,20 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         }
         into.inBiome += moved
         inBiome -= moved
+        // Its furnished supports go with their blocks, so neither has to look for them again.
+        val checked = furnishChecked
+        val stays = LongArrayList()
+        for (i in 0 until furnished.size) {
+            val key = furnished.getLong(i)
+            if (kept(key)) stays.add(key) else into.furnished.add(key)
+        }
+        furnished.clear()
+        furnished.addAll(stays)
+        into.furnishChecked = checked
         cells.clear()
         bounds = null
+        // Worked out again from the blocks left when each block is kept; else kept as it was.
+        if (keepsBlocks) anchors = null
         if (keepsBlocks) kinds.clear()
         val left = positions.iterator()
         while (left.hasNext()) {
@@ -162,6 +242,7 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
             cells.put(cell, cells.get(cell)?.including(x, y, z) ?: Box.of(x, y, z))
             bounds = bounds?.including(x, y, z) ?: Box.of(x, y, z)
             if (keepsBlocks) blocks.get(key)?.let { kinds.merge(it, 1, Int::plus) }
+            if (blocks.get(key) in Specs.of(type).anchors) anchors = anchors?.including(x, y, z) ?: Box.of(x, y, z)
         }
         changed = true
         fitDirty = true
@@ -177,8 +258,10 @@ class Detection(val id: Int, val type: StructureType, val dimension: String) {
         inBiome += other.inBiome
         // Only shipwrecks keep each block; for the rest the counts are carried over as they are.
         if (other.blocks.isEmpty()) for ((block, n) in other.kinds) kinds.merge(block, n, Int::plus)
+        other.anchors?.let { a -> anchors = anchors?.union(a) ?: a }
         if (storedId == null) storedId = other.storedId
         if (centre == null) centre = other.centre
+        if (start == null) start = other.start
         for (far in other.apart) {
             far.apart.remove(other)
             if (far !== this) {

@@ -1,5 +1,6 @@
 package com.skystormer.skysstructuremap.gui
 
+import com.mojang.blaze3d.platform.InputConstants
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents
 import net.fabricmc.fabric.api.client.screen.v1.Screens
 import net.fabricmc.loader.api.FabricLoader
@@ -286,11 +287,8 @@ abstract class DockPanel(protected val screen: Screen, private val id: String, t
     private fun scrolls() = open && !fixedRows && itemCount() > shownRows
     private val trackLeft get() = baseWidth - EDGE - BAR
     private val trackHeight get() = shownRows * ROW
-    private fun thumbHeight() = maxOf(4, trackHeight * shownRows / maxOf(1, itemCount()))
-    private fun thumbTop(): Int {
-        val most = itemCount() - shownRows
-        return listTop + if (most > 0) (trackHeight - thumbHeight()) * scrollOffset / most else 0
-    }
+    private fun thumbHeight() = ScrollBar.thumbHeight(trackHeight, shownRows, itemCount(), least = 4)
+    private fun thumbTop(): Int = ScrollBar.thumbTop(listTop, trackHeight, thumbHeight(), scrollOffset, itemCount() - shownRows)
 
     private fun zone(lx: Double, ly: Double): Zone = when {
         open && lx >= baseWidth - CORNER && ly >= baseHeight - CORNER -> Zone.CORNER
@@ -356,7 +354,7 @@ abstract class DockPanel(protected val screen: Screen, private val id: String, t
     private fun tip(graphics: GuiGraphicsExtractor, text: String, mouseX: Int, mouseY: Int) = tooltip(graphics, text, mouseX, mouseY)
 
     override fun mouseClicked(event: MouseButtonEvent, doubleClick: Boolean): Boolean {
-        if (!visible || event.button() != 0 || !isMouseOver(event.x(), event.y())) return false
+        if (!visible || event.button() != InputConstants.MOUSE_BUTTON_LEFT || !isMouseOver(event.x(), event.y())) return false
         val lx = localX(event.x())
         val ly = localY(event.y())
         when (zone(lx, ly)) {
@@ -464,7 +462,7 @@ abstract class DockPanel(protected val screen: Screen, private val id: String, t
         val most = itemCount() - shownRows
         val travel = trackHeight - thumbHeight()
         if (most <= 0 || travel <= 0) return
-        scrollOffset = ((ly - thumbGrab - listTop) / travel * most).roundToInt().coerceIn(0, most)
+        scrollOffset = ScrollBar.scrollFor(ly, listTop, trackHeight, thumbHeight(), thumbGrab, most)
     }
 
     /**
@@ -528,14 +526,6 @@ abstract class DockPanel(protected val screen: Screen, private val id: String, t
         val top = stack[0]
         top["left"] = minOf(top.int("x"), (screen.width - stackWidth()).toInt()).coerceAtLeast(0)
         top["top"] = minOf(top.int("y"), (screen.height - stackHeight()).toInt()).coerceAtLeast(0)
-    }
-
-    /**
-     * Takes this panel out of the share, for one that goes away while the screen stays open. Any
-     * panel docked under it stays where it is, on its own.
-     */
-    fun leave() {
-        root().remove("panel:$id")
     }
 
     override fun updateWidgetNarration(output: NarrationElementOutput) {

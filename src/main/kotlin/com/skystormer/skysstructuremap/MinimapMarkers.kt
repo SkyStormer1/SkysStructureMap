@@ -28,6 +28,11 @@ object MinimapMarkers {
         var icons: MultiTextureRenderTypeRenderer? = null
         /** The dimension the minimap itself is showing, taken from Xaero before each frame's elements. */
         var dimension: String? = null
+        /**
+         * Around the middle of the minimap, past any edge it can have, while it shows the dimension
+         * you are in; null (all of them) while it shows another, its middle being converted.
+         */
+        var area: Area? = null
     }
 
     /**
@@ -36,11 +41,13 @@ object MinimapMarkers {
      * overworld ones scattered across the nether minimap at their overworld coordinates.
      */
     private fun dimension(context: Context): String? =
-        context.dimension ?: Minecraft.getInstance().level?.dimension()?.identifier()?.toString()
+        context.dimension ?: Minecraft.getInstance().level?.let { dimensionId(it) }
 
     class Provider : MinimapElementRenderProvider<Marker, Context>() {
+        private val onScreen = OnScreen()
+
         override fun begin(location: MinimapElementRenderLocation, context: Context) {
-            context.markers = dimension(context)?.let(Markers::visibleIn) ?: emptyList()
+            context.markers = dimension(context)?.let { onScreen.of(Markers.visibleIn(it), context.area) } ?: emptyList()
             context.next = 0
         }
 
@@ -94,7 +101,9 @@ object MinimapMarkers {
 
         override fun preRender(info: MinimapElementRenderInfo, buffers: XaeroBufferProvider, renderers: MultiTextureRenderTypeRendererProvider) {
             // Xaero calls this before it asks the provider for the elements, so the provider has it.
-            context.dimension = info.mapDimension?.identifier()?.toString()
+            context.dimension = info.mapDimension?.let { dimensionId(it) }
+            context.area = if (info.mapDimension != info.renderEntityDimension) null
+            else Area.around(info.renderPos.x, info.renderPos.z, REACH.toDouble(), REACH.toDouble())
             context.icons = renderers.getRenderer(CustomRenderTypes.GUI_NEAREST)
         }
 
@@ -138,4 +147,6 @@ object MinimapMarkers {
     private fun size(): Float = SIZE * Config.minimapIconScale
     private fun half(): Int = (size() / 2).toInt()
     private const val SIZE = 14f
+    /** How far from its middle the minimap is asked for icons, in blocks: past its edge however far out it is zoomed. */
+    private const val REACH = 2048
 }

@@ -17,6 +17,7 @@ import java.nio.file.Path
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.Executors
 
 /**
  * A debug layer on Xaero's world map and minimap showing which chunks the Bobby mod has saved of
@@ -77,14 +78,18 @@ object BobbyCoverage {
 
     fun clear() {
         snapshot = Snapshot(emptyMap(), emptyMap())
-        synchronized(tables) { tables.clear() }
+        synchronized(tables) {
+            tables.clear()
+            lastFrom = null
+        }
         loaded.clear()
+        session = emptyMap()
         lastRead = 0
     }
 
     /** A chunk the server sent. Main thread. */
     fun chunkLoaded(dimension: String, chunkX: Int, chunkZ: Int) {
-        if (available) loaded.getOrPut(dimension) { HashSet() }.add(key(chunkX, chunkZ))
+        if (available) loaded.getOrPut(dimension) { HashSet() }.add(cellKey(chunkX, chunkZ))
     }
 
     /** Each tick: reads Bobby's tables again every couple of seconds. Main thread. */
@@ -94,54 +99,65 @@ object BobbyCoverage {
         if (now - lastRead < REFRESH_MILLIS) return
         lastRead = now
         val level = minecraft.level ?: return
-        val found = BobbyCache.locate(minecraft, level).getOrNull() ?: run {
-            snapshot = Snapshot(emptyMap(), emptyMap())
-            return
+        if (session.size != loaded.size || session.any { (dimension, chunks) -> chunks.size != loaded[dimension]?.size }) {
+            session = loaded.mapValues { it.value.toLongArray() }
         }
-        val session = loaded.mapValues { it.value.toLongArray() }
+        val session = session
         reading = true
-        Thread({
+        reader.execute {
             try {
-                snapshot = read(found, session)
+                val found = BobbyCache.locate(minecraft, level).getOrNull()
+                if (found == null) {
+                    snapshot = Snapshot(emptyMap(), emptyMap())
+                    lastFrom = null
+                } else {
+                    read(found, session)?.let { snapshot = it }
+                }
             } catch (e: Exception) {
                 Log.warn("Could not read Bobby's saved chunks for the map: {}", e.toString())
             } finally {
                 reading = false
             }
-        }, "Sky's Structure Map Bobby coverage").apply {
-            isDaemon = true
-            priority = Thread.MIN_PRIORITY
-            start()
         }
     }
 
-    private fun read(found: BobbyCache.Found, session: Map<String, LongArray>): Snapshot {
+    private val reader = Executors.newSingleThreadExecutor { Thread(it, "Sky's Structure Map Bobby coverage").apply { isDaemon = true; priority = Thread.MIN_PRIORITY } }
+
+    /** [loaded] as last handed to [reader], by dimension, kept while no chunk was added. */
+    private var session: Map<String, LongArray> = emptyMap()
+
+    /** What [read] last worked from: each file's table, and how many chunks were loaded. Reader thread. */
+    private var lastFrom: Any? = null
+
+    /** The map of Bobby's saved chunks; null when nothing changed since the last ([lastFrom]). */
+    private fun read(found: BobbyCache.Found, session: Map<String, LongArray>): Snapshot? {
         val times = HashMap<String, Map<Long, IntArray>>()
         val rectangles = HashMap<String, IntArray>()
         synchronized(tables) {
-            val seen = HashSet<Path>()
+            // A table is read again only when its file changed ([table]), so the same tables mean nothing did.
+            val read = found.regions.mapValues { (_, files) -> files.mapNotNull { file -> table(file)?.let { file to it } } }
+            tables.keys.retainAll(found.regions.values.flatten().toSet())
+            val from = listOf(read.mapValues { (_, files) -> files.map { it.second } }, session.mapValues { it.value.size })
+            if (from == lastFrom) return null
+            lastFrom = from
             for (dimension in found.regions.keys + session.keys) {
-                val files = found.regions[dimension].orEmpty()
                 val regions = HashMap<Long, IntArray>()
-                for (file in files) {
-                    seen.add(file)
-                    val table = table(file) ?: continue
+                for ((file, table) in read[dimension].orEmpty()) {
                     val (regionX, regionZ) = BobbyCache.regionOf(file)
                     // More than one file for a region when Bobby told several worlds apart: the newest save wins.
-                    val merged = regions.getOrPut(key(regionX, regionZ)) { IntArray(CHUNKS) }
+                    val merged = regions.getOrPut(cellKey(regionX, regionZ)) { IntArray(CHUNKS) }
                     for (i in 0 until CHUNKS) if (table.times[i] > merged[i]) merged[i] = table.times[i]
                 }
                 for (chunk in session[dimension] ?: LongArray(0)) {
                     val chunkX = (chunk shr 32).toInt()
                     val chunkZ = chunk.toInt()
-                    val merged = regions.getOrPut(key(chunkX shr 5, chunkZ shr 5)) { IntArray(CHUNKS) }
+                    val merged = regions.getOrPut(cellKey(chunkX shr 5, chunkZ shr 5)) { IntArray(CHUNKS) }
                     val i = (chunkX and 31) + (chunkZ and 31) * 32
                     if (merged[i] == 0) merged[i] = LOADED
                 }
                 times[dimension] = regions
                 rectangles[dimension] = rectanglesOf(regions)
             }
-            tables.keys.retainAll(seen)
         }
         return Snapshot(times, rectangles)
     }
@@ -186,7 +202,7 @@ object BobbyCoverage {
                         if (times[x + z * 32] == 0) { x++; continue }
                         val start = x
                         while (x < 32 && times[x + z * 32] != 0) x++
-                        val run = key(start, x)
+                        val run = cellKey(start, x)
                         next[run] = open.remove(run) ?: z
                     }
                 }
@@ -269,7 +285,7 @@ object BobbyCoverage {
         val chunkX = blockX shr 4
         val chunkZ = blockZ shr 4
         val regions = snapshot.times[dimension] ?: return "Bobby: nothing read for this dimension yet"
-        val time = regions[key(chunkX shr 5, chunkZ shr 5)]?.get((chunkX and 31) + (chunkZ and 31) * 32) ?: 0
+        val time = regions[cellKey(chunkX shr 5, chunkZ shr 5)]?.get((chunkX and 31) + (chunkZ and 31) * 32) ?: 0
         return when {
             time == 0 -> "Bobby: chunk $chunkX, $chunkZ not saved"
             time == LOADED -> "Bobby: chunk $chunkX, $chunkZ loaded now; Bobby saves it when you move away"
@@ -322,7 +338,6 @@ object BobbyCoverage {
         }
     }
 
-    internal fun key(a: Int, b: Int): Long = (a.toLong() shl 32) or (b.toLong() and 0xFFFFFFFFL)
 
     private val DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault())
 

@@ -119,7 +119,8 @@ object Config {
         try {
             if (!Files.exists(path)) return save()
             val json = Files.newBufferedReader(path).use { JsonParser.parseReader(it) }.asJsonObject
-            json.getAsJsonArray("shown")?.let { array -> shown = array.mapNotNull { StructureType.byId(it.asString) }.toSet() }
+            val known = json.getAsJsonArray("kinds")?.map { it.asString }
+            json.getAsJsonArray("shown")?.let { array -> shown = array.mapNotNull { StructureType.byId(it.asString) }.toSet() + StructureType.newTo(known) }
             json.getAsJsonArray("hiddenByHide")?.let { array -> hiddenByHide = array.mapNotNull { StructureType.byId(it.asString) }.toSet() }
             legendOpen = json.get("legendOpen")?.asBoolean ?: legendOpen
             legendRight = json.get("legendRight")?.asInt ?: legendRight
@@ -150,6 +151,7 @@ object Config {
     fun save() {
         try {
             val json = JsonObject()
+            json.add("kinds", JsonArray().also { array -> StructureType.entries.forEach { array.add(it.id) } })
             json.add("shown", JsonArray().also { array -> StructureType.entries.filter { it in shown }.forEach { array.add(it.id) } })
             json.add("hiddenByHide", JsonArray().also { array -> StructureType.entries.filter { it in hiddenByHide }.forEach { array.add(it.id) } })
             json.addProperty("legendOpen", legendOpen)

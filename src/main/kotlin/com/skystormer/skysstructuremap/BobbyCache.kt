@@ -2,6 +2,7 @@ package com.skystormer.skysstructuremap
 
 import com.google.common.net.PercentEscaper
 import com.mojang.serialization.Codec
+import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap
 import net.minecraft.SharedConstants
 import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.ClientLevel
@@ -143,6 +144,13 @@ object BobbyCache {
             if (index < 0 || index >= sections.size) return AIR
             return sections[index]?.getBlockState(x and 15, y and 15, z and 15) ?: AIR
         }
+
+        /** The biome at a block, as its id without `minecraft:`; biomes are kept per 4×4×4. */
+        fun biome(x: Int, y: Int, z: Int): String? {
+            val index = (y shr 4) - minSectionY
+            if (index < 0 || index >= sections.size) return null
+            return sections[index]?.getNoiseBiome((x and 15) shr 2, (y and 15) shr 2, (z and 15) shr 2)?.unwrapKey()?.map { it.identifier().path }?.orElse(null)
+        }
     }
 
     private val AIR: BlockState = Blocks.AIR.defaultBlockState()
@@ -151,7 +159,9 @@ object BobbyCache {
      * Turns what Bobby saved into chunks: made on the main thread (it needs the game's list of
      * biomes), then used from the scan's own thread. The same codecs Bobby itself reads them with.
      */
-    class Reader(level: ClientLevel) {
+    class Reader(registries: net.minecraft.core.RegistryAccess) {
+
+        constructor(level: ClientLevel) : this(level.registryAccess())
 
         private val biomeCodec: Codec<PalettedContainer<Holder<Biome>>>
         private val plains: Holder<Biome>
@@ -159,7 +169,7 @@ object BobbyCache {
         private val dataVersion = SharedConstants.getCurrentVersion().dataVersion().version()
 
         init {
-            val registry = level.registryAccess().lookupOrThrow(Registries.BIOME)
+            val registry = registries.lookupOrThrow(Registries.BIOME)
             plains = registry.get(net.minecraft.world.level.biome.Biomes.PLAINS.identifier()).orElseThrow()
             biomeStrategy = Strategy.createForBiomes(registry.asHolderIdMap())
             biomeCodec = PalettedContainer.codecRW(registry.holderByNameCodec(), biomeStrategy, plains)
@@ -275,9 +285,14 @@ object BobbyCache {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Path, Region?>) = size > REGIONS_KEPT
         }
 
-        private val chunks = object : LinkedHashMap<Long, Chunk?>(512, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Chunk?>) = size > CHUNKS_KEPT
-        }
+        // Kept by a hash that mixes its key's bits: a chunk's key is its x over its z, and a plain
+        // map's hash of that (x xor z) put whole diagonals of chunks in one bucket, a fifth of a scan
+        // of Bobby's cache spent searching them.
+        private val chunks = Long2ObjectLinkedOpenHashMap<Chunk?>(CHUNKS_KEPT * 2)
+
+        /** The chunk asked for last, which nearly every block asked for next is in too. */
+        private var lastKey = Long.MIN_VALUE
+        private var last: Chunk? = null
 
         private fun region(file: Path): Region? {
             if (regions.containsKey(file)) return regions[file]
@@ -292,18 +307,25 @@ object BobbyCache {
         }
 
         private fun chunk(chunkX: Int, chunkZ: Int): Chunk? {
-            val key = (chunkX.toLong() shl 32) or (chunkZ.toLong() and 0xFFFFFFFFL)
-            if (chunks.containsKey(key)) return chunks[key]
-            val chunk = files[Math.floorDiv(chunkX, 32) to Math.floorDiv(chunkZ, 32)].orEmpty().firstNotNullOfOrNull { file ->
+            val key = cellKey(chunkX, chunkZ)
+            if (key == lastKey) return last
+            val chunk = if (chunks.containsKey(key)) chunks.getAndMoveToLast(key) else read(chunkX, chunkZ).also {
+                chunks.putAndMoveToLast(key, it)
+                if (chunks.size > CHUNKS_KEPT) chunks.removeFirst()
+            }
+            lastKey = key
+            last = chunk
+            return chunk
+        }
+
+        private fun read(chunkX: Int, chunkZ: Int): Chunk? =
+            files[Math.floorDiv(chunkX, 32) to Math.floorDiv(chunkZ, 32)].orEmpty().firstNotNullOfOrNull { file ->
                 try {
                     region(file)?.tag(chunkX, chunkZ)?.let(reader::chunk)
                 } catch (e: Exception) {
                     null
                 }
             }
-            chunks[key] = chunk
-            return chunk
-        }
 
         override fun hasChunk(chunkX: Int, chunkZ: Int): Boolean = chunk(chunkX, chunkZ) != null
 
@@ -311,6 +333,8 @@ object BobbyCache {
             chunk(pos.x shr 4, pos.z shr 4)?.getBlockState(pos.x, pos.y, pos.z) ?: AIR
 
         override fun spawnerMob(pos: BlockPos): String? = chunk(pos.x shr 4, pos.z shr 4)?.spawners?.get(pos.asLong())
+
+        override fun biome(pos: BlockPos): String? = chunk(pos.x shr 4, pos.z shr 4)?.biome(pos.x, pos.y, pos.z)
 
         private companion object {
             const val REGIONS_KEPT = 4

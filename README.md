@@ -12,8 +12,8 @@ again. It puts every structure you find on **Xaero's World Map and Minimap**, wi
 
 ## How it works
 
-As you explore, the mod recognises structures from the blocks your game has already loaded. It doesn't need the
-seed, a server plugin or any help from the server, and nothing in it works out or uses the world seed. When you
+As you explore, the mod recognises structures from the blocks your game has already loaded. It doesn't need a
+server plugin or any help from the server: everything comes from what your own game has loaded. When you
 come near a structure (32 blocks by default, set anywhere from inside it to the server's whole view distance), it's
 saved as discovered and shows up on your map.
 
@@ -23,15 +23,25 @@ copy of Minecraft:
 - **Ocean monuments** are always the same building on the same grid, so their exact box is known, and their
   prismarine has to lay out that building: sea lanterns and prismarine in a player's build by the sea do not.
 - **Villages, pillager outposts, shipwrecks, trail ruins, end cities, bastion remnants, ancient cities, woodland
-  mansions and ruined portals** are matched against the game's own designs, block by block. A village is found by its town centre or by
+  mansions, ruined portals, igloos and ocean ruins** are matched against the game's own designs, block by block. A village is found by its town centre or by
   one of its houses, each found by its door or job block, so it still counts when the bell and the workstations have
   been taken. A farm never counts by itself: it only backs up a worn house, and only where both stand on a street
   as the game lays them.
 - **Nether fortresses** need their pieces laid out as the game builds them: a bridge crossroads, or several rooms,
   bridges and corridors; **desert temples** the
-  terracotta cross over their hidden chamber; **jungle temples** their lever wall and trap; **witch huts** their exact
-  size and fittings; **mineshafts** the fence and plank supports along their corridors; **dungeons** the mossy
-  cobblestone floor around their spawner.
+  terracotta cross over their hidden chamber, 10 blocks in from a chunk corner as the game lays it (a badlands layer
+  is terracotta all through, and holds a cross anywhere); **jungle temples** their lever wall and trap; **witch huts** their exact
+  size and fittings; **mineshafts** the fence and plank supports along their corridors, with a rail or cobweb by one of them, and
+  only their own fences, not those of a mineshaft crossing them; **dungeons** the mossy
+  cobblestone floor around their spawner; **buried treasure** its chest in the one column of its chunk the game
+  buries it in, sat on the stone or sandstone it dug down to and walled in.
+- **Mineshafts are a work in progress.** They cross into each other and their fences chain together, so one is
+  told apart from its neighbours by its start room, found or worked out from where its corridors end. Where that
+  room cannot be seen (a cave opened over it, it is filled in or dug out, or anti-xray hides it), its corridors may
+  be shown as part of the mineshaft beside it, one box over both, or now and then as two pieces of one.
+- Where what is seen tells which chunk a structure starts in (a village's town centre, a wreck, a temple, an
+  outpost, a monument, an igloo), it must be a chunk the game can start that kind in, and only one may start in each of the
+  squares the game spreads them over, so a copy built near a real one is not taken for a second.
 - A **ruined portal** must still have some of its obsidian, or the magma the game mixes into its netherrack, so a
   player's netherrack build never counts.
 - **Strongholds, trial chambers and end gateways** go by blocks no player can place in survival: end portal frames,
@@ -44,7 +54,7 @@ copy of Minecraft:
 
 ## Features
 
-- **Spawn boxes**, like MiniHUD's but without the seed: the boxes that structures with mobs of their own spawn
+- **Spawn boxes**, like MiniHUD's but from what you've seen: the boxes that structures with mobs of their own spawn
   them in, drawn in the world around you and on the world map.
   - **Nether fortresses:** the whole fortress box, and the box of every piece you have seen (each room, crossroads,
     bridge and corridor: where wither skeletons and blazes spawn), both exact. Pieces players have dug into still
@@ -107,7 +117,7 @@ copy of Minecraft:
 
 | Overworld | Nether | End |
 |---|---|---|
-| Villages, pillager outposts, woodland mansions, strongholds, witch huts, jungle temples, desert temples, trail ruins, ancient cities, trial chambers, ocean monuments, shipwrecks, ruined portals, mineshafts, dungeons | Nether fortresses, bastion remnants | End cities, end gateways |
+| Villages, pillager outposts, woodland mansions, strongholds, witch huts, igloos, jungle temples, desert temples, trail ruins, ancient cities, trial chambers, ocean monuments, shipwrecks, ocean ruins, buried treasure, ruined portals, mineshafts, dungeons | Nether fortresses, bastion remnants | End cities, end gateways |
 
 ## Installing
 

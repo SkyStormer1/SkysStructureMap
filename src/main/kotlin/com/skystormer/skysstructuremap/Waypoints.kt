@@ -28,7 +28,7 @@ object Waypoints {
     private fun add(marker: Marker): String {
         if (!available()) return "Making waypoints needs Xaero's Minimap"
         val minecraft = Minecraft.getInstance()
-        if (minecraft.level?.dimension()?.identifier()?.toString() != marker.dimension) {
+        if (minecraft.level?.let { dimensionId(it) } != marker.dimension) {
             return "Go to the ${dimensionName(marker.dimension)} first: waypoints are saved to the dimension you are in"
         }
         val session = BuiltInHudModules.MINIMAP.currentSession ?: return "Xaero's Minimap is not running"
@@ -50,6 +50,7 @@ object Waypoints {
         StructureType.MANSION -> WaypointColor.BROWN
         StructureType.STRONGHOLD -> WaypointColor.DARK_GREEN
         StructureType.WITCH_HUT -> WaypointColor.DARK_PURPLE
+        StructureType.IGLOO -> WaypointColor.WHITE
         StructureType.JUNGLE_TEMPLE -> WaypointColor.DARK_GREEN
         StructureType.DESERT_TEMPLE -> WaypointColor.YELLOW
         StructureType.TRAIL_RUINS -> WaypointColor.GOLD
@@ -57,6 +58,8 @@ object Waypoints {
         StructureType.TRIAL_CHAMBERS -> WaypointColor.GOLD
         StructureType.MONUMENT -> WaypointColor.AQUA
         StructureType.SHIPWRECK -> WaypointColor.GOLD
+        StructureType.OCEAN_RUIN -> WaypointColor.DARK_AQUA
+        StructureType.BURIED_TREASURE -> WaypointColor.YELLOW
         StructureType.RUINED_PORTAL -> WaypointColor.DARK_PURPLE
         StructureType.MINESHAFT -> WaypointColor.BROWN
         StructureType.DUNGEON -> WaypointColor.GRAY
